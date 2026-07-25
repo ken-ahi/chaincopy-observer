@@ -1,0 +1,26 @@
+{
+  "name": "@chaincopy/worker",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsx watch src/main.ts",
+    "start": "node dist/main.js",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@chaincopy/config": "workspace:*",
+    "@chaincopy/database": "workspace:*",
+    "@chaincopy/domain": "workspace:*",
+    "bullmq": "5.81.2",
+    "ioredis": "5.11.1",
+    "pino": "10.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.3",
+    "tsup": "8.5.1",
+    "tsx": "4.23.1",
+    "typescript": "5.9.3"
+  }
+}

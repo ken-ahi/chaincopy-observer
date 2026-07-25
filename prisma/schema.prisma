@@ -1,0 +1,175 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum DataSourceKind {
+  HYPERLIQUID
+  SUI
+  CETUS
+  SYSTEM
+}
+
+enum OperationalStatus {
+  UNKNOWN
+  HEALTHY
+  DEGRADED
+  UNAVAILABLE
+}
+
+enum SyncJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+enum AlertSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum AlertStatus {
+  OPEN
+  ACKNOWLEDGED
+  RESOLVED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+  accounts      Account[]
+  sessions      Session[]
+  auditLogs     AuditLog[]
+
+  @@map("users")
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String  @map("user_id")
+  type               String
+  provider           String
+  providerAccountId  String  @map("provider_account_id")
+  refresh_token      String? @db.Text
+  access_token       String? @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String? @db.Text
+  session_state      String?
+  oauth_token_secret String? @db.Text
+  oauth_token        String? @db.Text
+  user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+model DataSource {
+  id            String            @id @default(cuid())
+  key           String            @unique
+  name          String
+  kind          DataSourceKind
+  enabled       Boolean           @default(false)
+  status        OperationalStatus @default(UNKNOWN)
+  lastSuccessAt DateTime?         @map("last_success_at")
+  lastFailureAt DateTime?         @map("last_failure_at")
+  statusMessage String?           @map("status_message")
+  createdAt     DateTime          @default(now()) @map("created_at")
+  updatedAt     DateTime          @updatedAt @map("updated_at")
+  syncJobs      SyncJob[]
+  systemAlerts  SystemAlert[]
+
+  @@map("data_sources")
+}
+
+model SyncJob {
+  id             String        @id @default(cuid())
+  idempotencyKey String        @unique @map("idempotency_key")
+  queueName      String        @map("queue_name")
+  jobName        String        @map("job_name")
+  queueJobId     String?       @map("queue_job_id")
+  status         SyncJobStatus @default(QUEUED)
+  attempt        Int           @default(0)
+  startedAt      DateTime?     @map("started_at")
+  finishedAt     DateTime?     @map("finished_at")
+  errorMessage   String?       @map("error_message") @db.Text
+  metadata       Json?
+  sourceId       String?       @map("source_id")
+  source         DataSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+
+  @@index([status, createdAt])
+  @@index([sourceId])
+  @@map("sync_jobs")
+}
+
+model SystemAlert {
+  id         String        @id @default(cuid())
+  fingerprint String       @unique
+  severity   AlertSeverity
+  status     AlertStatus   @default(OPEN)
+  title      String
+  message    String        @db.Text
+  sourceId   String?       @map("source_id")
+  source     DataSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  openedAt   DateTime      @default(now()) @map("opened_at")
+  resolvedAt DateTime?     @map("resolved_at")
+  createdAt  DateTime      @default(now()) @map("created_at")
+  updatedAt  DateTime      @updatedAt @map("updated_at")
+
+  @@index([status, severity])
+  @@index([sourceId])
+  @@map("system_alerts")
+}
+
+model AuditLog {
+  id           String   @id @default(cuid())
+  actorUserId  String?  @map("actor_user_id")
+  actorUser    User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  action       String
+  resourceType String   @map("resource_type")
+  resourceId   String?  @map("resource_id")
+  ipAddress    String?  @map("ip_address")
+  userAgent    String?  @map("user_agent") @db.Text
+  metadata     Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([actorUserId, createdAt])
+  @@index([resourceType, resourceId])
+  @@map("audit_logs")
+}

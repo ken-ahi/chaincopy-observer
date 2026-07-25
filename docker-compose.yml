@@ -1,0 +1,134 @@
+name: chaincopy-observer
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: chaincopy
+      POSTGRES_PASSWORD: chaincopy
+      POSTGRES_USER: chaincopy
+      TZ: UTC
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U chaincopy -d chaincopy"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:8-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrate
+    environment:
+      DATABASE_URL: postgresql://chaincopy:chaincopy@postgres:5432/chaincopy?schema=public
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api
+    environment:
+      API_HOST: 0.0.0.0
+      API_PORT: 3001
+      DATABASE_URL: postgresql://chaincopy:chaincopy@postgres:5432/chaincopy?schema=public
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-local-internal-secret-at-least-32-characters}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      TZ: Asia/Tokyo
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3001/ready"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    ports:
+      - "3001:3001"
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: worker
+    environment:
+      DATABASE_URL: postgresql://chaincopy:chaincopy@postgres:5432/chaincopy?schema=public
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      TZ: Asia/Tokyo
+      WORKER_HEALTH_PORT: 3002
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3002/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    ports:
+      - "3002:3002"
+
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: web
+    environment:
+      ALLOWED_ADMIN_EMAIL: ${ALLOWED_ADMIN_EMAIL:-owner@example.com}
+      API_BASE_URL: http://api:3001
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      AUTH_SECRET: ${AUTH_SECRET:-local-auth-secret-at-least-32-characters-long}
+      DATABASE_URL: postgresql://chaincopy:chaincopy@postgres:5432/chaincopy?schema=public
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-with-google-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-with-google-client-secret}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      NEXTAUTH_URL: ${APP_BASE_URL:-http://localhost:3000}
+      NODE_ENV: production
+      REDIS_URL: redis://redis:6379
+      TZ: Asia/Tokyo
+    depends_on:
+      api:
+        condition: service_healthy
+      worker:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3000/login"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:
+  redis_data:

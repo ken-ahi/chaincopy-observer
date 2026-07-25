@@ -1,0 +1,99 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: chaincopy
+          POSTGRES_PASSWORD: chaincopy
+          POSTGRES_USER: chaincopy
+        options: >-
+          --health-cmd "pg_isready -U chaincopy -d chaincopy"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+        ports:
+          - 5432:5432
+      redis:
+        image: redis:8-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+        ports:
+          - 6379:6379
+    env:
+      ALLOWED_ADMIN_EMAIL: owner@example.com
+      API_BASE_URL: http://127.0.0.1:3001
+      API_HOST: 127.0.0.1
+      API_PORT: 3001
+      APP_BASE_URL: http://127.0.0.1:3000
+      AUTH_SECRET: ci-auth-secret-value-that-is-at-least-32-characters
+      DATABASE_URL: postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public
+      GOOGLE_CLIENT_ID: ci-client-id.apps.googleusercontent.com
+      GOOGLE_CLIENT_SECRET: ci-google-client-secret
+      INTERNAL_API_SECRET: ci-internal-secret-value-at-least-32-characters
+      LOG_LEVEL: warn
+      NEXTAUTH_URL: http://127.0.0.1:3000
+      NODE_ENV: test
+      REDIS_URL: redis://127.0.0.1:6379
+      TZ: Asia/Tokyo
+      WORKER_HEALTH_PORT: 3002
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 11.9.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24.12.0
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma Client
+        run: pnpm db:generate
+
+      - name: Apply migrations
+        run: pnpm db:migrate:deploy
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit and integration tests
+        run: pnpm test
+
+      - name: Build
+        run: pnpm build
+
+      - name: Install Playwright browser
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E
+        run: pnpm test:e2e
+
+      - name: Audit high-severity vulnerabilities
+        run: pnpm audit --audit-level high
