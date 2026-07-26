@@ -211,3 +211,10 @@
 - 整合性: Daily NAV、Position Cycle、Metricの作成とRunの`RUNNING`から`SUCCEEDED`への遷移を1 DB transactionに置く。子行の一部保存、履歴不足、未知cash flow、gapでは`SUCCEEDED`にしない。
 - version: Phase 4Bの式を変えず、Worker側の単一定数`performance-v1`をRunとMetricへ保存する。式変更時は新versionで別Runを生成する。
 - 運用: 計算は専用BullMQ queue、同時実行数1、priority 15、最大3回の指数backoffとし、既存監視、Gap Recovery、手動同期、候補Enrichmentを圧迫しない。
+
+## ADR-027: 日本語論理名をPrisma・Migration・DB定義書で同期する
+
+- 状態: 採用
+- 対象: `public`スキーマのPrisma管理対象アプリケーションテーブルと物理カラムを対象とし、`_prisma_migrations`、Prismaのリレーション専用仮想フィールド、存在しないViewは対象外とする。
+- 方式: `@map`、`@@map`と既存Migrationで物理名を確定し、Prismaの`///`を開発時の参照、`COMMENT ON TABLE`と`COMMENT ON COLUMN`をPostgreSQL上の正本、`docs/database.md`を一覧定義として同じ日本語論理名へ揃える。
+- 影響: コメント専用Migrationはテーブル、カラム、型、NULL、Default、Index、Unique、外部キー、リレーションを変更しない。今後の物理テーブル・カラム追加時は、同じMigrationで日本語コメントも追加する。

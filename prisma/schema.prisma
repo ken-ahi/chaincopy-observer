@@ -156,13 +156,21 @@ enum PositionCycleStatus {
   CLOSED
 }
 
+/// アプリ利用者
 model User {
+  /// ID
   id              String          @id @default(cuid())
+  /// 利用者名
   name            String?
+  /// メールアドレス
   email           String?         @unique
+  /// メール確認日時
   emailVerified   DateTime?       @map("email_verified")
+  /// 画像URL
   image           String?
+  /// 登録日時
   createdAt       DateTime        @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt       DateTime        @updatedAt @map("updated_at")
   accounts        Account[]
   sessions        Session[]
@@ -172,20 +180,35 @@ model User {
   @@map("users")
 }
 
+/// 外部認証アカウント
 model Account {
+  /// ID
   id                 String  @id @default(cuid())
+  /// ユーザーID
   userId             String  @map("user_id")
+  /// アカウント種別
   type               String
+  /// 認証プロバイダー
   provider           String
+  /// プロバイダーアカウントID
   providerAccountId  String  @map("provider_account_id")
+  /// リフレッシュトークン
   refresh_token      String? @db.Text
+  /// アクセストークン
   access_token       String? @db.Text
+  /// 有効期限（UNIX秒）
   expires_at         Int?
+  /// トークン種別
   token_type         String?
+  /// 認可スコープ
   scope              String?
+  /// IDトークン
   id_token           String? @db.Text
+  /// セッション状態
   session_state      String?
+  /// OAuthトークンシークレット
   oauth_token_secret String? @db.Text
+  /// OAuthトークン
   oauth_token        String? @db.Text
   user               User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -194,10 +217,15 @@ model Account {
   @@map("accounts")
 }
 
+/// 認証セッション
 model Session {
+  /// ID
   id           String   @id @default(cuid())
+  /// セッショントークン
   sessionToken String   @unique @map("session_token")
+  /// ユーザーID
   userId       String   @map("user_id")
+  /// 有効期限
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -205,26 +233,42 @@ model Session {
   @@map("sessions")
 }
 
+/// 認証確認トークン
 model VerificationToken {
+  /// 識別子
   identifier String
+  /// 確認トークン
   token      String
+  /// 有効期限
   expires    DateTime
 
   @@unique([identifier, token])
   @@map("verification_tokens")
 }
 
+/// データソース
 model DataSource {
+  /// ID
   id                   String                      @id @default(cuid())
+  /// データソースキー
   key                  String                      @unique
+  /// データソース名
   name                 String
+  /// データソース種別
   kind                 DataSourceKind
+  /// 有効フラグ
   enabled              Boolean                     @default(false)
+  /// ステータス
   status               OperationalStatus           @default(UNKNOWN)
+  /// 最終成功日時
   lastSuccessAt        DateTime?                   @map("last_success_at")
+  /// 最終失敗日時
   lastFailureAt        DateTime?                   @map("last_failure_at")
+  /// ステータスメッセージ
   statusMessage        String?                     @map("status_message")
+  /// 登録日時
   createdAt            DateTime                    @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt            DateTime                    @updatedAt @map("updated_at")
   syncJobs             SyncJob[]
   systemAlerts         SystemAlert[]
@@ -250,25 +294,42 @@ model DataSource {
   @@map("data_sources")
 }
 
+/// 同期ジョブ（Sync Job）
 model SyncJob {
+  /// ID
   id                 String            @id @default(cuid())
+  /// 冪等キー
   idempotencyKey     String            @unique @map("idempotency_key")
+  /// Queue名
   queueName          String            @map("queue_name")
+  /// ジョブ名
   jobName            String            @map("job_name")
+  /// QueueジョブID
   queueJobId         String?           @map("queue_job_id")
+  /// ステータス
   status             SyncJobStatus     @default(QUEUED)
+  /// 試行回数
   attempt            Int               @default(0)
+  /// 開始日時
   startedAt          DateTime?         @map("started_at")
+  /// 終了日時
   finishedAt         DateTime?         @map("finished_at")
+  /// エラーメッセージ
   errorMessage       String?           @map("error_message") @db.Text
+  /// メタデータ
   metadata           Json?
+  /// データソースID
   sourceId           String?           @map("source_id")
   source             DataSource?       @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  /// ウォレットアドレスID
   walletAddressId    String?           @map("wallet_address_id")
   walletAddress      WalletAddress?    @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// アドレス候補ID
   addressCandidateId String?           @map("address_candidate_id")
   addressCandidate   AddressCandidate? @relation(fields: [addressCandidateId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt          DateTime          @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt          DateTime          @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
@@ -278,17 +339,27 @@ model SyncJob {
   @@map("sync_jobs")
 }
 
+/// 監視ウォレットアドレス
 model WalletAddress {
+  /// ID
   id                    String                     @id @default(cuid())
+  /// ウォレットアドレス
   address               String
+  /// 表示名
   displayName           String?                    @map("display_name")
+  /// 監視対象フラグ
   isWatched             Boolean                    @default(true) @map("is_watched")
+  /// 最終同期日時
   lastSyncAt            DateTime?                  @map("last_sync_at")
+  /// データソースID
   sourceId              String                     @map("source_id")
   source                DataSource                 @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// 所有ユーザーID
   ownerUserId           String?                    @map("owner_user_id")
   ownerUser             User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  /// 登録日時
   createdAt             DateTime                   @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt             DateTime                   @updatedAt @map("updated_at")
   rawEvents             RawEvent[]
   normalizedTrades      NormalizedTrade[]
@@ -314,41 +385,76 @@ model WalletAddress {
   @@map("wallet_addresses")
 }
 
+/// アドレス候補（Candidate）
 model AddressCandidate {
+  /// ID
   id                   String                        @id @default(cuid())
+  /// ウォレットアドレス
   address              String
+  /// 初回発見日時
   firstSeenAt          DateTime                      @map("first_seen_at")
+  /// 最終発見日時
   lastSeenAt           DateTime                      @map("last_seen_at")
+  /// 発見元
   discoverySource      String                        @default("HYPERLIQUID_MARKET_TRADES") @map("discovery_source")
+  /// 取引回数
   tradeCount           Int                           @default(0) @map("trade_count")
+  /// 推定取引額（USD）
   estimatedNotionalUsd Decimal                       @default(0) @map("estimated_notional_usd") @db.Decimal(38, 18)
+  /// Maker回数
   makerCount           Int                           @default(0) @map("maker_count")
+  /// Taker回数
   takerCount           Int                           @default(0) @map("taker_count")
+  /// 買い回数
   buyCount             Int                           @default(0) @map("buy_count")
+  /// 売り回数
   sellCount            Int                           @default(0) @map("sell_count")
+  /// ロング関連回数
   longRelatedCount     Int                           @default(0) @map("long_related_count")
+  /// ショート関連回数
   shortRelatedCount    Int                           @default(0) @map("short_related_count")
+  /// 取引銘柄数
   distinctCoins        Int                           @default(0) @map("distinct_coins")
+  /// 最大取引額（USD）
   largestTradeUsd      Decimal                       @default(0) @map("largest_trade_usd") @db.Decimal(38, 18)
+  /// 平均取引額（USD）
   averageTradeUsd      Decimal                       @default(0) @map("average_trade_usd") @db.Decimal(38, 18)
+  /// 活動日数
   activeDays           Int                           @default(0) @map("active_days")
+  /// 活動時間数
   activeHours          Int                           @default(0) @map("active_hours")
+  /// Enrichmentステータス
   enrichmentStatus     CandidateEnrichmentStatus     @default(PENDING) @map("enrichment_status")
+  /// フィルターステータス
   filterStatus         CandidateFilterStatus         @default(PENDING) @map("filter_status")
+  /// 除外理由
   exclusionReasons     String[]                      @default([]) @map("exclusion_reasons")
+  /// 昇格日時
   promotedAt           DateTime?                     @map("promoted_at")
+  /// 最終Enrichment日時
   lastEnrichedAt       DateTime?                     @map("last_enriched_at")
+  /// 次回Enrichment可能日時
   nextEnrichmentAt     DateTime?                     @map("next_enrichment_at")
+  /// データ品質スコア
   dataQualityScore     Int                           @default(0) @map("data_quality_score")
+  /// 取得可能開始日時
   availableFrom        DateTime?                     @map("available_from")
+  /// 取得可能終了日時
   availableTo          DateTime?                     @map("available_to")
+  /// 取得Fill件数
   retrievedFillCount   Int                           @default(0) @map("retrieved_fill_count")
+  /// 履歴完全性
   historyCompleteness  CandidateHistoryCompleteness  @default(UNKNOWN) @map("history_completeness")
+  /// 履歴打切りフラグ
   historyTruncated     Boolean                       @default(false) @map("history_truncated")
+  /// 履歴打切り理由
   truncationReason     String?                       @map("truncation_reason")
+  /// Enrichmentメタデータ
   enrichmentMetadata   Json?                         @map("enrichment_metadata")
+  /// データソースID
   sourceId             String                        @map("source_id")
   source               DataSource                    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// 昇格先ウォレットID
   promotedWalletId     String?                       @map("promoted_wallet_id")
   promotedWallet       WalletAddress?                @relation("CandidatePromotion", fields: [promotedWalletId], references: [id], onDelete: SetNull)
   participations       CandidateTradeParticipation[]
@@ -357,7 +463,9 @@ model AddressCandidate {
   enrichmentAttempts   CandidateEnrichmentAttempt[]
   syncJobs             SyncJob[]
   qualityIssues        CandidateDataQualityIssue[]
+  /// 登録日時
   createdAt            DateTime                      @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt            DateTime                      @updatedAt @map("updated_at")
 
   @@unique([sourceId, address])
@@ -366,24 +474,41 @@ model AddressCandidate {
   @@map("address_candidates")
 }
 
+/// 探索市場取引
 model DiscoveryTrade {
+  /// ID
   id              String                        @id @default(cuid())
+  /// 外部取引ID
   externalTradeId String                        @map("external_trade_id")
+  /// フィンガープリント
   fingerprint     String
+  /// 銘柄
   coin            String
+  /// 売買方向
   side            TradeSide
+  /// 価格
   price           Decimal                       @db.Decimal(38, 18)
+  /// 数量
   size            Decimal                       @db.Decimal(38, 18)
+  /// 取引額（USD）
   notionalUsd     Decimal                       @map("notional_usd") @db.Decimal(38, 18)
+  /// 発生日時
   occurredAt      DateTime                      @map("occurred_at")
+  /// トランザクションハッシュ
   transactionHash String                        @map("transaction_hash")
+  /// 取引ID
   tradeId         String                        @map("trade_id")
+  /// 買い手アドレス
   buyerAddress    String                        @map("buyer_address")
+  /// 売り手アドレス
   sellerAddress   String                        @map("seller_address")
+  /// 生ペイロード
   rawPayload      String                        @map("raw_payload") @db.Text
+  /// データソースID
   sourceId        String                        @map("source_id")
   source          DataSource                    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   participations  CandidateTradeParticipation[]
+  /// 受信日時
   receivedAt      DateTime                      @default(now()) @map("received_at")
 
   @@unique([sourceId, externalTradeId])
@@ -394,15 +519,23 @@ model DiscoveryTrade {
   @@map("discovery_trades")
 }
 
+/// 候補取引参加
 model CandidateTradeParticipation {
+  /// ID
   id               String                 @id @default(cuid())
+  /// アドレス候補ID
   candidateId      String                 @map("candidate_id")
   candidate        AddressCandidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// 探索市場取引ID
   discoveryTradeId String                 @map("discovery_trade_id")
   discoveryTrade   DiscoveryTrade         @relation(fields: [discoveryTradeId], references: [id], onDelete: Cascade)
+  /// 取引参加役割
   role             CandidateTradeRole
+  /// 流動性役割
   liquidityRole    CandidateLiquidityRole @map("liquidity_role")
+  /// 売買方向
   side             TradeSide
+  /// 登録日時
   createdAt        DateTime               @default(now()) @map("created_at")
 
   @@unique([candidateId, discoveryTradeId])
@@ -410,13 +543,20 @@ model CandidateTradeParticipation {
   @@map("candidate_trade_participations")
 }
 
+/// 候補対象銘柄
 model CandidateCoin {
+  /// ID
   id          String           @id @default(cuid())
+  /// アドレス候補ID
   candidateId String           @map("candidate_id")
   candidate   AddressCandidate @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// 銘柄
   coin        String
+  /// 初回発見日時
   firstSeenAt DateTime         @map("first_seen_at")
+  /// 最終発見日時
   lastSeenAt  DateTime         @map("last_seen_at")
+  /// 取引回数
   tradeCount  Int              @default(1) @map("trade_count")
 
   @@unique([candidateId, coin])
@@ -424,11 +564,16 @@ model CandidateCoin {
   @@map("candidate_coins")
 }
 
+/// 候補活動時間帯
 model CandidateActivityBucket {
+  /// ID
   id          String                  @id @default(cuid())
+  /// アドレス候補ID
   candidateId String                  @map("candidate_id")
   candidate   AddressCandidate        @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// 活動集計単位
   period      CandidateActivityPeriod
+  /// 集計期間開始日時
   bucketStart DateTime                @map("bucket_start")
 
   @@unique([candidateId, period, bucketStart])
@@ -436,109 +581,190 @@ model CandidateActivityBucket {
   @@map("candidate_activity_buckets")
 }
 
+/// 候補詳細取得試行（Enrichment）
 model CandidateEnrichmentAttempt {
+  /// ID
   id                  String                       @id @default(cuid())
+  /// アドレス候補ID
   candidateId         String                       @map("candidate_id")
   candidate           AddressCandidate             @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// 要求開始日時
   requestedFrom       DateTime                     @map("requested_from")
+  /// 要求終了日時
   requestedTo         DateTime                     @map("requested_to")
+  /// 取得可能開始日時
   availableFrom       DateTime?                    @map("available_from")
+  /// 取得可能終了日時
   availableTo         DateTime?                    @map("available_to")
+  /// 取得Fill件数
   retrievedFillCount  Int                          @default(0) @map("retrieved_fill_count")
+  /// 履歴完全性
   historyCompleteness CandidateHistoryCompleteness @default(UNKNOWN) @map("history_completeness")
+  /// 履歴打切りフラグ
   historyTruncated    Boolean                      @default(false) @map("history_truncated")
+  /// 履歴打切り理由
   truncationReason    String?                      @map("truncation_reason")
+  /// エンドポイント結果
   endpointResults     Json?                        @map("endpoint_results")
+  /// エラーメッセージ
   errorMessage        String?                      @map("error_message") @db.Text
+  /// 開始日時
   startedAt           DateTime                     @default(now()) @map("started_at")
+  /// 終了日時
   finishedAt          DateTime?                    @map("finished_at")
+  /// 成功フラグ
   succeeded           Boolean                      @default(false)
 
   @@index([candidateId, startedAt])
   @@map("candidate_enrichment_attempts")
 }
 
+/// 候補データ品質問題（Data Quality）
 model CandidateDataQualityIssue {
+  /// ID
   id              String                 @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String                 @unique
+  /// 問題種別
   issueType       String                 @map("issue_type")
+  /// 重要度
   severity        AlertSeverity
+  /// ステータス
   status          DataQualityIssueStatus @default(OPEN)
+  /// メッセージ
   message         String                 @db.Text
+  /// 詳細
   details         Json?
+  /// アドレス候補ID
   candidateId     String                 @map("candidate_id")
   candidate       AddressCandidate       @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+  /// 初回検知日時
   firstDetectedAt DateTime               @default(now()) @map("first_detected_at")
+  /// 最終検知日時
   lastDetectedAt  DateTime               @default(now()) @map("last_detected_at")
+  /// 解消日時
   resolvedAt      DateTime?              @map("resolved_at")
+  /// 登録日時
   createdAt       DateTime               @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt       DateTime               @updatedAt @map("updated_at")
 
   @@index([candidateId, status, severity])
   @@map("candidate_data_quality_issues")
 }
 
+/// アドレス探索設定
 model DiscoverySettings {
+  /// ID
   id                           String        @id @default(cuid())
+  /// データソースID
   sourceId                     String        @unique @map("source_id")
   source                       DataSource    @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// 有効フラグ
   enabled                      Boolean       @default(false)
+  /// 探索モード
   mode                         DiscoveryMode @default(MAJOR)
+  /// 優先購読銘柄
   priorityCoins                String[]      @default(["BTC", "ETH", "SOL", "HYPE", "SUI"]) @map("priority_coins")
+  /// 最小観測取引回数
   minimumObservedTradeCount    Int           @default(10) @map("minimum_observed_trade_count")
+  /// 最小観測取引額（USD）
   minimumObservedNotionalUsd   Decimal       @default(10000) @map("minimum_observed_notional_usd") @db.Decimal(38, 18)
+  /// 直近活動判定時間数
   recentActivityHours          Int           @default(24) @map("recent_activity_hours")
+  /// 詳細評価最小取引回数
   fullMinimumTradeCount        Int           @default(30) @map("full_minimum_trade_count")
+  /// 詳細評価最小活動日数
   fullMinimumActiveDays        Int           @default(180) @map("full_minimum_active_days")
+  /// 詳細評価最小活動月数
   fullMinimumActiveMonths      Int           @default(6) @map("full_minimum_active_months")
+  /// 詳細評価最小取引額（USD）
   fullMinimumNotionalUsd       Decimal       @default(10000) @map("full_minimum_notional_usd") @db.Decimal(38, 18)
+  /// 詳細評価直近活動日数
   fullRecentActivityDays       Int           @default(90) @map("full_recent_activity_days")
+  /// 最小Enrichment間隔（分）
   minimumEnrichmentIntervalMin Int           @default(1440) @map("minimum_enrichment_interval_min")
+  /// 登録日時
   createdAt                    DateTime      @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt                    DateTime      @updatedAt @map("updated_at")
 
   @@map("discovery_settings")
 }
 
+/// アドレス探索統計
 model DiscoveryStats {
+  /// ID
   id                       String                    @id @default(cuid())
+  /// 探索データソースID
   sourceId                 String                    @unique @map("source_id")
   source                   DataSource                @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// 受信取引イベント数
   receivedTradeEvents      BigInt                    @default(0) @map("received_trade_events")
+  /// 重複取引イベント数
   duplicateTradeEvents     BigInt                    @default(0) @map("duplicate_trade_events")
+  /// 発見アドレス数
   discoveredAddresses      BigInt                    @default(0) @map("discovered_addresses")
+  /// 新規候補数
   newCandidates            BigInt                    @default(0) @map("new_candidates")
+  /// Enrichment成功数
   enrichmentSucceeded      BigInt                    @default(0) @map("enrichment_succeeded")
+  /// Enrichment失敗数
   enrichmentFailed         BigInt                    @default(0) @map("enrichment_failed")
+  /// フィルター通過数
   filterPassed             BigInt                    @default(0) @map("filter_passed")
+  /// 除外候補数
   excludedCandidates       BigInt                    @default(0) @map("excluded_candidates")
+  /// API weight使用量
   apiWeightUsed            Int                       @default(0) @map("api_weight_used")
+  /// API weight計測開始日時
   apiWeightWindowStartedAt DateTime?                 @map("api_weight_window_started_at")
+  /// Queue滞留数
   queueDepth               Int                       @default(0) @map("queue_depth")
+  /// WebSocket接続状態
   websocketStatus          DiscoveryConnectionStatus @default(STOPPED) @map("websocket_status")
+  /// 購読銘柄
   subscribedCoins          String[]                  @default([]) @map("subscribed_coins")
+  /// 最終イベント日時
   lastEventAt              DateTime?                 @map("last_event_at")
+  /// 最終接続日時
   lastConnectedAt          DateTime?                 @map("last_connected_at")
+  /// 最終切断日時
   lastDisconnectedAt       DateTime?                 @map("last_disconnected_at")
+  /// 登録日時
   createdAt                DateTime                  @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt                DateTime                  @updatedAt @map("updated_at")
 
   @@map("discovery_stats")
 }
 
+/// アドレス探索カーソル
 model DiscoveryCursor {
+  /// ID
   id               String           @id @default(cuid())
+  /// 探索スコープ
   scope            String
+  /// 探索カーソル種別
   cursorType       String           @map("cursor_type")
+  /// 最終タイムスタンプ
   lastTimestamp    DateTime?        @map("last_timestamp")
+  /// 最終外部ID
   lastExternalId   String?          @map("last_external_id")
+  /// 最終成功日時
   lastSuccessfulAt DateTime?        @map("last_successful_at")
+  /// 最終試行日時
   lastAttemptedAt  DateTime?        @map("last_attempted_at")
+  /// ステータス
   status           SyncCursorStatus @default(IDLE)
+  /// エラーメッセージ
   errorMessage     String?          @map("error_message") @db.Text
+  /// データソースID
   sourceId         String           @map("source_id")
   source           DataSource       @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt        DateTime         @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   @@unique([sourceId, scope, cursorType])
@@ -546,38 +772,63 @@ model DiscoveryCursor {
   @@map("discovery_cursors")
 }
 
+/// 探索データ品質問題（Data Quality）
 model DiscoveryDataQualityIssue {
+  /// ID
   id              String                 @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String                 @unique
+  /// 問題種別
   issueType       String                 @map("issue_type")
+  /// 重要度
   severity        AlertSeverity
+  /// ステータス
   status          DataQualityIssueStatus @default(OPEN)
+  /// メッセージ
   message         String                 @db.Text
+  /// 詳細
   details         Json?
+  /// データソースID
   sourceId        String                 @map("source_id")
   source          DataSource             @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// 初回検知日時
   firstDetectedAt DateTime               @default(now()) @map("first_detected_at")
+  /// 最終検知日時
   lastDetectedAt  DateTime               @default(now()) @map("last_detected_at")
+  /// 解消日時
   resolvedAt      DateTime?              @map("resolved_at")
+  /// 登録日時
   createdAt       DateTime               @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt       DateTime               @updatedAt @map("updated_at")
 
   @@index([sourceId, status, severity])
   @@map("discovery_data_quality_issues")
 }
 
+/// 生イベント
 model RawEvent {
+  /// ID
   id              String         @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String
+  /// 外部イベントID
   externalEventId String?        @map("external_event_id")
+  /// イベント種別
   eventType       String         @map("event_type")
+  /// 受信経路
   transport       EventTransport
+  /// イベント日時
   eventTime       DateTime?      @map("event_time")
+  /// 生ペイロード
   rawPayload      String         @map("raw_payload") @db.Text
+  /// データソースID
   sourceId        String         @map("source_id")
   source          DataSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String         @map("wallet_address_id")
   walletAddress   WalletAddress  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 受信日時
   receivedAt      DateTime       @default(now()) @map("received_at")
 
   @@unique([sourceId, fingerprint])
@@ -587,27 +838,47 @@ model RawEvent {
   @@map("raw_events")
 }
 
+/// 正規化約定（Fill）
 model NormalizedTrade {
+  /// ID
   id              String        @id @default(cuid())
+  /// 外部取引ID
   externalTradeId String        @map("external_trade_id")
+  /// フィンガープリント
   fingerprint     String
+  /// 銘柄
   coin            String
+  /// 売買方向
   side            TradeSide
+  /// ポジション方向
   direction       String
+  /// 価格
   price           Decimal       @db.Decimal(38, 18)
+  /// 数量
   size            Decimal       @db.Decimal(38, 18)
+  /// 手数料
   fee             Decimal       @db.Decimal(38, 18)
+  /// 手数料通貨
   feeToken        String        @map("fee_token")
+  /// 確定損益
   closedPnl       Decimal       @map("closed_pnl") @db.Decimal(38, 18)
+  /// 約定前ポジション
   startPosition   Decimal       @map("start_position") @db.Decimal(38, 18)
+  /// Taker約定フラグ
   crossed         Boolean
+  /// 注文ID
   orderId         String        @map("order_id")
+  /// トランザクションハッシュ
   transactionHash String        @map("transaction_hash")
+  /// 発生日時
   occurredAt      DateTime      @map("occurred_at")
+  /// データソースID
   sourceId        String        @map("source_id")
   source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String        @map("wallet_address_id")
   walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt       DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, externalTradeId])
@@ -617,19 +888,31 @@ model NormalizedTrade {
   @@map("normalized_trades")
 }
 
+/// 資金調達料支払（Funding）
 model FundingPayment {
+  /// ID
   id                String        @id @default(cuid())
+  /// 外部Funding ID
   externalPaymentId String        @map("external_payment_id")
+  /// フィンガープリント
   fingerprint       String
+  /// 銘柄
   coin              String
+  /// 金額
   amount            Decimal       @db.Decimal(38, 18)
+  /// ポジション数量
   positionSize      Decimal       @map("position_size") @db.Decimal(38, 18)
+  /// 資金調達率
   fundingRate       Decimal       @map("funding_rate") @db.Decimal(38, 18)
+  /// 発生日時
   occurredAt        DateTime      @map("occurred_at")
+  /// データソースID
   sourceId          String        @map("source_id")
   source            DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId   String        @map("wallet_address_id")
   walletAddress     WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt         DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, externalPaymentId])
@@ -638,22 +921,37 @@ model FundingPayment {
   @@map("funding_payments")
 }
 
+/// 入出金台帳（Ledger）
 model CashFlow {
+  /// ID
   id              String        @id @default(cuid())
+  /// 外部台帳ID
   externalFlowId  String        @map("external_flow_id")
+  /// フィンガープリント
   fingerprint     String
+  /// 台帳種別
   flowType        String        @map("flow_type")
+  /// 資産
   asset           String?
+  /// 金額
   amount          Decimal?      @db.Decimal(38, 18)
+  /// USD換算額
   usdValue        Decimal?      @map("usd_value") @db.Decimal(38, 18)
+  /// 手数料
   fee             Decimal?      @db.Decimal(38, 18)
+  /// 取引相手
   counterparty    String?
+  /// 発生日時
   occurredAt      DateTime      @map("occurred_at")
+  /// 生ペイロード
   rawPayload      String        @map("raw_payload") @db.Text
+  /// データソースID
   sourceId        String        @map("source_id")
   source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String        @map("wallet_address_id")
   walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt       DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, externalFlowId])
@@ -662,26 +960,45 @@ model CashFlow {
   @@map("cash_flows")
 }
 
+/// 無期限先物ポジション
 model PerpPosition {
+  /// ID
   id                String        @id @default(cuid())
+  /// 銘柄
   coin              String
+  /// 売買方向
   side              PositionSide
+  /// 数量
   size              Decimal       @db.Decimal(38, 18)
+  /// エントリー価格
   entryPrice        Decimal?      @map("entry_price") @db.Decimal(38, 18)
+  /// ポジション評価額
   positionValue     Decimal       @map("position_value") @db.Decimal(38, 18)
+  /// 含み損益
   unrealizedPnl     Decimal       @map("unrealized_pnl") @db.Decimal(38, 18)
+  /// 自己資本利益率
   returnOnEquity    Decimal       @map("return_on_equity") @db.Decimal(38, 18)
+  /// 使用証拠金
   marginUsed        Decimal       @map("margin_used") @db.Decimal(38, 18)
+  /// 清算価格
   liquidationPrice  Decimal?      @map("liquidation_price") @db.Decimal(38, 18)
+  /// レバレッジ種別
   leverageType      String        @map("leverage_type")
+  /// レバレッジ倍率
   leverageValue     Decimal       @map("leverage_value") @db.Decimal(38, 18)
+  /// 最大レバレッジ
   maxLeverage       Decimal       @map("max_leverage") @db.Decimal(38, 18)
+  /// 外部更新日時
   updatedExternalAt DateTime      @map("updated_external_at")
+  /// データソースID
   sourceId          String        @map("source_id")
   source            DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId   String        @map("wallet_address_id")
   walletAddress     WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt         DateTime      @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt         DateTime      @updatedAt @map("updated_at")
 
   @@unique([walletAddressId, coin])
@@ -689,20 +1006,33 @@ model PerpPosition {
   @@map("perp_positions")
 }
 
+/// 無期限先物ポジション履歴
 model PerpPositionEvent {
+  /// ID
   id              String        @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String
+  /// 銘柄
   coin            String
+  /// 売買方向
   side            PositionSide
+  /// 数量
   size            Decimal       @db.Decimal(38, 18)
+  /// エントリー価格
   entryPrice      Decimal?      @map("entry_price") @db.Decimal(38, 18)
+  /// ポジション評価額
   positionValue   Decimal       @map("position_value") @db.Decimal(38, 18)
+  /// 含み損益
   unrealizedPnl   Decimal       @map("unrealized_pnl") @db.Decimal(38, 18)
+  /// 発生日時
   occurredAt      DateTime      @map("occurred_at")
+  /// データソースID
   sourceId        String        @map("source_id")
   source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String        @map("wallet_address_id")
   walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt       DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, fingerprint])
@@ -710,20 +1040,33 @@ model PerpPositionEvent {
   @@map("perp_position_events")
 }
 
+/// ポートフォリオスナップショット
 model PortfolioSnapshot {
+  /// ID
   id                    String        @id @default(cuid())
+  /// フィンガープリント
   fingerprint           String
+  /// スナップショット種別
   snapshotType          String        @map("snapshot_type")
+  /// 口座評価額
   accountValue          Decimal?      @map("account_value") @db.Decimal(38, 18)
+  /// 総想定ポジション額
   totalNotionalPosition Decimal?      @map("total_notional_position") @db.Decimal(38, 18)
+  /// 総使用証拠金
   totalMarginUsed       Decimal?      @map("total_margin_used") @db.Decimal(38, 18)
+  /// 出金可能額
   withdrawable          Decimal?      @db.Decimal(38, 18)
+  /// 生ペイロード
   rawPayload            String        @map("raw_payload") @db.Text
+  /// 取得日時
   capturedAt            DateTime      @map("captured_at")
+  /// データソースID
   sourceId              String        @map("source_id")
   source                DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId       String        @map("wallet_address_id")
   walletAddress         WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt             DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, fingerprint])
@@ -731,19 +1074,31 @@ model PortfolioSnapshot {
   @@map("portfolio_snapshots")
 }
 
+/// 現物残高スナップショット
 model SpotBalanceSnapshot {
+  /// ID
   id              String        @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String
+  /// 銘柄
   coin            String
+  /// トークンインデックス
   tokenIndex      Int           @map("token_index")
+  /// 総残高
   total           Decimal       @db.Decimal(38, 18)
+  /// 拘束残高
   hold            Decimal       @db.Decimal(38, 18)
+  /// 取得時想定元本
   entryNotional   Decimal       @map("entry_notional") @db.Decimal(38, 18)
+  /// 取得日時
   capturedAt      DateTime      @map("captured_at")
+  /// データソースID
   sourceId        String        @map("source_id")
   source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String        @map("wallet_address_id")
   walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt       DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, fingerprint])
@@ -751,24 +1106,41 @@ model SpotBalanceSnapshot {
   @@map("spot_balance_snapshots")
 }
 
+/// 注文履歴
 model OrderHistory {
+  /// ID
   id              String        @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String
+  /// 注文ID
   orderId         String        @map("order_id")
+  /// クライアント注文ID
   clientOrderId   String?       @map("client_order_id")
+  /// 銘柄
   coin            String
+  /// 売買方向
   side            TradeSide
+  /// ステータス
   status          String
+  /// 注文種別
   orderType       String        @map("order_type")
+  /// 指値価格
   limitPrice      Decimal       @map("limit_price") @db.Decimal(38, 18)
+  /// 数量
   size            Decimal       @db.Decimal(38, 18)
+  /// 当初数量
   originalSize    Decimal       @map("original_size") @db.Decimal(38, 18)
+  /// Reduce Onlyフラグ
   reduceOnly      Boolean       @map("reduce_only")
+  /// ステータス日時
   statusTimestamp DateTime      @map("status_timestamp")
+  /// データソースID
   sourceId        String        @map("source_id")
   source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String        @map("wallet_address_id")
   walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt       DateTime      @default(now()) @map("created_at")
 
   @@unique([sourceId, fingerprint])
@@ -777,21 +1149,35 @@ model OrderHistory {
   @@map("order_history")
 }
 
+/// 同期カーソル（Sync Cursor）
 model SyncCursor {
+  /// ID
   id               String           @id @default(cuid())
+  /// 同期スコープ
   scope            String
+  /// カーソル種別
   cursorType       String           @map("cursor_type")
+  /// 最終タイムスタンプ
   lastTimestamp    DateTime?        @map("last_timestamp")
+  /// 最終外部ID
   lastExternalId   String?          @map("last_external_id")
+  /// 最終成功日時
   lastSuccessfulAt DateTime?        @map("last_successful_at")
+  /// 最終試行日時
   lastAttemptedAt  DateTime?        @map("last_attempted_at")
+  /// ステータス
   status           SyncCursorStatus @default(IDLE)
+  /// エラーメッセージ
   errorMessage     String?          @map("error_message") @db.Text
+  /// データソースID
   sourceId         String           @map("source_id")
   source           DataSource       @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId  String           @map("wallet_address_id")
   walletAddress    WalletAddress    @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt        DateTime         @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt        DateTime         @updatedAt @map("updated_at")
 
   @@unique([sourceId, walletAddressId, scope, cursorType])
@@ -799,52 +1185,88 @@ model SyncCursor {
   @@map("sync_cursors")
 }
 
+/// データ品質問題（Data Quality）
 model DataQualityIssue {
+  /// ID
   id              String                 @id @default(cuid())
+  /// フィンガープリント
   fingerprint     String                 @unique
+  /// 問題種別
   issueType       String                 @map("issue_type")
+  /// 重要度
   severity        AlertSeverity
+  /// ステータス
   status          DataQualityIssueStatus @default(OPEN)
+  /// メッセージ
   message         String                 @db.Text
+  /// 詳細
   details         Json?
+  /// 初回検知日時
   firstDetectedAt DateTime               @default(now()) @map("first_detected_at")
+  /// 最終検知日時
   lastDetectedAt  DateTime               @default(now()) @map("last_detected_at")
+  /// 解消日時
   resolvedAt      DateTime?              @map("resolved_at")
+  /// データソースID
   sourceId        String                 @map("source_id")
   source          DataSource             @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  /// ウォレットアドレスID
   walletAddressId String                 @map("wallet_address_id")
   walletAddress   WalletAddress          @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 登録日時
   createdAt       DateTime               @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt       DateTime               @updatedAt @map("updated_at")
 
   @@index([walletAddressId, status, severity])
   @@map("data_quality_issues")
 }
 
+/// 指標計算実行
 model MetricCalculationRun {
+  /// ID
   id                  String                         @id @default(cuid())
+  /// ウォレットアドレスID
   walletAddressId     String                         @map("wallet_address_id")
   walletAddress       WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 計算バージョン
   calculationVersion  String                         @map("calculation_version")
+  /// 計算開始日時
   calculationFrom     DateTime                       @map("calculation_from")
+  /// 計算終了日時
   calculationTo       DateTime                       @map("calculation_to")
+  /// 要求日時
   requestedAt         DateTime                       @map("requested_at")
+  /// 計算要求元
   requestedBy         String                         @map("requested_by")
+  /// 開始日時
   startedAt           DateTime?                      @map("started_at")
+  /// 完了日時
   completedAt         DateTime?                      @map("completed_at")
+  /// ステータス
   status              MetricCalculationStatus        @default(PENDING)
+  /// 履歴完全性
   historyCompleteness PerformanceHistoryCompleteness @map("history_completeness")
+  /// 精度区分
   precision           PerformancePrecision?
+  /// 入力フィンガープリント
   inputFingerprint    String                         @map("input_fingerprint")
+  /// 重複排除キー
   deduplicationKey    String                         @unique(map: "metric_runs_dedup_key") @map("deduplication_key")
+  /// 警告件数
   warningCount        Int                            @default(0) @map("warning_count")
+  /// 警告コード
   warningCodes        String[]                       @default([]) @map("warning_codes")
+  /// エラーコード
   errorCode           String?                        @map("error_code")
+  /// エラーメッセージ
   errorMessage        String?                        @map("error_message") @db.Text
   dailyNavs           DailyNav[]
   positionCycles      PositionCycle[]
   performanceMetrics  AddressPerformanceMetric[]
+  /// 登録日時
   createdAt           DateTime                       @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt           DateTime                       @updatedAt @map("updated_at")
 
   @@index([walletAddressId, status, requestedAt], map: "metric_runs_wallet_status_requested_idx")
@@ -852,22 +1274,37 @@ model MetricCalculationRun {
   @@map("metric_calculation_runs")
 }
 
+/// 日次純資産額（NAV）
 model DailyNav {
+  /// ID
   id                  String                         @id @default(cuid())
+  /// ウォレットアドレスID
   walletAddressId     String                         @map("wallet_address_id")
   walletAddress       WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 計算実行ID
   calculationRunId    String                         @map("calculation_run_id")
   calculationRun      MetricCalculationRun           @relation(fields: [calculationRunId], references: [id], onDelete: Cascade)
+  /// NAV対象日
   date                DateTime                       @db.Date
+  /// 日次純資産額（NAV）
   nav                 Decimal                        @db.Decimal(38, 18)
+  /// 現金残高
   cashBalance         Decimal?                       @map("cash_balance") @db.Decimal(38, 18)
+  /// 含み損益
   unrealizedPnl       Decimal?                       @map("unrealized_pnl") @db.Decimal(38, 18)
+  /// 実現損益
   realizedPnl         Decimal?                       @map("realized_pnl") @db.Decimal(38, 18)
+  /// 資金調達料（Funding）
   funding             Decimal?                       @db.Decimal(38, 18)
+  /// 手数料合計
   fees                Decimal?                       @db.Decimal(38, 18)
+  /// 外部キャッシュフロー
   externalCashFlow    Decimal?                       @map("external_cash_flow") @db.Decimal(38, 18)
+  /// 精度区分
   precision           PerformancePrecision
+  /// 履歴完全性
   historyCompleteness PerformanceHistoryCompleteness @map("history_completeness")
+  /// 登録日時
   createdAt           DateTime                       @default(now()) @map("created_at")
 
   @@unique([calculationRunId, date], map: "daily_navs_run_date_key")
@@ -875,27 +1312,47 @@ model DailyNav {
   @@map("daily_navs")
 }
 
+/// ポジションサイクル（Position Cycle）
 model PositionCycle {
+  /// ID
   id                String               @id @default(cuid())
+  /// ウォレットアドレスID
   walletAddressId   String               @map("wallet_address_id")
   walletAddress     WalletAddress        @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 計算実行ID
   calculationRunId  String               @map("calculation_run_id")
   calculationRun    MetricCalculationRun @relation(fields: [calculationRunId], references: [id], onDelete: Cascade)
+  /// 銘柄
   coin              String
+  /// 売買方向
   side              PositionSide
+  /// 開始日時
   openedAt          DateTime             @map("opened_at")
+  /// 終了日時
   closedAt          DateTime?            @map("closed_at")
+  /// 平均エントリー価格
   averageEntryPrice Decimal              @map("average_entry_price") @db.Decimal(38, 18)
+  /// 平均決済価格
   averageExitPrice  Decimal?             @map("average_exit_price") @db.Decimal(38, 18)
+  /// エントリー数量
   entryQuantity     Decimal              @map("entry_quantity") @db.Decimal(38, 18)
+  /// 決済数量
   exitQuantity      Decimal              @map("exit_quantity") @db.Decimal(38, 18)
+  /// 総実現損益
   grossRealizedPnl  Decimal              @map("gross_realized_pnl") @db.Decimal(38, 18)
+  /// 手数料合計
   fees              Decimal              @db.Decimal(38, 18)
+  /// 資金調達料（Funding）
   funding           Decimal              @db.Decimal(38, 18)
+  /// 純実現損益
   netRealizedPnl    Decimal              @map("net_realized_pnl") @db.Decimal(38, 18)
+  /// Fill件数
   fillCount         Int                  @map("fill_count")
+  /// ステータス
   status            PositionCycleStatus
+  /// 入力フィンガープリント
   inputFingerprint  String               @map("input_fingerprint")
+  /// 登録日時
   createdAt         DateTime             @default(now()) @map("created_at")
 
   @@unique([calculationRunId, inputFingerprint], map: "position_cycles_run_input_key")
@@ -903,20 +1360,33 @@ model PositionCycle {
   @@map("position_cycles")
 }
 
+/// アドレス運用指標
 model AddressPerformanceMetric {
+  /// ID
   id               String                  @id @default(cuid())
+  /// ウォレットアドレスID
   walletAddressId  String                  @map("wallet_address_id")
   walletAddress    WalletAddress           @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 計算実行ID
   calculationRunId String                  @map("calculation_run_id")
   calculationRun   MetricCalculationRun    @relation(fields: [calculationRunId], references: [id], onDelete: Cascade)
+  /// 指標キー
   metricKey        String                  @map("metric_key")
+  /// 指標値（Decimal）
   metricValue      Decimal                 @map("metric_value") @db.Decimal(38, 18)
+  /// 精度区分
   precision        PerformancePrecision
+  /// ステータス
   status           PerformanceMetricStatus
+  /// 警告コード
   warningCodes     String[]                @default([]) @map("warning_codes")
+  /// 計算開始日時
   calculationFrom  DateTime                @map("calculation_from")
+  /// 計算終了日時
   calculationTo    DateTime                @map("calculation_to")
+  /// 指標バージョン
   metricVersion    String                  @map("metric_version")
+  /// 登録日時
   createdAt        DateTime                @default(now()) @map("created_at")
 
   @@unique([calculationRunId, metricKey], map: "performance_metrics_run_key")
@@ -924,18 +1394,30 @@ model AddressPerformanceMetric {
   @@map("address_performance_metrics")
 }
 
+/// システムアラート
 model SystemAlert {
+  /// ID
   id          String        @id @default(cuid())
+  /// フィンガープリント
   fingerprint String        @unique
+  /// 重要度
   severity    AlertSeverity
+  /// ステータス
   status      AlertStatus   @default(OPEN)
+  /// タイトル
   title       String
+  /// メッセージ
   message     String        @db.Text
+  /// データソースID
   sourceId    String?       @map("source_id")
   source      DataSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  /// 開始日時
   openedAt    DateTime      @default(now()) @map("opened_at")
+  /// 解消日時
   resolvedAt  DateTime?     @map("resolved_at")
+  /// 登録日時
   createdAt   DateTime      @default(now()) @map("created_at")
+  /// 更新日時
   updatedAt   DateTime      @updatedAt @map("updated_at")
 
   @@index([status, severity])
@@ -943,16 +1425,26 @@ model SystemAlert {
   @@map("system_alerts")
 }
 
+/// 監査ログ
 model AuditLog {
+  /// ID
   id           String   @id @default(cuid())
+  /// 操作ユーザーID
   actorUserId  String?  @map("actor_user_id")
   actorUser    User?    @relation(fields: [actorUserId], references: [id], onDelete: SetNull)
+  /// 操作
   action       String
+  /// リソース種別
   resourceType String   @map("resource_type")
+  /// リソースID
   resourceId   String?  @map("resource_id")
+  /// IPアドレス
   ipAddress    String?  @map("ip_address")
+  /// ユーザーエージェント
   userAgent    String?  @map("user_agent") @db.Text
+  /// メタデータ
   metadata     Json?
+  /// 登録日時
   createdAt    DateTime @default(now()) @map("created_at")
 
   @@index([actorUserId, createdAt])
