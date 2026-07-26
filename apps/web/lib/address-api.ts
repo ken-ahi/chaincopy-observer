@@ -166,17 +166,29 @@ export async function apiRequest<T>(input: string, init?: RequestInit): Promise<
   });
   const payload: unknown = await response.json();
   if (!response.ok) {
-    const error =
+    const errorValue =
       typeof payload === "object" && payload !== null
         ? (payload as { error?: unknown }).error
         : undefined;
-    const message =
+    const legacyMessage =
       typeof payload === "object" && payload !== null
         ? (payload as { message?: unknown }).message
         : undefined;
+    const structuredError =
+      typeof errorValue === "object" && errorValue !== null
+        ? (errorValue as { code?: unknown; message?: unknown })
+        : undefined;
     throw new ApiRequestError(
-      typeof error === "string" ? error : "request_failed",
-      typeof message === "string" ? message : "API request failed.",
+      typeof structuredError?.code === "string"
+        ? structuredError.code
+        : typeof errorValue === "string"
+          ? errorValue
+          : "request_failed",
+      typeof structuredError?.message === "string"
+        ? structuredError.message
+        : typeof legacyMessage === "string"
+          ? legacyMessage
+          : "API request failed.",
       response.status,
     );
   }
