@@ -14,19 +14,20 @@ export class DatabaseRedisHealthService implements HealthService {
   public constructor(
     private readonly database: PrismaClient,
     private readonly redis: Redis,
+    private readonly timeoutMs = 2_000,
   ) {}
 
   public async check(): Promise<ServiceHealth> {
     const [database, redis] = await Promise.all([
       checkComponent(async () => {
         await this.database.$queryRaw`SELECT 1`;
-      }),
+      }, this.timeoutMs),
       checkComponent(async () => {
         const response = await this.redis.ping();
         if (response !== "PONG") {
           throw new Error("Redis ping did not return PONG");
         }
-      }),
+      }, this.timeoutMs),
     ]);
 
     return {
@@ -41,11 +42,20 @@ export class DatabaseRedisHealthService implements HealthService {
   }
 }
 
-async function checkComponent(check: ComponentCheck): Promise<HealthComponent> {
+async function checkComponent(check: ComponentCheck, timeoutMs: number): Promise<HealthComponent> {
   const startedAt = performance.now();
+  let timeout: NodeJS.Timeout | undefined;
 
   try {
-    await check();
+    await Promise.race([
+      check(),
+      new Promise<void>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`Health probe timed out after ${timeoutMs}ms.`)),
+          timeoutMs,
+        );
+      }),
+    ]);
     return {
       latencyMs: Math.round(performance.now() - startedAt),
       status: "up",
@@ -55,5 +65,9 @@ async function checkComponent(check: ComponentCheck): Promise<HealthComponent> {
       latencyMs: Math.round(performance.now() - startedAt),
       status: "down",
     };
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }

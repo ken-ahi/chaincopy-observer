@@ -3,6 +3,7 @@ name: chaincopy-observer
 services:
   postgres:
     image: postgres:17-alpine
+    restart: unless-stopped
     environment:
       POSTGRES_DB: chaincopy
       POSTGRES_PASSWORD: chaincopy
@@ -14,12 +15,13 @@ services:
       timeout: 5s
       retries: 20
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
   redis:
     image: redis:8-alpine
+    restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -27,7 +29,7 @@ services:
       timeout: 5s
       retries: 20
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis_data:/data
 
@@ -70,6 +72,7 @@ services:
       start_period: 10s
     ports:
       - "3001:3001"
+    restart: unless-stopped
 
   worker:
     build:
@@ -78,6 +81,11 @@ services:
       target: worker
     environment:
       DATABASE_URL: postgresql://chaincopy:chaincopy@postgres:5432/chaincopy?schema=public
+      HYPERLIQUID_API_URL: ${HYPERLIQUID_API_URL:-https://api.hyperliquid.xyz/info}
+      HYPERLIQUID_HTTP_TIMEOUT_MS: ${HYPERLIQUID_HTTP_TIMEOUT_MS:-10000}
+      HYPERLIQUID_NETWORK: ${HYPERLIQUID_NETWORK:-mainnet}
+      HYPERLIQUID_SYNC_INTERVAL_MS: ${HYPERLIQUID_SYNC_INTERVAL_MS:-60000}
+      HYPERLIQUID_WS_URL: ${HYPERLIQUID_WS_URL:-wss://api.hyperliquid.xyz/ws}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NODE_ENV: production
       REDIS_URL: redis://redis:6379
@@ -96,6 +104,7 @@ services:
       start_period: 10s
     ports:
       - "3002:3002"
+    restart: unless-stopped
 
   web:
     build:
@@ -110,6 +119,7 @@ services:
       DATABASE_URL: postgresql://chaincopy:chaincopy@postgres:5432/chaincopy?schema=public
       GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-replace-with-google-client-id}
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-replace-with-google-client-secret}
+      INTERNAL_API_SECRET: ${INTERNAL_API_SECRET:-local-internal-secret-at-least-32-characters}
       LOG_LEVEL: ${LOG_LEVEL:-info}
       NEXTAUTH_URL: ${APP_BASE_URL:-http://localhost:3000}
       NODE_ENV: production
@@ -128,6 +138,7 @@ services:
       start_period: 15s
     ports:
       - "3000:3000"
+    restart: unless-stopped
 
 volumes:
   postgres_data:

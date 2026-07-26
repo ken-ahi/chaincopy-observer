@@ -1,10 +1,16 @@
+import { HyperliquidClient } from "@chaincopy/blockchain-adapters";
 import { createLogger, errorDetails, loadRootEnvironment, readWorkerEnv } from "@chaincopy/config";
 import { disconnectDatabase, prisma } from "@chaincopy/database";
-import { systemJobNames } from "@chaincopy/domain";
+import { hyperliquidQueueName, systemJobNames, type HyperliquidJobData } from "@chaincopy/domain";
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 
 import { startHealthServer } from "./health-server.js";
+import { HyperliquidJobProcessor } from "./hyperliquid/processor.js";
+import { HyperliquidRepository } from "./hyperliquid/repository.js";
+import { HyperliquidScheduler } from "./hyperliquid/scheduler.js";
+import { HyperliquidSyncService } from "./hyperliquid/sync-service.js";
+import { HyperliquidWebSocketSupervisor } from "./hyperliquid/websocket-supervisor.js";
 import {
   enqueueSampleHealthJob,
   sampleJobId,
@@ -20,11 +26,60 @@ const redis = new Redis(env.REDIS_URL, {
   enableReadyCheck: true,
   maxRetriesPerRequest: null,
 });
-const queue = new Queue<SampleHealthJobData>(systemQueueName, {
+redis.on("error", (error) => {
+  logger.error({ error: errorDetails(error) }, "Worker Redis connection error");
+});
+redis.on("reconnecting", (delay: number) => {
+  logger.warn({ delay }, "Worker Redis connection is reconnecting");
+});
+redis.on("ready", () => {
+  logger.info("Worker Redis connection is ready");
+});
+
+const systemQueue = new Queue<SampleHealthJobData>(systemQueueName, {
+  connection: redis,
+});
+const hyperliquidQueue = new Queue<HyperliquidJobData>(hyperliquidQueueName, {
   connection: redis,
 });
 
-const worker = new Worker<SampleHealthJobData>(
+await Promise.all([prisma.$queryRaw`SELECT 1`, redis.ping()]);
+
+const sourceKey = `hyperliquid-${env.HYPERLIQUID_NETWORK}`;
+const sourceName = `Hyperliquid ${env.HYPERLIQUID_NETWORK === "mainnet" ? "Mainnet" : "Testnet"}`;
+const hyperliquidRepository = new HyperliquidRepository(prisma, sourceKey, sourceName);
+const sourceId = await hyperliquidRepository.ensureSource();
+const hyperliquidClient = new HyperliquidClient(env.HYPERLIQUID_API_URL, {
+  timeoutMs: env.HYPERLIQUID_HTTP_TIMEOUT_MS,
+});
+const websocketSupervisor = new HyperliquidWebSocketSupervisor(
+  env.HYPERLIQUID_WS_URL,
+  hyperliquidRepository,
+  hyperliquidQueue,
+  logger,
+);
+const syncService = new HyperliquidSyncService(hyperliquidClient, hyperliquidRepository, logger);
+const scheduler = new HyperliquidScheduler(
+  prisma,
+  redis,
+  hyperliquidQueue,
+  websocketSupervisor,
+  sourceKey,
+  env.HYPERLIQUID_SYNC_INTERVAL_MS,
+  logger,
+);
+const hyperliquidProcessor = new HyperliquidJobProcessor(
+  prisma,
+  redis,
+  hyperliquidQueue,
+  syncService,
+  websocketSupervisor,
+  sourceId,
+  () => scheduler.hasLeadership(),
+  logger,
+);
+
+const systemWorker = new Worker<SampleHealthJobData>(
   systemQueueName,
   async (job: Job<SampleHealthJobData>) => {
     if (job.name !== systemJobNames.sampleHealthCheck) {
@@ -100,17 +155,53 @@ const worker = new Worker<SampleHealthJobData>(
   },
 );
 
-worker.on("failed", (job, error) => {
+systemWorker.on("failed", (job, error) => {
   logger.error(
     {
       error: errorDetails(error),
       jobId: job?.id,
     },
-    "Worker job failed",
+    "System worker job failed",
   );
 });
-worker.on("error", (error) => {
-  logger.error({ error: errorDetails(error) }, "BullMQ worker error");
+systemWorker.on("error", (error) => {
+  logger.error({ error: errorDetails(error) }, "System BullMQ worker error");
+});
+
+const hyperliquidWorker = new Worker<HyperliquidJobData>(
+  hyperliquidQueueName,
+  (job) => hyperliquidProcessor.process(job),
+  {
+    connection: redis,
+    concurrency: 4,
+  },
+);
+
+hyperliquidWorker.on("completed", (job) => {
+  logger.debug({ jobId: job.id, jobName: job.name }, "Hyperliquid BullMQ job acknowledged");
+});
+hyperliquidWorker.on("failed", (job, error) => {
+  const attempts = job?.opts.attempts ?? 1;
+  const attemptsMade = job?.attemptsMade ?? attempts;
+  const context = {
+    attempts,
+    attemptsMade,
+    error: errorDetails(error),
+    jobId: job?.id,
+    jobName: job?.name,
+    retryScheduled: attemptsMade < attempts,
+  };
+  if (attemptsMade < attempts) {
+    logger.warn(context, "Hyperliquid BullMQ job failed; retry scheduled");
+    return;
+  }
+  logger.error(context, "Hyperliquid BullMQ job exhausted retries");
+});
+hyperliquidWorker.on("stalled", (jobId) => {
+  logger.warn({ jobId }, "Hyperliquid BullMQ job stalled");
+});
+hyperliquidWorker.on("error", (error) => {
+  logger.error({ error: errorDetails(error) }, "Hyperliquid BullMQ worker error");
 });
 
 const healthServer = await startHealthServer({
@@ -120,14 +211,14 @@ const healthServer = await startHealthServer({
   redis,
 });
 
-await prisma.$queryRaw`SELECT 1`;
-await redis.ping();
-const queuedJobId = await enqueueSampleHealthJob(queue);
+const queuedJobId = await enqueueSampleHealthJob(systemQueue);
+await scheduler.start();
 logger.info(
   {
     healthPort: env.WORKER_HEALTH_PORT,
     jobId: queuedJobId,
-    queue: systemQueueName,
+    queues: [systemQueueName, hyperliquidQueueName],
+    sourceKey,
   },
   "Worker started",
 );
@@ -141,7 +232,37 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   logger.info({ signal }, "Stopping worker");
 
-  await new Promise<void>((resolve, reject) => {
+  let shutdownFailed = false;
+  const close = async (component: string, operation: () => Promise<unknown>): Promise<void> => {
+    try {
+      await operation();
+    } catch (error) {
+      shutdownFailed = true;
+      logger.error({ component, error: errorDetails(error) }, "Worker shutdown step failed");
+    }
+  };
+
+  await close("health-server", () => closeServer());
+  await close("hyperliquid-scheduler", () => scheduler.stop());
+  await close("hyperliquid-worker", () => hyperliquidWorker.close());
+  await close("system-worker", () => systemWorker.close());
+  await close("hyperliquid-queue", () => hyperliquidQueue.close());
+  await close("system-queue", () => systemQueue.close());
+  await close("redis", async () => {
+    if (redis.status !== "end") {
+      await redis.quit();
+    }
+  });
+  await close("database", () => disconnectDatabase());
+
+  if (shutdownFailed) {
+    process.exitCode = 1;
+  }
+  logger.info({ shutdownFailed, signal }, "Worker stopped");
+}
+
+function closeServer(): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
     healthServer.close((error) => {
       if (error) {
         reject(error);
@@ -150,10 +271,6 @@ async function shutdown(signal: string): Promise<void> {
       resolve();
     });
   });
-  await worker.close();
-  await queue.close();
-  await redis.quit();
-  await disconnectDatabase();
 }
 
 process.once("SIGINT", () => {

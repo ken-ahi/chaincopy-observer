@@ -19,6 +19,7 @@ describe("environment schemas", () => {
       GOOGLE_CLIENT_ID: "google-client",
       GOOGLE_CLIENT_SECRET: "google-secret",
       ALLOWED_ADMIN_EMAIL: " Owner@Example.COM ",
+      INTERNAL_API_SECRET: "an-internal-secret-that-is-at-least-32-characters",
     });
 
     expect(result.ALLOWED_ADMIN_EMAIL).toBe("owner@example.com");

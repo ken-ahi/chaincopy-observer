@@ -1,6 +1,6 @@
 # セキュリティ設計
 
-最終更新: 2026-07-25
+最終更新: 2026-07-26
 
 ## 1. セキュリティ境界
 
@@ -24,6 +24,7 @@
 - ダッシュボードのServer Componentでセッションと許可メールを再検証する。
 - 認可はUIの表示/非表示だけに依存しない。
 - 管理APIは `x-internal-api-secret` を要求し、timing-safe comparisonを用いる。
+- ブラウザは internal secret を受け取らない。Next.js Route Handler が DB session と許可メールを再検証し、サーバー間リクエストにだけ secret を付ける。
 - 将来のcron/webhookには個別Secretと署名検証を使い、同じSecretを使い回さない。
 
 ## 4. セッション
@@ -32,6 +33,14 @@
 - Auth.jsのCSRF/state/nonce検証を無効化しない。
 - セッションはDBに保存し、失効・削除可能にする。
 - `AUTH_SECRET` は32文字以上のランダム値とする。
+
+## Phase 2 コード監査
+
+- Hyperliquid は `https://api.hyperliquid.xyz/info` と `wss://api.hyperliquid.xyz/ws` の読み取り専用処理だけを使用する。
+- `/exchange` 呼び出し、market/limit order 作成、leverage 変更、transfer/withdraw、署名、秘密鍵、seed phrase、API Wallet、wallet connector、売買 SDK 初期化は実装しない。
+- 外部 payload は lossless JSON と Zod で検証し、検証失敗を握りつぶさず Data Quality Issue と構造化ログへ記録する。
+- API error response は内部 stack、DB URL、Redis URL、secret を返さない。logger は secret と接続 URL を redact する。
+- PostgreSQL/Redis は Compose で loopback にだけ bind する。
 
 ## 5. 環境変数・秘密管理
 

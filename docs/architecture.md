@@ -1,6 +1,6 @@
 # アーキテクチャ
 
-最終更新: 2026-07-25
+最終更新: 2026-07-26
 
 ## 1. 方針
 
@@ -24,17 +24,31 @@ flowchart LR
     Redis --> Queue["BullMQ queues"]
     Queue --> Worker
 
-    subgraph Future["Phase 2以降（Phase 1では未接続）"]
+    subgraph Sources["外部ソース"]
       HL["Hyperliquid<br/>HTTP / WebSocket"]
+      HL --> Worker
+    end
+
+    subgraph Future["Phase 3以降"]
       Sui["Sui<br/>GraphQL / gRPC"]
       Cetus["Cetus<br/>Events / SDK"]
       Notify["Resend"]
-      HL --> Worker
       Sui --> Worker
       Cetus --> Worker
       Worker --> Notify
     end
 ```
+
+## Phase 2 データフロー
+
+1. 認証済み Web BFF が Fastify Address API へ internal secret を付けて転送する。
+2. API は WalletAddress と SyncJob を保存し、BullMQ `hyperliquid-sync` queue に job を登録する。
+3. Redis lease を保持する1つの Worker process だけが scheduler と WebSocket 購読を所有する。
+4. HTTP backfill は DB cursor の timestamp から再開し、最後の timestamp を inclusive に再取得して DB uniqueness で重複を除く。
+5. WS イベントは受信順に処理し、切断を `GAP_DETECTED` として記録する。再接続後は切断区間を HTTP で補完する。
+6. cursor は保存が完了した場合だけ更新する。古い gap や position snapshot は現在 cursor/state を巻き戻さない。
+
+Queue と Redis lease は再生成可能な一時状態であり、同期位置、実行結果、品質問題の正本は PostgreSQL に置く。
 
 ## 3. ランタイム責務
 

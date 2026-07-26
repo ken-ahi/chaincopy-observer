@@ -1,7 +1,10 @@
 import { createLogger, errorDetails, loadRootEnvironment, readApiEnv } from "@chaincopy/config";
 import { disconnectDatabase, prisma } from "@chaincopy/database";
+import { hyperliquidQueueName, type HyperliquidJobData } from "@chaincopy/domain";
+import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 
+import { PrismaAddressService } from "./address-service.js";
 import { createApi } from "./app.js";
 import { DatabaseRedisHealthService } from "./health.js";
 
@@ -14,11 +17,16 @@ const redis = new Redis(env.REDIS_URL, {
   maxRetriesPerRequest: 2,
 });
 const healthService = new DatabaseRedisHealthService(prisma, redis);
-const app = await createApi({ env, healthService, logger });
+const hyperliquidQueue = new Queue<HyperliquidJobData>(hyperliquidQueueName, {
+  connection: redis,
+});
+const addressService = new PrismaAddressService(prisma, hyperliquidQueue);
+const app = await createApi({ addressService, env, healthService, logger });
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Stopping API");
   await app.close();
+  await hyperliquidQueue.close();
   await redis.quit();
   await disconnectDatabase();
 }

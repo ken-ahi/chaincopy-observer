@@ -9,10 +9,12 @@ interface HealthServerOptions {
   readonly database: PrismaClient;
   readonly logger: Logger;
   readonly port: number;
+  readonly probeTimeoutMs?: number;
   readonly redis: Redis;
 }
 
 export async function startHealthServer(options: HealthServerOptions): Promise<Server> {
+  const probeTimeoutMs = options.probeTimeoutMs ?? 2_000;
   const server = createServer(async (request, response) => {
     if (request.url !== "/health") {
       response.writeHead(404, { "content-type": "application/json" });
@@ -23,13 +25,13 @@ export async function startHealthServer(options: HealthServerOptions): Promise<S
     const [database, redis] = await Promise.all([
       probe(async () => {
         await options.database.$queryRaw`SELECT 1`;
-      }),
+      }, probeTimeoutMs),
       probe(async () => {
         const result = await options.redis.ping();
         if (result !== "PONG") {
           throw new Error("Redis ping did not return PONG");
         }
-      }),
+      }, probeTimeoutMs),
     ]);
     const healthy = database.status === "up" && redis.status === "up";
     response.writeHead(healthy ? 200 : 503, {
@@ -66,12 +68,26 @@ export async function startHealthServer(options: HealthServerOptions): Promise<S
 
 async function probe(
   check: () => Promise<void>,
+  timeoutMs: number,
 ): Promise<{ latencyMs: number; status: "up" | "down" }> {
   const startedAt = performance.now();
+  let timeout: NodeJS.Timeout | undefined;
   try {
-    await check();
+    await Promise.race([
+      check(),
+      new Promise<void>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error(`Health probe timed out after ${timeoutMs}ms.`)),
+          timeoutMs,
+        );
+      }),
+    ]);
     return { latencyMs: Math.round(performance.now() - startedAt), status: "up" };
   } catch {
     return { latencyMs: Math.round(performance.now() - startedAt), status: "down" };
+  } finally {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
   }
 }

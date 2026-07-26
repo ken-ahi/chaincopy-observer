@@ -1,8 +1,8 @@
 # 外部API調査
 
-確認日: 2026-07-25
+確認日: 2026-07-26
 
-Phase 1 では以下のチェーン・メールAPIへ接続しない。ここではPhase 2以降の設計制約だけを確定する。参照先は公式ドキュメントで、実装開始時に再確認する。
+Phase 2 では Hyperliquid の読み取り専用 API だけへ接続する。Sui/Cetus とメールは後続 Phase のままである。
 
 ## 1. Hyperliquid
 
@@ -11,6 +11,7 @@ Phase 1 では以下のチェーン・メールAPIへ接続しない。ここで
 - [Info endpoint](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/info-endpoint)
 - [WebSocket](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket)
 - [Subscriptions](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/subscriptions)
+- [Timeouts and heartbeats](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/websocket/timeouts-and-heartbeats)
 - [Rate limits and user limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)
 
 ### 確認事項
@@ -20,7 +21,8 @@ Phase 1 では以下のチェーン・メールAPIへ接続しない。ここで
 - `userFillsByTime` はレスポンス最大2,000件で、利用可能なのは直近10,000約定。
 - 時間範囲APIは返却上限があるため、最後のtimestampを次の `startTime` にしてページングする。
 - WebSocket mainnetは `wss://api.hyperliquid.xyz/ws`。
-- `userFills`、`userFundings`、`userNonFundingLedgerUpdates` 等のユーザー別購読がある。
+- 実装する HTTP type は `userFills`、`userFillsByTime`、`clearinghouseState`、`spotClearinghouseState`、`portfolio`、`userFunding`、`userNonFundingLedgerUpdates`、`openOrders`、`frontendOpenOrders`、`historicalOrders`、`userRateLimit`。
+- 実装する WS type は `userEvents`、`userFills`、`userFundings`、`userNonFundingLedgerUpdates`、`orderUpdates`、`clearinghouseState`、`openOrders`。公式一覧にない推測購読名は作らない。
 - WebSocketは予告なく切断され得る。再接続し、snapshotまたはInfo APIで欠損を補う。
 - ユーザー別WebSocket購読には同時ユーザー数などの制限があるため、Phase 2で実測とrate budgetを設計する。
 
@@ -30,6 +32,9 @@ Phase 1 では以下のチェーン・メールAPIへ接続しない。ここで
 - raw eventの外部ID候補はtransaction hash、trade id、ledger updateの複合キーから決定する。
 - snapshotとstreamを区別し、snapshot再受信を一意制約で安全にする。
 - 長期分析には継続保存または別の履歴ソースが必要。
+- `userFillsByTime` は1レスポンス2,000件、利用可能履歴10,000件、その他の時間範囲レスポンスは原則500件である。上限到達や同一 timestamp だけでページが埋まる場合は Data Quality Issue とする。
+- server は client から60秒間 message がない接続を閉じ得るため、30秒 heartbeat を送る。
+- HTTP は timeout 10秒、最大3回の内部 retry、BullMQ は最大5 attempt の指数 backoff を既定とする。
 
 ## 2. Sui
 

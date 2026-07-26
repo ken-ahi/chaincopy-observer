@@ -1,0 +1,186 @@
+import { errorDetails } from "@chaincopy/config";
+import {
+  hyperliquidJobNames,
+  hyperliquidQueueName,
+  type HyperliquidJobData,
+  type HyperliquidJobName,
+} from "@chaincopy/domain";
+import { type PrismaClient } from "@chaincopy/database";
+import { type Job, type Queue } from "bullmq";
+import { type Redis } from "ioredis";
+import { type Logger } from "pino";
+
+import { withRedisLock } from "./lock.js";
+import { enqueueWalletBackfillChildren } from "./queue.js";
+import type { HyperliquidSyncService } from "./sync-service.js";
+import type { HyperliquidWebSocketSupervisor } from "./websocket-supervisor.js";
+
+const supportedJobNames = new Set<string>(Object.values(hyperliquidJobNames));
+
+export class HyperliquidJobProcessor {
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly redis: Redis,
+    private readonly queue: Queue<HyperliquidJobData>,
+    private readonly syncService: HyperliquidSyncService,
+    private readonly websocketSupervisor: HyperliquidWebSocketSupervisor,
+    private readonly sourceId: string,
+    private readonly isSchedulerLeader: () => boolean,
+    private readonly logger: Logger,
+  ) {}
+
+  public async process(job: Job<HyperliquidJobData>): Promise<Readonly<Record<string, unknown>>> {
+    if (!supportedJobNames.has(job.name)) {
+      throw new Error(`Unsupported Hyperliquid job: ${job.name}`);
+    }
+    const jobName = job.name as HyperliquidJobName;
+    const queueJobId = job.id ?? `${jobName}-${job.data.walletAddressId}`;
+    const idempotencyKey = `${hyperliquidQueueName}:${queueJobId}`;
+
+    const existing = await this.database.syncJob.findUnique({
+      select: { status: true },
+      where: { idempotencyKey },
+    });
+    if (existing?.status === "SUCCEEDED") {
+      this.logger.info(
+        { idempotencyKey, jobId: job.id, jobName },
+        "Skipped an already completed Hyperliquid job",
+      );
+      return { duplicateSuppressed: true };
+    }
+
+    await this.database.syncJob.upsert({
+      create: {
+        attempt: 1,
+        idempotencyKey,
+        jobName,
+        queueJobId,
+        queueName: hyperliquidQueueName,
+        sourceId: this.sourceId,
+        startedAt: new Date(),
+        status: "RUNNING",
+        walletAddressId: job.data.walletAddressId,
+      },
+      update: {
+        attempt: { increment: 1 },
+        errorMessage: null,
+        finishedAt: null,
+        sourceId: this.sourceId,
+        startedAt: new Date(),
+        status: "RUNNING",
+      },
+      where: { idempotencyKey },
+    });
+
+    this.logger.info(
+      {
+        attempt: job.attemptsMade + 1,
+        idempotencyKey,
+        jobId: job.id,
+        jobName,
+        walletAddress: job.data.walletAddress,
+      },
+      "Hyperliquid job started",
+    );
+
+    try {
+      const result =
+        jobName === hyperliquidJobNames.websocketListener
+          ? await this.startWebSocket(job.data)
+          : await withRedisLock(
+              this.redis,
+              `hyperliquid:wallet-sync:${job.data.walletAddressId}`,
+              () => this.runJob(jobName, job.data, queueJobId),
+            );
+      await this.database.syncJob.update({
+        data: {
+          errorMessage: null,
+          finishedAt: new Date(),
+          metadata: { result: JSON.stringify(result) },
+          status: "SUCCEEDED",
+        },
+        where: { idempotencyKey },
+      });
+      this.logger.info(
+        {
+          attempt: job.attemptsMade + 1,
+          idempotencyKey,
+          jobId: job.id,
+          jobName,
+          result,
+        },
+        "Hyperliquid job completed",
+      );
+      return result;
+    } catch (error) {
+      const details = errorDetails(error);
+      await this.database.syncJob.update({
+        data: {
+          errorMessage: details.message,
+          finishedAt: new Date(),
+          status: "FAILED",
+        },
+        where: { idempotencyKey },
+      });
+      this.logger.error(
+        {
+          attempt: job.attemptsMade + 1,
+          error: details,
+          idempotencyKey,
+          jobId: job.id,
+          jobName,
+        },
+        "Hyperliquid job attempt failed",
+      );
+      throw error;
+    }
+  }
+
+  private async runJob(
+    jobName: HyperliquidJobName,
+    data: HyperliquidJobData,
+    queueJobId: string,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    switch (jobName) {
+      case hyperliquidJobNames.walletBackfill:
+        return {
+          childJobIds: await enqueueWalletBackfillChildren(this.queue, data, queueJobId),
+        };
+      case hyperliquidJobNames.fillSync:
+        return this.syncService.syncFills(data);
+      case hyperliquidJobNames.fundingSync:
+        return this.syncService.syncFunding(data);
+      case hyperliquidJobNames.ledgerSync:
+        return this.syncService.syncLedger(data);
+      case hyperliquidJobNames.positionSnapshot:
+        return this.syncService.snapshotPositions(data);
+      case hyperliquidJobNames.gapRecovery:
+        return this.syncService.recoverGap(data);
+      case hyperliquidJobNames.dataQualityAudit:
+        return this.syncService.auditDataQuality(data);
+      case hyperliquidJobNames.websocketListener:
+        return this.startWebSocket(data);
+    }
+  }
+
+  private async startWebSocket(
+    data: HyperliquidJobData,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    if (!this.isSchedulerLeader()) {
+      this.logger.info(
+        { walletAddress: data.walletAddress },
+        "Deferred WebSocket listener to the scheduler leader",
+      );
+      return { delegatedToSchedulerLeader: true, listening: false };
+    }
+    await this.websocketSupervisor.ensureWallet({
+      address: data.walletAddress,
+      id: data.walletAddressId,
+    });
+    this.logger.info(
+      { walletAddress: data.walletAddress },
+      "Hyperliquid WebSocket listener is active",
+    );
+    return { listening: true };
+  }
+}

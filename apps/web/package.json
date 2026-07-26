@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@chaincopy/blockchain-adapters": "workspace:*",
     "@chaincopy/config": "workspace:*",
     "@chaincopy/database": "workspace:*",
     "@chaincopy/ui": "workspace:*",

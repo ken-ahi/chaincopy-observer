@@ -28,6 +28,34 @@ enum SyncJobStatus {
   FAILED
 }
 
+enum SyncCursorStatus {
+  IDLE
+  RUNNING
+  SUCCEEDED
+  FAILED
+  GAP_DETECTED
+}
+
+enum DataQualityIssueStatus {
+  OPEN
+  RESOLVED
+}
+
+enum EventTransport {
+  HTTP
+  WEBSOCKET
+}
+
+enum TradeSide {
+  BUY
+  SELL
+}
+
+enum PositionSide {
+  LONG
+  SHORT
+}
+
 enum AlertSeverity {
   INFO
   WARNING
@@ -42,16 +70,17 @@ enum AlertStatus {
 }
 
 model User {
-  id            String    @id @default(cuid())
-  name          String?
-  email         String?   @unique
-  emailVerified DateTime? @map("email_verified")
-  image         String?
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  accounts      Account[]
-  sessions      Session[]
-  auditLogs     AuditLog[]
+  id              String          @id @default(cuid())
+  name            String?
+  email           String?         @unique
+  emailVerified   DateTime?       @map("email_verified")
+  image           String?
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  accounts        Account[]
+  sessions        Session[]
+  auditLogs       AuditLog[]
+  walletAddresses WalletAddress[]
 
   @@map("users")
 }
@@ -99,58 +128,359 @@ model VerificationToken {
 }
 
 model DataSource {
-  id            String            @id @default(cuid())
-  key           String            @unique
-  name          String
-  kind          DataSourceKind
-  enabled       Boolean           @default(false)
-  status        OperationalStatus @default(UNKNOWN)
-  lastSuccessAt DateTime?         @map("last_success_at")
-  lastFailureAt DateTime?         @map("last_failure_at")
-  statusMessage String?           @map("status_message")
-  createdAt     DateTime          @default(now()) @map("created_at")
-  updatedAt     DateTime          @updatedAt @map("updated_at")
-  syncJobs      SyncJob[]
-  systemAlerts  SystemAlert[]
+  id                   String                @id @default(cuid())
+  key                  String                @unique
+  name                 String
+  kind                 DataSourceKind
+  enabled              Boolean               @default(false)
+  status               OperationalStatus     @default(UNKNOWN)
+  lastSuccessAt        DateTime?             @map("last_success_at")
+  lastFailureAt        DateTime?             @map("last_failure_at")
+  statusMessage        String?               @map("status_message")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  syncJobs             SyncJob[]
+  systemAlerts         SystemAlert[]
+  walletAddresses      WalletAddress[]
+  rawEvents            RawEvent[]
+  normalizedTrades     NormalizedTrade[]
+  fundingPayments      FundingPayment[]
+  cashFlows            CashFlow[]
+  perpPositions        PerpPosition[]
+  perpPositionEvents   PerpPositionEvent[]
+  portfolioSnapshots   PortfolioSnapshot[]
+  spotBalanceSnapshots SpotBalanceSnapshot[]
+  orderHistory         OrderHistory[]
+  syncCursors          SyncCursor[]
+  dataQualityIssues    DataQualityIssue[]
 
   @@map("data_sources")
 }
 
 model SyncJob {
-  id             String        @id @default(cuid())
-  idempotencyKey String        @unique @map("idempotency_key")
-  queueName      String        @map("queue_name")
-  jobName        String        @map("job_name")
-  queueJobId     String?       @map("queue_job_id")
-  status         SyncJobStatus @default(QUEUED)
-  attempt        Int           @default(0)
-  startedAt      DateTime?     @map("started_at")
-  finishedAt     DateTime?     @map("finished_at")
-  errorMessage   String?       @map("error_message") @db.Text
-  metadata       Json?
-  sourceId       String?       @map("source_id")
-  source         DataSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  createdAt      DateTime      @default(now()) @map("created_at")
-  updatedAt      DateTime      @updatedAt @map("updated_at")
+  id              String         @id @default(cuid())
+  idempotencyKey  String         @unique @map("idempotency_key")
+  queueName       String         @map("queue_name")
+  jobName         String         @map("job_name")
+  queueJobId      String?        @map("queue_job_id")
+  status          SyncJobStatus  @default(QUEUED)
+  attempt         Int            @default(0)
+  startedAt       DateTime?      @map("started_at")
+  finishedAt      DateTime?      @map("finished_at")
+  errorMessage    String?        @map("error_message") @db.Text
+  metadata        Json?
+  sourceId        String?        @map("source_id")
+  source          DataSource?    @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  walletAddressId String?        @map("wallet_address_id")
+  walletAddress   WalletAddress? @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
 
   @@index([status, createdAt])
   @@index([sourceId])
+  @@index([walletAddressId, status, createdAt])
   @@map("sync_jobs")
 }
 
+model WalletAddress {
+  id                   String                @id @default(cuid())
+  address              String
+  displayName          String?               @map("display_name")
+  isWatched            Boolean               @default(true) @map("is_watched")
+  lastSyncAt           DateTime?             @map("last_sync_at")
+  sourceId             String                @map("source_id")
+  source               DataSource            @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  ownerUserId          String?               @map("owner_user_id")
+  ownerUser            User?                 @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  rawEvents            RawEvent[]
+  normalizedTrades     NormalizedTrade[]
+  fundingPayments      FundingPayment[]
+  cashFlows            CashFlow[]
+  perpPositions        PerpPosition[]
+  perpPositionEvents   PerpPositionEvent[]
+  portfolioSnapshots   PortfolioSnapshot[]
+  spotBalanceSnapshots SpotBalanceSnapshot[]
+  orderHistory         OrderHistory[]
+  syncCursors          SyncCursor[]
+  syncJobs             SyncJob[]
+  dataQualityIssues    DataQualityIssue[]
+
+  @@unique([sourceId, address])
+  @@index([isWatched, updatedAt])
+  @@index([ownerUserId])
+  @@map("wallet_addresses")
+}
+
+model RawEvent {
+  id              String         @id @default(cuid())
+  fingerprint     String
+  externalEventId String?        @map("external_event_id")
+  eventType       String         @map("event_type")
+  transport       EventTransport
+  eventTime       DateTime?      @map("event_time")
+  rawPayload      String         @map("raw_payload") @db.Text
+  sourceId        String         @map("source_id")
+  source          DataSource     @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String         @map("wallet_address_id")
+  walletAddress   WalletAddress  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  receivedAt      DateTime       @default(now()) @map("received_at")
+
+  @@unique([sourceId, fingerprint])
+  @@unique([sourceId, externalEventId])
+  @@index([walletAddressId, eventTime])
+  @@index([eventType, receivedAt])
+  @@map("raw_events")
+}
+
+model NormalizedTrade {
+  id              String        @id @default(cuid())
+  externalTradeId String        @map("external_trade_id")
+  fingerprint     String
+  coin            String
+  side            TradeSide
+  direction       String
+  price           Decimal       @db.Decimal(38, 18)
+  size            Decimal       @db.Decimal(38, 18)
+  fee             Decimal       @db.Decimal(38, 18)
+  feeToken        String        @map("fee_token")
+  closedPnl       Decimal       @map("closed_pnl") @db.Decimal(38, 18)
+  startPosition   Decimal       @map("start_position") @db.Decimal(38, 18)
+  crossed         Boolean
+  orderId         String        @map("order_id")
+  transactionHash String        @map("transaction_hash")
+  occurredAt      DateTime      @map("occurred_at")
+  sourceId        String        @map("source_id")
+  source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String        @map("wallet_address_id")
+  walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, externalTradeId])
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, occurredAt])
+  @@index([coin, occurredAt])
+  @@map("normalized_trades")
+}
+
+model FundingPayment {
+  id                String        @id @default(cuid())
+  externalPaymentId String        @map("external_payment_id")
+  fingerprint       String
+  coin              String
+  amount            Decimal       @db.Decimal(38, 18)
+  positionSize      Decimal       @map("position_size") @db.Decimal(38, 18)
+  fundingRate       Decimal       @map("funding_rate") @db.Decimal(38, 18)
+  occurredAt        DateTime      @map("occurred_at")
+  sourceId          String        @map("source_id")
+  source            DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId   String        @map("wallet_address_id")
+  walletAddress     WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, externalPaymentId])
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, occurredAt])
+  @@map("funding_payments")
+}
+
+model CashFlow {
+  id              String        @id @default(cuid())
+  externalFlowId  String        @map("external_flow_id")
+  fingerprint     String
+  flowType        String        @map("flow_type")
+  asset           String?
+  amount          Decimal?      @db.Decimal(38, 18)
+  usdValue        Decimal?      @map("usd_value") @db.Decimal(38, 18)
+  fee             Decimal?      @db.Decimal(38, 18)
+  counterparty    String?
+  occurredAt      DateTime      @map("occurred_at")
+  rawPayload      String        @map("raw_payload") @db.Text
+  sourceId        String        @map("source_id")
+  source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String        @map("wallet_address_id")
+  walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, externalFlowId])
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, occurredAt])
+  @@map("cash_flows")
+}
+
+model PerpPosition {
+  id                String        @id @default(cuid())
+  coin              String
+  side              PositionSide
+  size              Decimal       @db.Decimal(38, 18)
+  entryPrice        Decimal?      @map("entry_price") @db.Decimal(38, 18)
+  positionValue     Decimal       @map("position_value") @db.Decimal(38, 18)
+  unrealizedPnl     Decimal       @map("unrealized_pnl") @db.Decimal(38, 18)
+  returnOnEquity    Decimal       @map("return_on_equity") @db.Decimal(38, 18)
+  marginUsed        Decimal       @map("margin_used") @db.Decimal(38, 18)
+  liquidationPrice  Decimal?      @map("liquidation_price") @db.Decimal(38, 18)
+  leverageType      String        @map("leverage_type")
+  leverageValue     Decimal       @map("leverage_value") @db.Decimal(38, 18)
+  maxLeverage       Decimal       @map("max_leverage") @db.Decimal(38, 18)
+  updatedExternalAt DateTime      @map("updated_external_at")
+  sourceId          String        @map("source_id")
+  source            DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId   String        @map("wallet_address_id")
+  walletAddress     WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@unique([walletAddressId, coin])
+  @@index([sourceId, coin])
+  @@map("perp_positions")
+}
+
+model PerpPositionEvent {
+  id              String        @id @default(cuid())
+  fingerprint     String
+  coin            String
+  side            PositionSide
+  size            Decimal       @db.Decimal(38, 18)
+  entryPrice      Decimal?      @map("entry_price") @db.Decimal(38, 18)
+  positionValue   Decimal       @map("position_value") @db.Decimal(38, 18)
+  unrealizedPnl   Decimal       @map("unrealized_pnl") @db.Decimal(38, 18)
+  occurredAt      DateTime      @map("occurred_at")
+  sourceId        String        @map("source_id")
+  source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String        @map("wallet_address_id")
+  walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, occurredAt])
+  @@map("perp_position_events")
+}
+
+model PortfolioSnapshot {
+  id                    String        @id @default(cuid())
+  fingerprint           String
+  snapshotType          String        @map("snapshot_type")
+  accountValue          Decimal?      @map("account_value") @db.Decimal(38, 18)
+  totalNotionalPosition Decimal?      @map("total_notional_position") @db.Decimal(38, 18)
+  totalMarginUsed       Decimal?      @map("total_margin_used") @db.Decimal(38, 18)
+  withdrawable          Decimal?      @db.Decimal(38, 18)
+  rawPayload            String        @map("raw_payload") @db.Text
+  capturedAt            DateTime      @map("captured_at")
+  sourceId              String        @map("source_id")
+  source                DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId       String        @map("wallet_address_id")
+  walletAddress         WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt             DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, capturedAt])
+  @@map("portfolio_snapshots")
+}
+
+model SpotBalanceSnapshot {
+  id              String        @id @default(cuid())
+  fingerprint     String
+  coin            String
+  tokenIndex      Int           @map("token_index")
+  total           Decimal       @db.Decimal(38, 18)
+  hold            Decimal       @db.Decimal(38, 18)
+  entryNotional   Decimal       @map("entry_notional") @db.Decimal(38, 18)
+  capturedAt      DateTime      @map("captured_at")
+  sourceId        String        @map("source_id")
+  source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String        @map("wallet_address_id")
+  walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, capturedAt])
+  @@map("spot_balance_snapshots")
+}
+
+model OrderHistory {
+  id              String        @id @default(cuid())
+  fingerprint     String
+  orderId         String        @map("order_id")
+  clientOrderId   String?       @map("client_order_id")
+  coin            String
+  side            TradeSide
+  status          String
+  orderType       String        @map("order_type")
+  limitPrice      Decimal       @map("limit_price") @db.Decimal(38, 18)
+  size            Decimal       @db.Decimal(38, 18)
+  originalSize    Decimal       @map("original_size") @db.Decimal(38, 18)
+  reduceOnly      Boolean       @map("reduce_only")
+  statusTimestamp DateTime      @map("status_timestamp")
+  sourceId        String        @map("source_id")
+  source          DataSource    @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String        @map("wallet_address_id")
+  walletAddress   WalletAddress @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@unique([sourceId, fingerprint])
+  @@index([walletAddressId, statusTimestamp])
+  @@index([orderId])
+  @@map("order_history")
+}
+
+model SyncCursor {
+  id               String           @id @default(cuid())
+  scope            String
+  cursorType       String           @map("cursor_type")
+  lastTimestamp    DateTime?        @map("last_timestamp")
+  lastExternalId   String?          @map("last_external_id")
+  lastSuccessfulAt DateTime?        @map("last_successful_at")
+  lastAttemptedAt  DateTime?        @map("last_attempted_at")
+  status           SyncCursorStatus @default(IDLE)
+  errorMessage     String?          @map("error_message") @db.Text
+  sourceId         String           @map("source_id")
+  source           DataSource       @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId  String           @map("wallet_address_id")
+  walletAddress    WalletAddress    @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+
+  @@unique([sourceId, walletAddressId, scope, cursorType])
+  @@index([status, lastAttemptedAt])
+  @@map("sync_cursors")
+}
+
+model DataQualityIssue {
+  id              String                 @id @default(cuid())
+  fingerprint     String                 @unique
+  issueType       String                 @map("issue_type")
+  severity        AlertSeverity
+  status          DataQualityIssueStatus @default(OPEN)
+  message         String                 @db.Text
+  details         Json?
+  firstDetectedAt DateTime               @default(now()) @map("first_detected_at")
+  lastDetectedAt  DateTime               @default(now()) @map("last_detected_at")
+  resolvedAt      DateTime?              @map("resolved_at")
+  sourceId        String                 @map("source_id")
+  source          DataSource             @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  walletAddressId String                 @map("wallet_address_id")
+  walletAddress   WalletAddress          @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  createdAt       DateTime               @default(now()) @map("created_at")
+  updatedAt       DateTime               @updatedAt @map("updated_at")
+
+  @@index([walletAddressId, status, severity])
+  @@map("data_quality_issues")
+}
+
 model SystemAlert {
-  id         String        @id @default(cuid())
-  fingerprint String       @unique
-  severity   AlertSeverity
-  status     AlertStatus   @default(OPEN)
-  title      String
-  message    String        @db.Text
-  sourceId   String?       @map("source_id")
-  source     DataSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
-  openedAt   DateTime      @default(now()) @map("opened_at")
-  resolvedAt DateTime?     @map("resolved_at")
-  createdAt  DateTime      @default(now()) @map("created_at")
-  updatedAt  DateTime      @updatedAt @map("updated_at")
+  id          String        @id @default(cuid())
+  fingerprint String        @unique
+  severity    AlertSeverity
+  status      AlertStatus   @default(OPEN)
+  title       String
+  message     String        @db.Text
+  sourceId    String?       @map("source_id")
+  source      DataSource?   @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  openedAt    DateTime      @default(now()) @map("opened_at")
+  resolvedAt  DateTime?     @map("resolved_at")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
 
   @@index([status, severity])
   @@index([sourceId])

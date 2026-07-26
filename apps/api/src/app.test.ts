@@ -3,6 +3,11 @@ import { type ServiceHealth } from "@chaincopy/domain";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createApi } from "./app.js";
+import {
+  AddressConflictError,
+  type AddressService,
+  type AddressSummary,
+} from "./address-service.js";
 import { type HealthService } from "./health.js";
 
 const env = apiEnvSchema.parse({
@@ -30,6 +35,65 @@ const healthService: HealthService = {
   check: async () => healthy,
 };
 
+const addressService: AddressService = {
+  listAddresses: async () => ({ items: [], nextCursor: null }),
+  createAddress: async () => {
+    throw new Error("Not used by this test.");
+  },
+  getAddress: async () => {
+    throw new Error("Not used by this test.");
+  },
+  updateAddress: async () => {
+    throw new Error("Not used by this test.");
+  },
+  setWatch: async () => {
+    throw new Error("Not used by this test.");
+  },
+  enqueueSync: async () => {
+    throw new Error("Not used by this test.");
+  },
+  listFills: async () => ({ items: [], nextCursor: null }),
+  listFunding: async () => ({ items: [], nextCursor: null }),
+  listLedger: async () => ({ items: [], nextCursor: null }),
+  listPositions: async () => [],
+  listOrders: async () => ({ items: [], nextCursor: null }),
+  listDataQuality: async () => ({ items: [], nextCursor: null }),
+  getSyncStatus: async () => {
+    throw new Error("Not used by this test.");
+  },
+  getHyperliquidHealth: async () => ({}),
+};
+
+const addressSummary: AddressSummary = {
+  address: "0x1111111111111111111111111111111111111111",
+  currentPositionCount: 0,
+  displayName: "test",
+  fillCount: 0,
+  fundingCount: 0,
+  isWatched: true,
+  lastError: null,
+  lastSuccessfulAt: null,
+  lastSyncAt: null,
+  ledgerCount: 0,
+  openDataQualityIssues: 0,
+  syncStatus: null,
+};
+
+function withAddressService(overrides: Partial<AddressService>): AddressService {
+  return { ...addressService, ...overrides };
+}
+
+async function createTestApi(service: AddressService = addressService) {
+  const app = await createApi({
+    addressService: service,
+    env,
+    healthService,
+    logger: createLogger("api-test", "fatal"),
+  });
+  apps.push(app);
+  return app;
+}
+
 const apps: Array<Awaited<ReturnType<typeof createApi>>> = [];
 
 afterEach(async () => {
@@ -38,12 +102,7 @@ afterEach(async () => {
 
 describe("API health routes", () => {
   it("returns liveness without querying dependencies", async () => {
-    const app = await createApi({
-      env,
-      healthService,
-      logger: createLogger("api-test", "fatal"),
-    });
-    apps.push(app);
+    const app = await createTestApi();
 
     const response = await app.inject({ method: "GET", url: "/health" });
 
@@ -52,12 +111,7 @@ describe("API health routes", () => {
   });
 
   it("protects detailed health with the internal secret", async () => {
-    const app = await createApi({
-      env,
-      healthService,
-      logger: createLogger("api-test", "fatal"),
-    });
-    apps.push(app);
+    const app = await createTestApi();
 
     const unauthorized = await app.inject({ method: "GET", url: "/api/admin/health" });
     const authorized = await app.inject({
@@ -71,5 +125,100 @@ describe("API health routes", () => {
     expect(unauthorized.statusCode).toBe(401);
     expect(authorized.statusCode).toBe(200);
     expect(authorized.json()).toEqual(healthy);
+  });
+});
+
+describe("address routes", () => {
+  it("rejects unauthenticated requests", async () => {
+    const app = await createTestApi();
+
+    const response = await app.inject({ method: "GET", url: "/api/addresses" });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ error: "unauthorized" });
+  });
+
+  it("parses address filters and returns cursor pagination", async () => {
+    let receivedQuery: unknown;
+    const app = await createTestApi(
+      withAddressService({
+        listAddresses: async (query) => {
+          receivedQuery = query;
+          return { items: [addressSummary], nextCursor: "next-id" };
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/addresses?limit=25&search=test&isWatched=false&syncStatus=FAILED",
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(receivedQuery).toEqual({
+      isWatched: false,
+      limit: 25,
+      search: "test",
+      syncStatus: "FAILED",
+    });
+    expect(response.json()).toEqual({
+      items: [addressSummary],
+      nextCursor: "next-id",
+    });
+  });
+
+  it("rejects malformed addresses before calling the service", async () => {
+    const app = await createTestApi();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/addresses",
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      payload: { address: "not-an-address", isWatched: true },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json()).toMatchObject({ error: "validation_error" });
+  });
+
+  it("returns a structured duplicate error", async () => {
+    const app = await createTestApi(
+      withAddressService({
+        createAddress: async () => {
+          throw new AddressConflictError(addressSummary.address);
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/addresses",
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      payload: { address: addressSummary.address, isWatched: true },
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toMatchObject({ error: "duplicate_address" });
+  });
+
+  it("returns the queued job for an immediate manual sync", async () => {
+    const app = await createTestApi(
+      withAddressService({
+        enqueueSync: async () => ({ jobId: "wallet-backfill-test", status: "QUEUED" }),
+      }),
+    );
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/addresses/${addressSummary.address}/sync`,
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      jobId: "wallet-backfill-test",
+      status: "QUEUED",
+    });
   });
 });

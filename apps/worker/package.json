@@ -7,9 +7,12 @@
     "build": "tsup",
     "dev": "tsx watch src/main.ts",
     "start": "node dist/main.js",
-    "typecheck": "tsc --noEmit"
+    "test": "vitest run --config vitest.config.ts --root ../.. apps/worker",
+    "typecheck": "tsc --noEmit",
+    "verify:phase2": "tsx src/hyperliquid/verify-real-data.ts"
   },
   "dependencies": {
+    "@chaincopy/blockchain-adapters": "workspace:*",
     "@chaincopy/config": "workspace:*",
     "@chaincopy/database": "workspace:*",
     "@chaincopy/domain": "workspace:*",

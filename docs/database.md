@@ -1,6 +1,6 @@
 # データベース設計
 
-最終更新: 2026-07-25
+最終更新: 2026-07-26
 
 ## 1. 基本原則
 
@@ -11,7 +11,7 @@
 - Raw Eventは不変データとして保持し、正規化済みデータと分離する。
 - Redisは同期カーソルや業務データの正本にしない。
 
-## 2. Phase 1 物理モデル
+## 2. Phase 1–2 物理モデル
 
 Phase 1 のMigrationは認証・運用基盤だけを作る。取引データの各テーブルは、対応するPhaseでAPIの実データ型を確定してからMigrationを追加する。
 
@@ -20,6 +20,25 @@ Phase 1 のMigrationは認証・運用基盤だけを作る。取引データの
 - `sync_jobs`: BullMQ業務ジョブの状態と冪等キー
 - `system_alerts`: 運用上の警告
 - `audit_logs`: 認証・管理操作の監査
+
+Phase 2 migration は次を追加・確定した。
+
+- `wallet_addresses`
+- `raw_events`
+- `normalized_trades`
+- `funding_payments`
+- `cash_flows`
+- `perp_positions`, `perp_position_events`
+- `portfolio_snapshots`, `spot_balance_snapshots`
+- `order_history`
+- `sync_cursors`
+- `data_quality_issues`
+
+金融値はすべて `numeric(38,18)` に保存し、API 境界から JavaScript `number` を経由させない。`RawEvent`、Fill、Funding、Ledger、Position Event、Order は source と external ID または fingerprint の一意制約で再配信を抑止する。
+
+HTTP と WS の Funding は hash の有無や小数末尾表現が異なるため、wallet、timestamp、coin、amount、position size、rate を Decimal で正規化した transport 共通 ID を使う。
+
+`SyncCursor.lastTimestamp` は inclusive cursor である。次回も同じ timestamp から取得し、重複は一意制約で除く。これにより同じ millisecond に複数イベントがあるページ境界を欠落させない。古い gap recovery が後から完了しても cursor は後退させない。
 
 ## 3. 全体ER図
 

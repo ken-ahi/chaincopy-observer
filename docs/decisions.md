@@ -1,6 +1,6 @@
 # Architecture Decision Log
 
-最終更新: 2026-07-25
+最終更新: 2026-07-26
 
 ## ADR-001: Web、API、Workerを分離する
 
@@ -131,3 +131,24 @@
 - 出力確認: Monorepo build後のserver実体は `apps/web/.next/standalone/apps/web/server.js`。
 - 方針: Web専用builderからstandalone出力をruntime imageへコピーし、`.next/static` を `apps/web/.next/static`、`public` を `apps/web/public` へ配置する。runtime imageには全workspaceの依存を含めず、`HOSTNAME=0.0.0.0`、`PORT=3000` を設定して `node apps/web/server.js` を実行する。
 - 検証: `format:check`、`lint`、`typecheck`、`test`（10件）、`build` が成功した。Webをno-cache buildしてComposeを再起動し、全サービスHealthy、Migration正常終了を確認した。Webログからstandalone警告が消え、`/login`、Google認証provider API、CSS asset、React Server Components responseがすべてHTTP 200で応答した。runtimeコンテナ内のstandalone server、`.next/static`、`public` の配置も確認した。
+
+## ADR-016: Phase 2 scheduler と WebSocket は Redis lease の単一 leader が所有する
+
+- 状態: 採用
+- 理由: Worker を複数起動しても、定期 job と同一アドレス購読を多重化しないため。
+- 方式: source 単位の token 付き Redis lease を `NX/PX` で取得し、Lua で所有者一致時だけ renew/release する。
+- 障害時: lease renew 失敗または所有権喪失時は active tick を待ち、WebSocket supervisor を停止する。次の process は TTL 後に取得できる。
+
+## ADR-017: timestamp cursor は inclusive とし、DB uniqueness で重複を除く
+
+- 状態: 採用
+- 理由: Hyperliquid の時間範囲 API は最後の timestamp を次の `startTime` にする仕様であり、`+1ms` すると同一 timestamp のページ境界イベントを欠落させるため。
+- 影響: 次回同期は最後の timestamp を再取得する。cursor は成功時だけ単調増加し、古い gap recovery では後退させない。
+- 上限: 同一 timestamp だけで最大ページが埋まり進行不能な場合は推測せず Data Quality Issue を記録する。
+
+## ADR-018: HTTP/WS Funding は transport 共通の正規化IDを使う
+
+- 状態: 採用
+- 理由: WS payload には HTTP の hash がなく、小数も `-40` と `-40.0` のように表現差があるため。
+- 方式: wallet、timestamp、coin、amount、position size、funding rate を Decimal で正規化し external ID と fingerprint を作る。
+- 検証: 公開アドレスの HTTP 履歴2,102件に対し WS 初期 snapshot を受信しても Funding 件数が増えないことを確認した。

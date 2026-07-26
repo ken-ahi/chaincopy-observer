@@ -1,12 +1,28 @@
-# Phase 0–1 要件定義
+# Phase 0–2 要件定義
 
-最終更新: 2026-07-25
+最終更新: 2026-07-26
 
 ## 1. 目的
 
 ChainCopy Observer は、Hyperliquid および Sui/Cetus の公開取引データを将来分析するための、所有者1名専用の分析・通知Webアプリケーションである。
 
 Phase 0 は仕様を実装可能な設計へ落とし込み、Phase 1 は外部チェーンデータ取得を始める前に、Web、API、常駐Worker、PostgreSQL、Redis、認証、テスト、CIをローカルで再現可能にする。
+
+Phase 2 は公開 Hyperliquid アドレスを登録し、Info API と WebSocket から読み取り専用データを取得して、再実行可能な形で保存・表示する。実売買、署名、秘密鍵処理は対象外とする。
+
+## Phase 2 受入要件
+
+- 認証済み所有者だけがアドレス API と `/dashboard/addresses` を利用できる。
+- EVM 形式のアドレスを正規化し、同じアドレスの重複登録を拒否する。
+- watch ON のアドレスだけを scheduler と WebSocket supervisor の対象にする。
+- 手動同期は一意な BullMQ 親 job を即時登録し、再試行時の child job は重複登録しない。
+- Fill、Funding、Ledger、Position、Spot、Portfolio、Order、Raw Event、Sync Job/Cursor、Data Quality Issue を PostgreSQL に保存する。
+- HTTP と WebSocket が同じイベントを返しても、transport 共通の業務キーで重複保存しない。
+- cursor は成功時だけ前進し、切断区間の補完や順序逆転で過去へ戻さない。
+- WS は heartbeat、指数 backoff、再購読、切断区間の HTTP 補完を行う。
+- 一覧・履歴 API は件数上限と cursor pagination を持つ。
+- Web は loading、error、empty、同期結果、最終成功・失敗を実データで表示する。
+- PostgreSQL/Redis/Worker/WS の一時障害後に再実行できる。
 
 ## 2. Phase 0 の成果物
 

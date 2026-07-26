@@ -6,9 +6,12 @@ import { errorDetails, type ApiEnv } from "@chaincopy/config";
 import Fastify, { LogController } from "fastify";
 import { type Logger } from "pino";
 
+import { registerAddressRoutes } from "./address-routes.js";
+import { type AddressService } from "./address-service.js";
 import { type HealthService } from "./health.js";
 
 export interface CreateApiOptions {
+  readonly addressService: AddressService;
   readonly env: ApiEnv;
   readonly healthService: HealthService;
   readonly logger: Logger;
@@ -31,6 +34,19 @@ export async function createApi(options: CreateApiOptions) {
     timeWindow: "1 minute",
   });
 
+  app.addHook("onRequest", async (request, reply) => {
+    if (!request.url.startsWith("/api/")) {
+      return;
+    }
+    const providedSecret = request.headers["x-internal-api-secret"];
+    if (!isSecretEqual(providedSecret, options.env.INTERNAL_API_SECRET)) {
+      return reply.code(401).send({
+        error: "unauthorized",
+        message: "Internal API authentication is required.",
+      });
+    }
+  });
+
   app.get("/health", async () => {
     return {
       checkedAt: new Date().toISOString(),
@@ -48,20 +64,20 @@ export async function createApi(options: CreateApiOptions) {
     return health;
   });
 
-  app.get("/api/admin/health", async (request, reply) => {
-    const providedSecret = request.headers["x-internal-api-secret"];
-    if (!isSecretEqual(providedSecret, options.env.INTERNAL_API_SECRET)) {
-      return reply.code(401).send({
-        error: "unauthorized",
-        message: "Internal API authentication is required.",
-      });
-    }
-
+  app.get("/api/admin/health", async (_request, reply) => {
     const health = await options.healthService.check();
     return reply.code(health.status === "healthy" ? 200 : 503).send(health);
   });
 
+  registerAddressRoutes(app, options.addressService);
+
   app.setErrorHandler((error, request, reply) => {
+    if (isClientError(error)) {
+      return void reply.code(error.statusCode).send({
+        error: "bad_request",
+        message: error.message,
+      });
+    }
     request.log.error(
       {
         error: errorDetails(error),
@@ -76,6 +92,16 @@ export async function createApi(options: CreateApiOptions) {
   });
 
   return app;
+}
+
+function isClientError(error: unknown): error is Error & { readonly statusCode: number } {
+  return (
+    error instanceof Error &&
+    "statusCode" in error &&
+    typeof error.statusCode === "number" &&
+    error.statusCode >= 400 &&
+    error.statusCode < 500
+  );
 }
 
 function isSecretEqual(provided: string | string[] | undefined, expected: string): boolean {

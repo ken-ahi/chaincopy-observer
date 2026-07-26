@@ -19,6 +19,7 @@ export const webEnvSchema = sharedSchema.extend({
   APP_BASE_URL: z.string().url(),
   NEXTAUTH_URL: z.string().url().optional(),
   API_BASE_URL: z.string().url().default("http://localhost:3001"),
+  INTERNAL_API_SECRET: z.string().min(32),
   AUTH_SECRET: z.string().min(32),
   GOOGLE_CLIENT_ID: z.string().min(1),
   GOOGLE_CLIENT_SECRET: z.string().min(1),
@@ -33,6 +34,11 @@ export const apiEnvSchema = sharedSchema.extend({
 
 export const workerEnvSchema = sharedSchema.extend({
   WORKER_HEALTH_PORT: portSchema.default(3002),
+  HYPERLIQUID_API_URL: z.string().url().default("https://api.hyperliquid.xyz/info"),
+  HYPERLIQUID_WS_URL: z.string().url().startsWith("wss://").default("wss://api.hyperliquid.xyz/ws"),
+  HYPERLIQUID_NETWORK: z.enum(["mainnet", "testnet"]).default("mainnet"),
+  HYPERLIQUID_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
+  HYPERLIQUID_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).default(60_000),
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;
@@ -72,6 +78,7 @@ function withBuildFallbacks(environment: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
     REDIS_URL: "redis://127.0.0.1:6379",
     APP_BASE_URL: "http://localhost:3000",
     API_BASE_URL: "http://localhost:3001",
+    INTERNAL_API_SECRET: "build-only-internal-secret-at-least-32-characters",
     AUTH_SECRET: "build-only-placeholder-secret-at-least-32-characters",
     GOOGLE_CLIENT_ID: "build-only-client-id",
     GOOGLE_CLIENT_SECRET: "build-only-client-secret",
