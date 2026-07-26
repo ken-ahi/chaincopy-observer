@@ -11,6 +11,9 @@ export default defineConfig({
       "@chaincopy/config": fileURLToPath(
         new URL("./packages/config/src/index.ts", import.meta.url),
       ),
+      "@chaincopy/database": fileURLToPath(
+        new URL("./packages/database/src/index.ts", import.meta.url),
+      ),
     },
   },
   test: {
