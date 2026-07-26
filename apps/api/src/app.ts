@@ -11,6 +11,8 @@ import { type AddressService } from "./address-service.js";
 import { registerDiscoveryRoutes } from "./discovery-routes.js";
 import { type DiscoveryService } from "./discovery-service.js";
 import { type HealthService } from "./health.js";
+import { registerPerformanceRoutes } from "./performance-routes.js";
+import { type PerformanceService } from "./performance-service.js";
 
 export interface CreateApiOptions {
   readonly addressService: AddressService;
@@ -18,6 +20,7 @@ export interface CreateApiOptions {
   readonly env: ApiEnv;
   readonly healthService: HealthService;
   readonly logger: Logger;
+  readonly performanceService: PerformanceService;
 }
 
 export async function createApi(options: CreateApiOptions) {
@@ -73,6 +76,7 @@ export async function createApi(options: CreateApiOptions) {
   });
 
   registerAddressRoutes(app, options.addressService);
+  registerPerformanceRoutes(app, options.performanceService);
   registerDiscoveryRoutes(app, options.discoveryService);
 
   app.setErrorHandler((error, request, reply) => {

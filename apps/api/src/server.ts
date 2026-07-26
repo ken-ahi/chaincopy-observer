@@ -14,6 +14,7 @@ import { PrismaAddressService } from "./address-service.js";
 import { createApi } from "./app.js";
 import { PrismaDiscoveryService } from "./discovery-service.js";
 import { DatabaseRedisHealthService } from "./health.js";
+import { PrismaPerformanceService } from "./performance-service.js";
 
 loadRootEnvironment();
 
@@ -35,7 +36,15 @@ const candidateQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidCandida
 });
 const addressService = new PrismaAddressService(prisma, hyperliquidQueue);
 const discoveryService = new PrismaDiscoveryService(prisma, discoveryQueue, candidateQueue);
-const app = await createApi({ addressService, discoveryService, env, healthService, logger });
+const performanceService = new PrismaPerformanceService(prisma);
+const app = await createApi({
+  addressService,
+  discoveryService,
+  env,
+  healthService,
+  logger,
+  performanceService,
+});
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Stopping API");
