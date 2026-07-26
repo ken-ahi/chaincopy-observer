@@ -156,6 +156,9 @@ importers:
 
   apps/worker:
     dependencies:
+      '@chaincopy/analytics':
+        specifier: workspace:*
+        version: link:../../packages/analytics
       '@chaincopy/blockchain-adapters':
         specifier: workspace:*
         version: link:../../packages/blockchain-adapters

@@ -6,9 +6,11 @@ import {
   hyperliquidDiscoveryJobNames,
   hyperliquidDiscoveryQueueName,
   hyperliquidQueueName,
+  performanceQueueName,
   systemJobNames,
   type HyperliquidDiscoveryJobData,
   type HyperliquidJobData,
+  type PerformanceJobData,
 } from "@chaincopy/domain";
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
@@ -25,6 +27,9 @@ import { HyperliquidRepository } from "./hyperliquid/repository.js";
 import { HyperliquidScheduler } from "./hyperliquid/scheduler.js";
 import { HyperliquidSyncService } from "./hyperliquid/sync-service.js";
 import { HyperliquidWebSocketSupervisor } from "./hyperliquid/websocket-supervisor.js";
+import { PerformanceJobProcessor } from "./performance/processor.js";
+import { PerformanceRepository } from "./performance/repository.js";
+import { PerformanceCalculationService } from "./performance/service.js";
 import {
   enqueueSampleHealthJob,
   sampleJobId,
@@ -60,6 +65,9 @@ const discoveryQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidDiscove
   connection: redis,
 });
 const candidateQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidCandidateQueueName, {
+  connection: redis,
+});
+const performanceQueue = new Queue<PerformanceJobData>(performanceQueueName, {
   connection: redis,
 });
 
@@ -168,6 +176,9 @@ const discoveryProcessor = new HyperliquidDiscoveryJobProcessor(
   new Set(env.HYPERLIQUID_DISCOVERY_KNOWN_SYSTEM_ADDRESSES.map((address) => address.toLowerCase())),
   logger,
 );
+const performanceRepository = new PerformanceRepository(prisma);
+const performanceService = new PerformanceCalculationService(performanceRepository);
+const performanceProcessor = new PerformanceJobProcessor(performanceService, logger);
 
 const systemWorker = new Worker<SampleHealthJobData>(
   systemQueueName,
@@ -355,6 +366,34 @@ candidateWorker.on("error", (error) => {
   logger.error({ error: errorDetails(error) }, "Hyperliquid candidate BullMQ worker error");
 });
 
+const performanceWorker = new Worker<PerformanceJobData>(
+  performanceQueueName,
+  (job) => performanceProcessor.process(job),
+  {
+    connection: redis,
+    concurrency: 1,
+  },
+);
+
+performanceWorker.on("failed", (job, error) => {
+  const attempts = job?.opts.attempts ?? 1;
+  const attemptsMade = job?.attemptsMade ?? attempts;
+  logger.error(
+    {
+      attempts,
+      attemptsMade,
+      error: errorDetails(error),
+      jobId: job?.id,
+      jobName: job?.name,
+      retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
+    },
+    "Address performance BullMQ job failed",
+  );
+});
+performanceWorker.on("error", (error) => {
+  logger.error({ error: errorDetails(error) }, "Address performance BullMQ worker error");
+});
+
 function recoverInterruptedCandidateEnrichment(
   job: Job<HyperliquidDiscoveryJobData> | undefined,
   error: Error,
@@ -415,6 +454,7 @@ logger.info(
       hyperliquidQueueName,
       hyperliquidDiscoveryQueueName,
       hyperliquidCandidateQueueName,
+      performanceQueueName,
     ],
     sourceKey,
   },
@@ -446,7 +486,9 @@ async function shutdown(signal: string): Promise<void> {
   await close("hyperliquid-worker", () => hyperliquidWorker.close());
   await close("hyperliquid-discovery-worker", () => discoveryWorker.close());
   await close("hyperliquid-candidate-worker", () => candidateWorker.close());
+  await close("performance-worker", () => performanceWorker.close());
   await close("system-worker", () => systemWorker.close());
+  await close("performance-queue", () => performanceQueue.close());
   await close("hyperliquid-candidate-queue", () => candidateQueue.close());
   await close("hyperliquid-discovery-queue", () => discoveryQueue.close());
   await close("hyperliquid-queue", () => hyperliquidQueue.close());

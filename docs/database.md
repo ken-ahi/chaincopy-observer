@@ -137,19 +137,20 @@ erDiagram
 - 個人専用アプリでも、不要になったOAuth Account/Sessionは削除可能にする。
 - Phase 8でPostgreSQLの日次バックアップと復元試験を定義する。
 
-## 8. Phase 4A分析モデル案
+## 8. Phase 4C分析モデル
 
-Phase 4AではschemaとMigrationを変更しない。Phase 4Bで計算結果の再現性が必要になった時点で、既存の取引・snapshotを正本のまま参照し、次の最小構成を検討する。
+Phase 4Cでは既存の取引・snapshotを入力の正本として参照し、計算結果だけを次の最小構成で永続化する。
 
-| model                      | 主な役割・フィールド                                                                                                                       |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `MetricVersion`            | version、計算規則JSON、Decimal設定、作成日時                                                                                               |
-| `MetricCalculationRun`     | wallet、metric version、`calculationFrom`、`calculationTo`、`dataCompleteness`、`calculationStatus`、`calculationError`、input fingerprint |
-| `DailyNav`                 | run、UTC日、NAV、external cash flow、daily return、precision                                                                               |
-| `PositionCycle`            | run、coin、side、open/close時刻、gross PnL、fee、Funding、net PnL、完全性                                                                  |
-| `AddressPerformanceMetric` | run、metric key、Decimal値、precision、補足metadata                                                                                        |
+| model                      | 主な役割・一意性                                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `MetricCalculationRun`     | version、期間、完全性、precision、input fingerprint、warning/error。`deduplicationKey`で同一実行を抑止          |
+| `DailyNav`                 | run、UTC日、Perp NAV、利用可能な損益・cash flow内訳。`(calculationRunId, date)`で一意                           |
+| `PositionCycle`            | run、coin、side、open/close時刻、gross PnL、fee、Funding、net PnL。`(calculationRunId, inputFingerprint)`で一意 |
+| `AddressPerformanceMetric` | run、metric key、Decimal値、precision、status、warning、期間、version。`(calculationRunId, metricKey)`で一意    |
 
-`ReturnSeries`は独立modelにせず、初期案では`DailyNav.dailyReturn`で代替する。異なる頻度の系列が必要と実証された場合だけ追加する。既存`PortfolioSnapshot`、`PerpPositionEvent`、`NormalizedTrade`、`FundingPayment`、`CashFlow`を複製しない。
+金融値は全て`numeric(38,18)`とし、計算Runの結果行作成と`SUCCEEDED`遷移を1 transactionで確定する。失敗・履歴不足Runは原因を保存するが、正式なNAV・Cycle・Metric行を保存しない。同一入力は`walletAddressId + calculationVersion + inputFingerprint`で成功Runを再利用し、`force=true`だけ新しいRunを作る。
+
+`MetricVersion`と`ReturnSeries`は独立modelにせず、前者はRun/Metricの`calculationVersion`と`metricVersion`、後者は再現可能な`DailyNav`からの再計算で代替する。異なる頻度の系列が必要と実証された場合だけ追加する。既存`PortfolioSnapshot`、`PerpPositionEvent`、`NormalizedTrade`、`FundingPayment`、`CashFlow`を複製しない。
 
 入力側では次の追加保存を検討する。
 

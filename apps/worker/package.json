@@ -12,6 +12,7 @@
     "verify:phase2": "tsx src/hyperliquid/verify-real-data.ts"
   },
   "dependencies": {
+    "@chaincopy/analytics": "workspace:*",
     "@chaincopy/blockchain-adapters": "workspace:*",
     "@chaincopy/config": "workspace:*",
     "@chaincopy/database": "workspace:*",

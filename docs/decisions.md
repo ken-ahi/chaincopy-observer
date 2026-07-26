@@ -202,3 +202,12 @@
 - return: TWRは外部cash flow時刻で分割し、直前・直後NAVがない場合は日初・日末へ寄せて推定しない。非正NAV、未知cash flow、gap、API打切りを跨ぐ計算はfail closedにする。
 - risk: UTC日次return、risk-free rate 0、年率係数365をv1規則とする。30日未満は年率換算せず、30～179日は参考値、180日以上を通常評価とする。
 - 影響: Phase 4Bは純粋関数と固定Decimal test vectorから開始する。DB modelとMigrationは計算出力・version・完全性の永続化設計を確定してから別変更で追加する。
+
+## ADR-026: Phase 4Cは入力fingerprint単位で結果をtransaction保存する
+
+- 状態: 採用
+- 冪等性: `walletAddressId + calculationVersion + inputFingerprint`が同じ成功Runを再利用する。入力fingerprintは対象期間、Fill・Funding・Cash Flow・NAV/Position snapshotの外部ID、履歴完全性、計算versionを安定順でhash化する。
+- 再計算: `force=true`は依頼時刻をdeduplication keyへ加えて新しいRunを作る。同じBullMQ再配信では同一Runを再開し、FAILEDまたはINSUFFICIENT_DATAのdeduplication keyは終端時に解放して再試行可能にする。
+- 整合性: Daily NAV、Position Cycle、Metricの作成とRunの`RUNNING`から`SUCCEEDED`への遷移を1 DB transactionに置く。子行の一部保存、履歴不足、未知cash flow、gapでは`SUCCEEDED`にしない。
+- version: Phase 4Bの式を変えず、Worker側の単一定数`performance-v1`をRunとMetricへ保存する。式変更時は新versionで別Runを生成する。
+- 運用: 計算は専用BullMQ queue、同時実行数1、priority 15、最大3回の指数backoffとし、既存監視、Gap Recovery、手動同期、候補Enrichmentを圧迫しない。

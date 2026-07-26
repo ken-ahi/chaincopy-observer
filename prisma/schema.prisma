@@ -123,6 +123,39 @@ enum DiscoveryConnectionStatus {
   DEGRADED
 }
 
+enum MetricCalculationStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  INSUFFICIENT_DATA
+  FAILED
+}
+
+enum PerformanceHistoryCompleteness {
+  COMPLETE
+  PARTIAL
+  TRUNCATED
+  GAP_DETECTED
+  INSUFFICIENT_HISTORY
+}
+
+enum PerformancePrecision {
+  EXACT
+  DERIVED
+  ESTIMATED
+  UNAVAILABLE
+}
+
+enum PerformanceMetricStatus {
+  AVAILABLE
+  REFERENCE_ONLY
+}
+
+enum PositionCycleStatus {
+  OPEN
+  CLOSED
+}
+
 model User {
   id              String          @id @default(cuid())
   name            String?
@@ -246,30 +279,34 @@ model SyncJob {
 }
 
 model WalletAddress {
-  id                   String                @id @default(cuid())
-  address              String
-  displayName          String?               @map("display_name")
-  isWatched            Boolean               @default(true) @map("is_watched")
-  lastSyncAt           DateTime?             @map("last_sync_at")
-  sourceId             String                @map("source_id")
-  source               DataSource            @relation(fields: [sourceId], references: [id], onDelete: Restrict)
-  ownerUserId          String?               @map("owner_user_id")
-  ownerUser            User?                 @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
-  createdAt            DateTime              @default(now()) @map("created_at")
-  updatedAt            DateTime              @updatedAt @map("updated_at")
-  rawEvents            RawEvent[]
-  normalizedTrades     NormalizedTrade[]
-  fundingPayments      FundingPayment[]
-  cashFlows            CashFlow[]
-  perpPositions        PerpPosition[]
-  perpPositionEvents   PerpPositionEvent[]
-  portfolioSnapshots   PortfolioSnapshot[]
-  spotBalanceSnapshots SpotBalanceSnapshot[]
-  orderHistory         OrderHistory[]
-  syncCursors          SyncCursor[]
-  syncJobs             SyncJob[]
-  dataQualityIssues    DataQualityIssue[]
-  promotedCandidates   AddressCandidate[]    @relation("CandidatePromotion")
+  id                    String                     @id @default(cuid())
+  address               String
+  displayName           String?                    @map("display_name")
+  isWatched             Boolean                    @default(true) @map("is_watched")
+  lastSyncAt            DateTime?                  @map("last_sync_at")
+  sourceId              String                     @map("source_id")
+  source                DataSource                 @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  ownerUserId           String?                    @map("owner_user_id")
+  ownerUser             User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  createdAt             DateTime                   @default(now()) @map("created_at")
+  updatedAt             DateTime                   @updatedAt @map("updated_at")
+  rawEvents             RawEvent[]
+  normalizedTrades      NormalizedTrade[]
+  fundingPayments       FundingPayment[]
+  cashFlows             CashFlow[]
+  perpPositions         PerpPosition[]
+  perpPositionEvents    PerpPositionEvent[]
+  portfolioSnapshots    PortfolioSnapshot[]
+  spotBalanceSnapshots  SpotBalanceSnapshot[]
+  orderHistory          OrderHistory[]
+  syncCursors           SyncCursor[]
+  syncJobs              SyncJob[]
+  dataQualityIssues     DataQualityIssue[]
+  promotedCandidates    AddressCandidate[]         @relation("CandidatePromotion")
+  metricCalculationRuns MetricCalculationRun[]
+  dailyNavs             DailyNav[]
+  positionCycles        PositionCycle[]
+  performanceMetrics    AddressPerformanceMetric[]
 
   @@unique([sourceId, address])
   @@index([isWatched, updatedAt])
@@ -782,6 +819,109 @@ model DataQualityIssue {
 
   @@index([walletAddressId, status, severity])
   @@map("data_quality_issues")
+}
+
+model MetricCalculationRun {
+  id                  String                         @id @default(cuid())
+  walletAddressId     String                         @map("wallet_address_id")
+  walletAddress       WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  calculationVersion  String                         @map("calculation_version")
+  calculationFrom     DateTime                       @map("calculation_from")
+  calculationTo       DateTime                       @map("calculation_to")
+  requestedAt         DateTime                       @map("requested_at")
+  requestedBy         String                         @map("requested_by")
+  startedAt           DateTime?                      @map("started_at")
+  completedAt         DateTime?                      @map("completed_at")
+  status              MetricCalculationStatus        @default(PENDING)
+  historyCompleteness PerformanceHistoryCompleteness @map("history_completeness")
+  precision           PerformancePrecision?
+  inputFingerprint    String                         @map("input_fingerprint")
+  deduplicationKey    String                         @unique(map: "metric_runs_dedup_key") @map("deduplication_key")
+  warningCount        Int                            @default(0) @map("warning_count")
+  warningCodes        String[]                       @default([]) @map("warning_codes")
+  errorCode           String?                        @map("error_code")
+  errorMessage        String?                        @map("error_message") @db.Text
+  dailyNavs           DailyNav[]
+  positionCycles      PositionCycle[]
+  performanceMetrics  AddressPerformanceMetric[]
+  createdAt           DateTime                       @default(now()) @map("created_at")
+  updatedAt           DateTime                       @updatedAt @map("updated_at")
+
+  @@index([walletAddressId, status, requestedAt], map: "metric_runs_wallet_status_requested_idx")
+  @@index([walletAddressId, calculationVersion, inputFingerprint], map: "metric_runs_input_idx")
+  @@map("metric_calculation_runs")
+}
+
+model DailyNav {
+  id                  String                         @id @default(cuid())
+  walletAddressId     String                         @map("wallet_address_id")
+  walletAddress       WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  calculationRunId    String                         @map("calculation_run_id")
+  calculationRun      MetricCalculationRun           @relation(fields: [calculationRunId], references: [id], onDelete: Cascade)
+  date                DateTime                       @db.Date
+  nav                 Decimal                        @db.Decimal(38, 18)
+  cashBalance         Decimal?                       @map("cash_balance") @db.Decimal(38, 18)
+  unrealizedPnl       Decimal?                       @map("unrealized_pnl") @db.Decimal(38, 18)
+  realizedPnl         Decimal?                       @map("realized_pnl") @db.Decimal(38, 18)
+  funding             Decimal?                       @db.Decimal(38, 18)
+  fees                Decimal?                       @db.Decimal(38, 18)
+  externalCashFlow    Decimal?                       @map("external_cash_flow") @db.Decimal(38, 18)
+  precision           PerformancePrecision
+  historyCompleteness PerformanceHistoryCompleteness @map("history_completeness")
+  createdAt           DateTime                       @default(now()) @map("created_at")
+
+  @@unique([calculationRunId, date], map: "daily_navs_run_date_key")
+  @@index([walletAddressId, date], map: "daily_navs_wallet_date_idx")
+  @@map("daily_navs")
+}
+
+model PositionCycle {
+  id                String               @id @default(cuid())
+  walletAddressId   String               @map("wallet_address_id")
+  walletAddress     WalletAddress        @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  calculationRunId  String               @map("calculation_run_id")
+  calculationRun    MetricCalculationRun @relation(fields: [calculationRunId], references: [id], onDelete: Cascade)
+  coin              String
+  side              PositionSide
+  openedAt          DateTime             @map("opened_at")
+  closedAt          DateTime?            @map("closed_at")
+  averageEntryPrice Decimal              @map("average_entry_price") @db.Decimal(38, 18)
+  averageExitPrice  Decimal?             @map("average_exit_price") @db.Decimal(38, 18)
+  entryQuantity     Decimal              @map("entry_quantity") @db.Decimal(38, 18)
+  exitQuantity      Decimal              @map("exit_quantity") @db.Decimal(38, 18)
+  grossRealizedPnl  Decimal              @map("gross_realized_pnl") @db.Decimal(38, 18)
+  fees              Decimal              @db.Decimal(38, 18)
+  funding           Decimal              @db.Decimal(38, 18)
+  netRealizedPnl    Decimal              @map("net_realized_pnl") @db.Decimal(38, 18)
+  fillCount         Int                  @map("fill_count")
+  status            PositionCycleStatus
+  inputFingerprint  String               @map("input_fingerprint")
+  createdAt         DateTime             @default(now()) @map("created_at")
+
+  @@unique([calculationRunId, inputFingerprint], map: "position_cycles_run_input_key")
+  @@index([walletAddressId, openedAt], map: "position_cycles_wallet_opened_idx")
+  @@map("position_cycles")
+}
+
+model AddressPerformanceMetric {
+  id               String                  @id @default(cuid())
+  walletAddressId  String                  @map("wallet_address_id")
+  walletAddress    WalletAddress           @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  calculationRunId String                  @map("calculation_run_id")
+  calculationRun   MetricCalculationRun    @relation(fields: [calculationRunId], references: [id], onDelete: Cascade)
+  metricKey        String                  @map("metric_key")
+  metricValue      Decimal                 @map("metric_value") @db.Decimal(38, 18)
+  precision        PerformancePrecision
+  status           PerformanceMetricStatus
+  warningCodes     String[]                @default([]) @map("warning_codes")
+  calculationFrom  DateTime                @map("calculation_from")
+  calculationTo    DateTime                @map("calculation_to")
+  metricVersion    String                  @map("metric_version")
+  createdAt        DateTime                @default(now()) @map("created_at")
+
+  @@unique([calculationRunId, metricKey], map: "performance_metrics_run_key")
+  @@index([walletAddressId, metricKey, calculationTo], map: "performance_metrics_wallet_key_to_idx")
+  @@map("address_performance_metrics")
 }
 
 model SystemAlert {

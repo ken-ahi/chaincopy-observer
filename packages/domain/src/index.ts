@@ -7,6 +7,7 @@ export type SystemJobName = (typeof systemJobNames)[keyof typeof systemJobNames]
 export const hyperliquidQueueName = "hyperliquid-sync";
 export const hyperliquidDiscoveryQueueName = "hyperliquid-discovery";
 export const hyperliquidCandidateQueueName = "hyperliquid-candidate-enrichment";
+export const performanceQueueName = "address-performance";
 
 export const hyperliquidJobNames = {
   walletBackfill: "hyperliquid-wallet-backfill",
@@ -88,8 +89,26 @@ export const hyperliquidJobPriorities = {
   discoveryControl: 5,
   candidateUpsert: 6,
   candidateEnrichment: 10,
+  addressPerformance: 15,
   candidateRecheck: 20,
 } as const;
+
+export const performanceJobNames = {
+  calculate: "calculate-address-performance",
+  recalculate: "recalculate-address-performance",
+} as const;
+
+export type PerformanceJobName = (typeof performanceJobNames)[keyof typeof performanceJobNames];
+
+export interface PerformanceJobData {
+  readonly calculationFrom: string;
+  readonly calculationTo: string;
+  readonly calculationVersion: string;
+  readonly force: boolean;
+  readonly requestedAt: string;
+  readonly requestedBy: string;
+  readonly walletAddressId: string;
+}
 
 export type ComponentStatus = "up" | "down";
 

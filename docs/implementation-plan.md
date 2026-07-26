@@ -100,6 +100,17 @@
 
 Phase 4BではDCA/Leverage分類、score、ranking、シグナルへ進まない。全口座NAV、清算回数など入力不足の指標は、必要データの保存が実装されるまで値を作らない。
 
+### Phase 4C: 計算結果永続化とWorker集計
+
+- `MetricCalculationRun`、`DailyNav`、`PositionCycle`、`AddressPerformanceMetric`
+- `performance-v1`と入力fingerprintによる成功Run再利用
+- transactionによる結果保存と`SUCCEEDED`遷移
+- `calculate-address-performance`、`recalculate-address-performance`
+- 既存同期・Gap Recovery・候補Enrichmentより低優先度、同時実行数1
+- fixture 2件と既存公開テストアドレス1件だけで連携検証
+
+Phase 4CではAPI、Web、分類、score、ranking、シグナルへ進まない。全口座NAV、清算回数、payoff ratioなど入力または純粋関数が不足する指標は値を作らない。
+
 ## Phase 5: シグナル
 
 - deterministic signal rule
