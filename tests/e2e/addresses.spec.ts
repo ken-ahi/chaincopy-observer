@@ -20,7 +20,18 @@ test("registers, deduplicates, watches, syncs, and opens an address", async ({ p
   await page.goto("/dashboard/addresses");
   await expect(page.getByRole("heading", { name: "監視アドレス" })).toBeVisible();
   const search = page.getByLabel("アドレス検索");
-  await search.fill("__phase2_empty_state__");
+  const [emptyResponse] = await Promise.all([
+    page.waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        url.pathname === "/api/addresses" &&
+        url.searchParams.get("search") === "__phase2_empty_state__"
+      );
+    }),
+    search.fill("__phase2_empty_state__"),
+  ]);
+  expect(emptyResponse.status()).toBe(200);
+  await expect(emptyResponse.json()).resolves.toMatchObject({ items: [] });
   await expect(page.getByText("条件に一致するアドレスはありません。")).toBeVisible();
   await Promise.all([
     page.waitForResponse((response) => {

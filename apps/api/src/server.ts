@@ -1,11 +1,18 @@
 import { createLogger, errorDetails, loadRootEnvironment, readApiEnv } from "@chaincopy/config";
 import { disconnectDatabase, prisma } from "@chaincopy/database";
-import { hyperliquidQueueName, type HyperliquidJobData } from "@chaincopy/domain";
+import {
+  hyperliquidCandidateQueueName,
+  hyperliquidDiscoveryQueueName,
+  hyperliquidQueueName,
+  type HyperliquidDiscoveryJobData,
+  type HyperliquidJobData,
+} from "@chaincopy/domain";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 
 import { PrismaAddressService } from "./address-service.js";
 import { createApi } from "./app.js";
+import { PrismaDiscoveryService } from "./discovery-service.js";
 import { DatabaseRedisHealthService } from "./health.js";
 
 loadRootEnvironment();
@@ -20,12 +27,21 @@ const healthService = new DatabaseRedisHealthService(prisma, redis);
 const hyperliquidQueue = new Queue<HyperliquidJobData>(hyperliquidQueueName, {
   connection: redis,
 });
+const discoveryQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidDiscoveryQueueName, {
+  connection: redis,
+});
+const candidateQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidCandidateQueueName, {
+  connection: redis,
+});
 const addressService = new PrismaAddressService(prisma, hyperliquidQueue);
-const app = await createApi({ addressService, env, healthService, logger });
+const discoveryService = new PrismaDiscoveryService(prisma, discoveryQueue, candidateQueue);
+const app = await createApi({ addressService, discoveryService, env, healthService, logger });
 
 async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Stopping API");
   await app.close();
+  await candidateQueue.close();
+  await discoveryQueue.close();
   await hyperliquidQueue.close();
   await redis.quit();
   await disconnectDatabase();
@@ -46,6 +62,9 @@ try {
   logger.info({ host: env.API_HOST, port: env.API_PORT }, "API is listening");
 } catch (error) {
   logger.fatal({ error: errorDetails(error) }, "API failed to start");
+  await candidateQueue.close();
+  await discoveryQueue.close();
+  await hyperliquidQueue.close();
   await redis.quit();
   await disconnectDatabase();
   process.exitCode = 1;

@@ -1,5 +1,7 @@
 # Phase別実装計画
 
+> 2026-07-26の所有者指示により、Phase 1/2の直後にHyperliquid自動探索を「Phase 3」として実施する。既存のSui/Cetus以降の順序は今回変更・実装せず、差異はADR-019を正とする。
+
 最終更新: 2026-07-25
 
 ## 共通完了ゲート
@@ -55,7 +57,18 @@
 
 禁止: Exchange endpoint、署名、注文送信。
 
-## Phase 3: Sui/Cetus連携
+## Phase 3: Hyperliquidアドレス自動探索
+
+- 公式`meta` APIから購読対象Perpetualsを決定
+- 公式`trades` WebSocketからbuyer/sellerを抽出
+- 取引・候補・CursorをPostgreSQLへ冪等保存
+- 軽量フィルター、低優先度Enrichment、履歴完全性判定
+- 候補一覧・詳細・設定・昇格Web UI
+- Weighted limiter、429/Retry-After、再接続・再購読・Data Quality Issue
+
+禁止: 手動ファイルimport、有料データ、scraping、Requester Pays S3、自前node、Exchange endpoint、署名、注文。
+
+## 将来候補: Sui/Cetus連携
 
 - Sui GraphQL履歴pagination
 - Sui gRPC低遅延取得
@@ -103,13 +116,13 @@
 - rate limit、suppression
 - test email
 
-## Phase 8: 自動アドレス探索
+## 旧Phase 8案: 自動アドレス探索（Phase 3へ前倒し済み）
 
 - 公開データからの候補抽出
 - 除外リスト、bot/contract分類
 - candidate enrichment queue
 - 条件未達を水増ししない
-- 手動CSV経路との統合
+- 手動CSV/JSON経路は採用しない
 
 ## Phase 9: 本番運用強化
 

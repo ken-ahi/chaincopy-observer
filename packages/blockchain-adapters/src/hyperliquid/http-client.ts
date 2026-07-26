@@ -13,6 +13,7 @@ import {
   frontendOpenOrdersSchema,
   historicalOrdersSchema,
   openOrdersSchema,
+  perpetualMetaSchema,
   portfolioSchema,
   spotClearinghouseStateSchema,
   userFillsSchema,
@@ -25,6 +26,7 @@ import {
   type HyperliquidHistoricalOrder,
   type HyperliquidLedgerUpdate,
   type HyperliquidOrder,
+  type HyperliquidPerpetualMeta,
   type HyperliquidPortfolio,
   type HyperliquidSpotState,
   type HyperliquidUserRateLimit,
@@ -36,6 +38,7 @@ export interface HyperliquidHttpResponse<T> {
 }
 
 export interface HyperliquidHttpClientOptions {
+  readonly defaultPriority?: number;
   readonly fetchImplementation?: typeof fetch;
   readonly maximumAttempts?: number;
   readonly rateLimiter?: WeightedRateLimiter;
@@ -45,13 +48,14 @@ export interface HyperliquidHttpClientOptions {
 interface RequestOptions<T> {
   readonly body: Readonly<Record<string, unknown>>;
   readonly endpointType: string;
+  readonly maximumResponseItems?: number;
   readonly responseSchema: ZodType<T>;
   readonly weight: number;
-  readonly responseItemWeight?: boolean;
 }
 
 export class HyperliquidHttpClient {
   private readonly fetchImplementation: typeof fetch;
+  private readonly defaultPriority: number;
   private readonly maximumAttempts: number;
   private readonly rateLimiter: WeightedRateLimiter;
   private readonly timeoutMs: number;
@@ -61,6 +65,7 @@ export class HyperliquidHttpClient {
     options: HyperliquidHttpClientOptions = {},
   ) {
     this.fetchImplementation = options.fetchImplementation ?? fetch;
+    this.defaultPriority = options.defaultPriority ?? 0;
     this.maximumAttempts = options.maximumAttempts ?? 3;
     this.rateLimiter = options.rateLimiter ?? new WeightedRateLimiter();
     this.timeoutMs = options.timeoutMs ?? 10_000;
@@ -70,8 +75,17 @@ export class HyperliquidHttpClient {
     return this.request({
       body: { aggregateByTime: false, type: "userFills", user },
       endpointType: "userFills",
-      responseItemWeight: true,
+      maximumResponseItems: 2_000,
       responseSchema: userFillsSchema,
+      weight: 20,
+    });
+  }
+
+  public meta(): Promise<HyperliquidHttpResponse<HyperliquidPerpetualMeta>> {
+    return this.request({
+      body: { type: "meta" },
+      endpointType: "meta",
+      responseSchema: perpetualMetaSchema,
       weight: 20,
     });
   }
@@ -90,7 +104,7 @@ export class HyperliquidHttpClient {
         user,
       }),
       endpointType: "userFillsByTime",
-      responseItemWeight: true,
+      maximumResponseItems: 2_000,
       responseSchema: userFillsSchema,
       weight: 20,
     });
@@ -135,7 +149,7 @@ export class HyperliquidHttpClient {
     return this.request({
       body: compact({ endTime, startTime, type: "userFunding", user }),
       endpointType: "userFunding",
-      responseItemWeight: true,
+      maximumResponseItems: 500,
       responseSchema: userFundingSchema,
       weight: 20,
     });
@@ -149,7 +163,7 @@ export class HyperliquidHttpClient {
     return this.request({
       body: compact({ endTime, startTime, type: "userNonFundingLedgerUpdates", user }),
       endpointType: "userNonFundingLedgerUpdates",
-      responseItemWeight: true,
+      maximumResponseItems: 500,
       responseSchema: userNonFundingLedgerUpdatesSchema,
       weight: 20,
     });
@@ -179,7 +193,7 @@ export class HyperliquidHttpClient {
     return this.request({
       body: { type: "historicalOrders", user },
       endpointType: "historicalOrders",
-      responseItemWeight: true,
+      maximumResponseItems: 2_000,
       responseSchema: historicalOrdersSchema,
       weight: 20,
     });
@@ -198,23 +212,18 @@ export class HyperliquidHttpClient {
     let lastError: unknown;
 
     for (let attempt = 1; attempt <= this.maximumAttempts; attempt += 1) {
-      await this.rateLimiter.acquire(options.weight);
+      const reservedWeight =
+        options.weight +
+        (options.maximumResponseItems ? Math.ceil(options.maximumResponseItems / 20) : 0);
+      await this.rateLimiter.acquire(reservedWeight, this.defaultPriority);
       try {
-        const response = await this.requestOnce(options);
-        if (
-          options.responseItemWeight &&
-          Array.isArray(response.data) &&
-          response.data.length > 0
-        ) {
-          await this.rateLimiter.acquire(Math.ceil(response.data.length / 20));
-        }
-        return response;
+        return await this.requestOnce(options);
       } catch (error) {
         lastError = error;
         if (attempt === this.maximumAttempts || !isRetryableHyperliquidError(error)) {
           throw error;
         }
-        await delay(250 * 2 ** (attempt - 1));
+        await delay(retryDelay(error, attempt));
       }
     }
 
@@ -240,6 +249,7 @@ export class HyperliquidHttpClient {
           `Hyperliquid ${options.endpointType} request failed with HTTP ${response.status}.`,
           response.status,
           rawText.slice(0, 2_000),
+          parseRetryAfter(response.headers.get("retry-after")),
         );
       }
 
@@ -270,4 +280,26 @@ async function delay(milliseconds: number): Promise<void> {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, milliseconds);
   });
+}
+
+function retryDelay(error: unknown, attempt: number): number {
+  if (error instanceof HyperliquidHttpError && error.status === 429) {
+    return error.retryAfterMs ?? 250 * 2 ** (attempt - 1);
+  }
+  return 250 * 2 ** (attempt - 1);
+}
+
+function parseRetryAfter(value: string | null): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) {
+    return Math.ceil(seconds * 1_000);
+  }
+  const date = Date.parse(value);
+  if (!Number.isFinite(date)) {
+    return undefined;
+  }
+  return Math.max(0, date - Date.now());
 }

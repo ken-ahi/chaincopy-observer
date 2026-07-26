@@ -8,10 +8,13 @@ import { type Logger } from "pino";
 
 import { registerAddressRoutes } from "./address-routes.js";
 import { type AddressService } from "./address-service.js";
+import { registerDiscoveryRoutes } from "./discovery-routes.js";
+import { type DiscoveryService } from "./discovery-service.js";
 import { type HealthService } from "./health.js";
 
 export interface CreateApiOptions {
   readonly addressService: AddressService;
+  readonly discoveryService: DiscoveryService;
   readonly env: ApiEnv;
   readonly healthService: HealthService;
   readonly logger: Logger;
@@ -70,6 +73,7 @@ export async function createApi(options: CreateApiOptions) {
   });
 
   registerAddressRoutes(app, options.addressService);
+  registerDiscoveryRoutes(app, options.discoveryService);
 
   app.setErrorHandler((error, request, reply) => {
     if (isClientError(error)) {

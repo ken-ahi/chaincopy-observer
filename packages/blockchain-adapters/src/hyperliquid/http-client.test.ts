@@ -94,4 +94,71 @@ describe("Hyperliquid history pagination", () => {
     };
     expect(secondBody.startTime).toBe(500);
   });
+
+  it("marks fill history truncated when a full page cannot advance past one timestamp", async () => {
+    const page = (offset: number) =>
+      Array.from({ length: 2_000 }, (_, index) => ({
+        closedPnl: "0",
+        coin: "BTC",
+        crossed: true,
+        dir: "Open Long",
+        fee: "0",
+        feeToken: "USDC",
+        hash: `hash-${offset + index}`,
+        oid: String(offset + index),
+        px: "100",
+        side: "B",
+        startPosition: "0",
+        sz: "1",
+        tid: String(offset + index),
+        time: 100,
+      }));
+    const fetchImplementation = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify(page(0)), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(page(2_000)), { status: 200 }));
+    const client = new HyperliquidClient("https://example.test/info", {
+      fetchImplementation,
+    });
+
+    const result = await client.allUserFillsByTime(address, 0, 1_000);
+
+    expect(result.items).toHaveLength(4_000);
+    expect(result.reachedHistoryLimit).toBe(true);
+    expect(fetchImplementation).toHaveBeenCalledTimes(2);
+  });
+
+  it("bounds funding history and marks the result truncated at 10000 items", async () => {
+    const pages = Array.from({ length: 20 }, (_, pageIndex) =>
+      Array.from({ length: 500 }, (_, itemIndex) => {
+        const sequence = pageIndex * 500 + itemIndex;
+        return {
+          delta: {
+            coin: "BTC",
+            fundingRate: "0.0001",
+            szi: "1",
+            type: "funding",
+            usdc: "0.1",
+          },
+          hash: `hash-${sequence}`,
+          time: sequence + 1,
+        };
+      }),
+    );
+    const fetchImplementation = vi.fn<typeof fetch>();
+    for (const page of pages) {
+      fetchImplementation.mockResolvedValueOnce(
+        new Response(JSON.stringify(page), { status: 200 }),
+      );
+    }
+    const client = new HyperliquidClient("https://example.test/info", {
+      fetchImplementation,
+    });
+
+    const result = await client.allUserFunding(address, 0, 20_000);
+
+    expect(result.items).toHaveLength(10_000);
+    expect(result.reachedHistoryLimit).toBe(true);
+    expect(fetchImplementation).toHaveBeenCalledTimes(20);
+  });
 });

@@ -1,0 +1,16 @@
+import { type NextRequest } from "next/server";
+
+import { proxyInternalApi } from "@/lib/api-proxy";
+
+interface RouteContext {
+  readonly params: Promise<{ readonly path?: ReadonlyArray<string> }>;
+}
+
+async function handle(request: NextRequest, context: RouteContext) {
+  const params = await context.params;
+  return proxyInternalApi(request, ["discovery", ...(params.path ?? [])]);
+}
+
+export const GET = handle;
+export const POST = handle;
+export const PATCH = handle;

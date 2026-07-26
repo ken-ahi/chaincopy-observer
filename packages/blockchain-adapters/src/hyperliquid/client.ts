@@ -10,6 +10,8 @@ import {
   type HyperliquidLedgerUpdate,
 } from "./schemas.js";
 
+const maximumHistoryItems = 10_000;
+
 export interface HyperliquidPaginatedResponse<T> {
   readonly items: ReadonlyArray<T>;
   readonly pages: ReadonlyArray<string>;
@@ -31,16 +33,22 @@ export class HyperliquidClient extends HyperliquidHttpClient {
     const pages: string[] = [];
     let cursor = startTime;
     let reachedHistoryLimit = false;
+    let retrievedItemCount = 0;
 
     while (cursor <= endTime && items.size < 10_000) {
       const response = await this.userFillsByTime(user, cursor, endTime);
       pages.push(response.rawText);
+      retrievedItemCount += response.data.length;
       if (response.data.length === 0) {
         break;
       }
 
       for (const fill of response.data) {
         items.set(fillKey(fill), fill);
+      }
+      if (retrievedItemCount >= 10_000) {
+        reachedHistoryLimit = true;
+        break;
       }
       const lastTimestamp = Math.max(...response.data.map((fill) => fill.time));
       if (lastTimestamp < cursor) {
@@ -106,15 +114,21 @@ async function paginateByTime<T extends { readonly time: number }>(
   const pages: string[] = [];
   let cursor = startTime;
   let reachedHistoryLimit = false;
+  let retrievedItemCount = 0;
 
-  while (cursor <= endTime) {
+  while (cursor <= endTime && retrievedItemCount < maximumHistoryItems) {
     const response = await request(cursor);
     pages.push(response.rawText);
+    retrievedItemCount += response.data.length;
     if (response.data.length === 0) {
       break;
     }
     for (const item of response.data) {
       items.set(key(item), item);
+    }
+    if (retrievedItemCount >= maximumHistoryItems) {
+      reachedHistoryLimit = true;
+      break;
     }
     const lastTimestamp = Math.max(...response.data.map((item) => item.time));
     if (lastTimestamp < cursor || response.data.length < 500) {

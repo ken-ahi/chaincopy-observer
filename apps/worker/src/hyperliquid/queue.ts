@@ -1,5 +1,6 @@
 import {
   hyperliquidJobNames,
+  hyperliquidJobPriorities,
   type HyperliquidJobData,
   type HyperliquidJobName,
 } from "@chaincopy/domain";
@@ -42,6 +43,12 @@ export async function enqueueHyperliquidJob(
   const job = await queue.add(name, data, {
     ...hyperliquidJobOptions,
     jobId,
+    priority:
+      name === hyperliquidJobNames.gapRecovery
+        ? hyperliquidJobPriorities.gapRecovery
+        : name === hyperliquidJobNames.walletBackfill
+          ? hyperliquidJobPriorities.manualSync
+          : hyperliquidJobPriorities.monitoredSync,
   });
   return job.id ?? jobId;
 }

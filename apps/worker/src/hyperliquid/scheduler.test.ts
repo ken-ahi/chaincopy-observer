@@ -124,4 +124,50 @@ describe("HyperliquidScheduler", () => {
       await first.stop();
     }
   });
+
+  it("releases leadership before waiting for WebSocket shutdown", async () => {
+    const database = {
+      walletAddress: { findMany: vi.fn(async () => []) },
+    } as unknown as PrismaClient;
+    const redis = new LeaseRedis();
+    const logger = pino({ level: "silent" });
+    let finishWebSocketStop: (() => void) | undefined;
+    const webSocketStop = new Promise<void>((resolve) => {
+      finishWebSocketStop = resolve;
+    });
+    const firstSupervisor = {
+      ...createSupervisor(),
+      stop: vi.fn(() => webSocketStop),
+    };
+    const secondSupervisor = createSupervisor();
+    const first = new HyperliquidScheduler(
+      database,
+      redis as unknown as Redis,
+      new RecordingQueue() as unknown as Queue<HyperliquidJobData>,
+      firstSupervisor,
+      "hyperliquid-mainnet",
+      60_000,
+      logger,
+    );
+    const second = new HyperliquidScheduler(
+      database,
+      redis as unknown as Redis,
+      new RecordingQueue() as unknown as Queue<HyperliquidJobData>,
+      secondSupervisor,
+      "hyperliquid-mainnet",
+      60_000,
+      logger,
+    );
+
+    await first.start();
+    const stopping = first.stop();
+    await vi.waitFor(() => expect(firstSupervisor.stop).toHaveBeenCalledOnce());
+    await second.start();
+
+    expect(second.hasLeadership()).toBe(true);
+
+    finishWebSocketStop?.();
+    await stopping;
+    await second.stop();
+  });
 });

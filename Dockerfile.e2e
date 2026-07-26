@@ -1,0 +1,27 @@
+FROM node:24.12.0-bookworm
+
+RUN corepack enable && corepack prepare pnpm@11.9.0 --activate
+
+WORKDIR /app
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml turbo.json .npmrc ./
+COPY apps/api/package.json apps/api/package.json
+COPY apps/web/package.json apps/web/package.json
+COPY apps/worker/package.json apps/worker/package.json
+COPY packages/analytics/package.json packages/analytics/package.json
+COPY packages/blockchain-adapters/package.json packages/blockchain-adapters/package.json
+COPY packages/config/package.json packages/config/package.json
+COPY packages/database/package.json packages/database/package.json
+COPY packages/demo-trading/package.json packages/demo-trading/package.json
+COPY packages/domain/package.json packages/domain/package.json
+COPY packages/notification/package.json packages/notification/package.json
+COPY packages/ui/package.json packages/ui/package.json
+
+RUN pnpm install --frozen-lockfile
+RUN pnpm exec playwright install --with-deps chromium
+
+COPY . .
+RUN pnpm db:generate
+RUN pnpm build
+
+CMD ["pnpm", "test:e2e"]

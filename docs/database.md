@@ -38,6 +38,19 @@ Phase 2 migration は次を追加・確定した。
 
 HTTP と WS の Funding は hash の有無や小数末尾表現が異なるため、wallet、timestamp、coin、amount、position size、rate を Decimal で正規化した transport 共通 ID を使う。
 
+Phase 3 migration は次を追加した。
+
+- `address_candidates`: 発見時刻、軽量統計、Enrichment/filter/昇格、履歴完全性
+- `discovery_trades`: 市場WsTrade本体とbuyer/seller
+- `candidate_trade_participations`: 候補と取引の一意な参加、maker/taker、buy/sell
+- `candidate_coins`, `candidate_activity_buckets`: distinct coinとUTC day/hour
+- `candidate_enrichment_attempts`: 要求期間、利用可能期間、endpoint結果、失敗
+- `candidate_data_quality_issues`: 候補別品質問題
+- `discovery_settings`, `discovery_stats`: 所有者設定と運用統計
+- `discovery_cursors`, `discovery_data_quality_issues`: 市場全体Cursorと補完不能gap
+
+主な一意制約は`discovery_trades(source_id, external_trade_id)`、`discovery_trades(source_id, fingerprint)`、`candidate_trade_participations(candidate_id, discovery_trade_id)`、`address_candidates(source_id, address)`、`discovery_cursors(source_id, scope, cursor_type)`である。
+
 `SyncCursor.lastTimestamp` は inclusive cursor である。次回も同じ timestamp から取得し、重複は一意制約で除く。これにより同じ millisecond に複数イベントがあるページ境界を欠落させない。古い gap recovery が後から完了しても cursor は後退させない。
 
 ## 3. 全体ER図

@@ -11,6 +11,7 @@ import {
   ServerCog,
   ShieldCheck,
   Sparkles,
+  Telescope,
   UserRoundSearch,
   WalletCards,
   Wifi,
@@ -30,6 +31,7 @@ const navigation = [
     icon: UserRoundSearch,
     label: "監視アドレス",
   },
+  { href: "/dashboard/discovery", icon: Telescope, label: "自動探索" },
   { href: "#planned-sections", icon: BarChart3, label: "ランキング" },
   { href: "#planned-sections", icon: BellRing, label: "売買シグナル" },
   { href: "#planned-sections", icon: Bot, label: "デモトレード" },
@@ -82,13 +84,13 @@ export function Dashboard({ email, name }: DashboardProps) {
             <Brand />
           </div>
           <div className="hidden lg:block">
-            <p className="text-xs text-slate-600">Phase 2 · Read-only monitoring</p>
+            <p className="text-xs text-slate-600">Phase 3 · Read-only discovery</p>
             <p className="mt-0.5 text-sm font-medium text-slate-200">おかえりなさい、{name}</p>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="success">
               <span className="size-1.5 rounded-full bg-emerald-300" />
-              Phase 2 active
+              Phase 3 active
             </Badge>
             <div className="hidden text-right sm:block">
               <p className="max-w-48 truncate text-xs text-slate-300">{email}</p>
@@ -109,7 +111,7 @@ export function Dashboard({ email, name }: DashboardProps) {
                 Observation deck
               </h1>
               <p className="mt-2 text-xs leading-5 text-slate-500 sm:text-sm">
-                Hyperliquid監視アドレスは実データに接続済みです。分析領域は後続Phaseで有効になります。
+                Hyperliquid監視と市場ストリームからの候補自動探索が実データに接続済みです。
               </p>
             </div>
           </section>
@@ -138,6 +140,21 @@ export function Dashboard({ email, name }: DashboardProps) {
                   <a
                     className="flex items-center gap-1 text-xs text-cyan-200 hover:underline"
                     href="/dashboard/addresses"
+                  >
+                    開く
+                    <ChevronRight aria-hidden="true" className="size-4" />
+                  </a>
+                </div>
+                <div className="flex items-center justify-between rounded-xl border border-emerald-300/10 bg-emerald-300/[0.04] p-4">
+                  <div>
+                    <p className="text-xs font-medium text-emerald-100">自動探索を開く</p>
+                    <p className="mt-1 text-[10px] text-slate-600">
+                      市場trades、候補統計、Enrichment、昇格
+                    </p>
+                  </div>
+                  <a
+                    className="flex items-center gap-1 text-xs text-emerald-200 hover:underline"
+                    href="/dashboard/discovery"
                   >
                     開く
                     <ChevronRight aria-hidden="true" className="size-4" />

@@ -42,6 +42,15 @@
 - API error response は内部 stack、DB URL、Redis URL、secret を返さない。logger は secret と接続 URL を redact する。
 - PostgreSQL/Redis は Compose で loopback にだけ bind する。
 
+## Phase 3 コード監査
+
+- 候補供給は公式`wss://api.hyperliquid.xyz/ws`と`POST /info`だけである。
+- CSV/JSON import route・button、scraper、Requester Pays S3、有料indexer、自前nodeを追加しない。
+- 保存対象は公開EVMアドレスと公開市場/口座データだけで、秘密鍵・署名・API Wallet・Exchange endpointを扱わない。
+- Discovery APIはNext.js session BFFと内部Secretの二層を維持し、ブラウザbundleへSecretを渡さない。
+- 価格・数量・notionalはlossless string/Decimalで扱い、表示整形でも金融再計算をしない。
+- 外部payload、設定値、address paramsをZodで検証する。
+
 ## 5. 環境変数・秘密管理
 
 - `.env` と `.env.local` はGit管理外。

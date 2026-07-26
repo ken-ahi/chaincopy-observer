@@ -5,6 +5,8 @@ export const systemJobNames = {
 export type SystemJobName = (typeof systemJobNames)[keyof typeof systemJobNames];
 
 export const hyperliquidQueueName = "hyperliquid-sync";
+export const hyperliquidDiscoveryQueueName = "hyperliquid-discovery";
+export const hyperliquidCandidateQueueName = "hyperliquid-candidate-enrichment";
 
 export const hyperliquidJobNames = {
   walletBackfill: "hyperliquid-wallet-backfill",
@@ -26,6 +28,68 @@ export interface HyperliquidJobData {
   readonly startTime?: string;
   readonly endTime?: string;
 }
+
+export const hyperliquidDiscoveryJobNames = {
+  marketTradeDiscovery: "hyperliquid-market-trade-discovery",
+  candidateUpsert: "hyperliquid-candidate-upsert",
+  candidateEnrichment: "hyperliquid-candidate-enrichment",
+  candidateFilter: "hyperliquid-candidate-filter",
+  candidateQualityAudit: "hyperliquid-candidate-quality-audit",
+  candidatePromotion: "hyperliquid-candidate-promotion",
+} as const;
+
+export type HyperliquidDiscoveryJobName =
+  (typeof hyperliquidDiscoveryJobNames)[keyof typeof hyperliquidDiscoveryJobNames];
+
+export interface DiscoveryMarketTradeData {
+  readonly buyerAddress: string;
+  readonly coin: string;
+  readonly externalTradeId: string;
+  readonly fingerprint: string;
+  readonly notionalUsd: string;
+  readonly occurredAt: string;
+  readonly price: string;
+  readonly rawPayload: string;
+  readonly sellerAddress: string;
+  readonly side: "BUY" | "SELL";
+  readonly size: string;
+  readonly tradeId: string;
+  readonly transactionHash: string;
+}
+
+export interface DiscoveryControlJobData {
+  readonly requestedAt: string;
+  readonly kind: "control";
+}
+
+export interface DiscoveryTradeJobData {
+  readonly requestedAt: string;
+  readonly kind: "trade";
+  readonly trade: DiscoveryMarketTradeData;
+}
+
+export interface DiscoveryCandidateJobData {
+  readonly requestedAt: string;
+  readonly kind: "candidate";
+  readonly address: string;
+  readonly candidateId: string;
+  readonly requestedFrom?: string;
+  readonly requestedTo?: string;
+  readonly automatic?: boolean;
+}
+
+export type HyperliquidDiscoveryJobData =
+  DiscoveryControlJobData | DiscoveryTradeJobData | DiscoveryCandidateJobData;
+
+export const hyperliquidJobPriorities = {
+  monitoredSync: 1,
+  gapRecovery: 2,
+  manualSync: 3,
+  discoveryControl: 5,
+  candidateUpsert: 6,
+  candidateEnrichment: 10,
+  candidateRecheck: 20,
+} as const;
 
 export type ComponentStatus = "up" | "down";
 

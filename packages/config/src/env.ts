@@ -6,6 +6,17 @@ import { z } from "zod";
 const nodeEnvironmentSchema = z.enum(["development", "test", "production"]).default("development");
 const logLevelSchema = z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info");
 const portSchema = z.coerce.number().int().min(1).max(65_535);
+const positiveDecimalStringSchema = z
+  .string()
+  .trim()
+  .regex(/^(?:0|[1-9]\d*)(?:\.\d+)?$/, "Expected a non-negative decimal string.");
+const booleanEnvironmentSchema = z.enum(["true", "false"]).transform((value) => value === "true");
+const commaSeparatedSchema = z.string().transform((value) =>
+  value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean),
+);
 
 const sharedSchema = z.object({
   NODE_ENV: nodeEnvironmentSchema,
@@ -39,6 +50,26 @@ export const workerEnvSchema = sharedSchema.extend({
   HYPERLIQUID_NETWORK: z.enum(["mainnet", "testnet"]).default("mainnet"),
   HYPERLIQUID_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
   HYPERLIQUID_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).default(60_000),
+  HYPERLIQUID_DISCOVERY_ENABLED: booleanEnvironmentSchema.default(false),
+  HYPERLIQUID_DISCOVERY_MODE: z.enum(["MAJOR", "ALL"]).default("MAJOR"),
+  HYPERLIQUID_DISCOVERY_PRIORITY_COINS: commaSeparatedSchema.default([
+    "BTC",
+    "ETH",
+    "SOL",
+    "HYPE",
+    "SUI",
+  ]),
+  HYPERLIQUID_DISCOVERY_MIN_TRADES: z.coerce.number().int().min(1).default(10),
+  HYPERLIQUID_DISCOVERY_MIN_NOTIONAL_USD: positiveDecimalStringSchema.default("10000"),
+  HYPERLIQUID_DISCOVERY_RECENT_HOURS: z.coerce.number().int().min(1).default(24),
+  HYPERLIQUID_DISCOVERY_ENRICHMENT_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(2),
+  HYPERLIQUID_DISCOVERY_MIN_ENRICHMENT_INTERVAL_MIN: z.coerce.number().int().min(1).default(1_440),
+  HYPERLIQUID_DISCOVERY_SCHEDULER_INTERVAL_MS: z.coerce.number().int().min(5_000).default(10_000),
+  HYPERLIQUID_DISCOVERY_MAX_RECONNECT_ATTEMPTS: z.coerce.number().int().min(1).max(100).default(12),
+  HYPERLIQUID_DISCOVERY_KNOWN_SYSTEM_ADDRESSES: commaSeparatedSchema.default([
+    "0x0000000000000000000000000000000000000000",
+  ]),
+  HYPERLIQUID_API_WEIGHT_PER_MINUTE: z.coerce.number().int().min(100).max(1_200).default(1_200),
 });
 
 export type WebEnv = z.infer<typeof webEnvSchema>;

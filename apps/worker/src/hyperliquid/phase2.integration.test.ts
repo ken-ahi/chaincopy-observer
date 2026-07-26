@@ -141,7 +141,10 @@ describe.sequential("Phase 2 PostgreSQL and Redis integration", () => {
     const duplicate = await enqueueHyperliquidJob(queue, hyperliquidJobNames.fillSync, data);
 
     expect(duplicate).toBe(first);
-    expect(await queue.getJobCounts("waiting")).toMatchObject({ waiting: 1 });
+    expect(await queue.getJobCounts("waiting", "prioritized")).toMatchObject({
+      prioritized: 1,
+      waiting: 0,
+    });
 
     const service = new PrismaAddressService(database, queue);
     const mainnetSource = await database.dataSource.upsert({

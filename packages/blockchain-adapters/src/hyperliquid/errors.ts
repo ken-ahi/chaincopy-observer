@@ -16,6 +16,7 @@ export class HyperliquidHttpError extends HyperliquidError {
     message: string,
     public readonly status: number,
     public readonly responseBody: string,
+    public readonly retryAfterMs?: number,
   ) {
     super(message, "HYPERLIQUID_HTTP_ERROR");
     this.name = "HyperliquidHttpError";

@@ -1,11 +1,25 @@
-import { HyperliquidClient } from "@chaincopy/blockchain-adapters";
+import { HyperliquidClient, WeightedRateLimiter } from "@chaincopy/blockchain-adapters";
 import { createLogger, errorDetails, loadRootEnvironment, readWorkerEnv } from "@chaincopy/config";
 import { disconnectDatabase, prisma } from "@chaincopy/database";
-import { hyperliquidQueueName, systemJobNames, type HyperliquidJobData } from "@chaincopy/domain";
+import {
+  hyperliquidCandidateQueueName,
+  hyperliquidDiscoveryJobNames,
+  hyperliquidDiscoveryQueueName,
+  hyperliquidQueueName,
+  systemJobNames,
+  type HyperliquidDiscoveryJobData,
+  type HyperliquidJobData,
+} from "@chaincopy/domain";
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 
 import { startHealthServer } from "./health-server.js";
+import { CandidateEnrichmentService } from "./hyperliquid/discovery/enrichment-service.js";
+import { HyperliquidDiscoveryJobProcessor } from "./hyperliquid/discovery/processor.js";
+import { HyperliquidDiscoveryRepository } from "./hyperliquid/discovery/repository.js";
+import { HyperliquidDiscoveryScheduler } from "./hyperliquid/discovery/scheduler.js";
+import { HyperliquidDiscoveryWebSocketSupervisor } from "./hyperliquid/discovery/websocket-supervisor.js";
+import { KeyedSerialExecutor } from "./hyperliquid/keyed-serial-executor.js";
 import { HyperliquidJobProcessor } from "./hyperliquid/processor.js";
 import { HyperliquidRepository } from "./hyperliquid/repository.js";
 import { HyperliquidScheduler } from "./hyperliquid/scheduler.js";
@@ -42,6 +56,12 @@ const systemQueue = new Queue<SampleHealthJobData>(systemQueueName, {
 const hyperliquidQueue = new Queue<HyperliquidJobData>(hyperliquidQueueName, {
   connection: redis,
 });
+const discoveryQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidDiscoveryQueueName, {
+  connection: redis,
+});
+const candidateQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidCandidateQueueName, {
+  connection: redis,
+});
 
 await Promise.all([prisma.$queryRaw`SELECT 1`, redis.ping()]);
 
@@ -49,7 +69,38 @@ const sourceKey = `hyperliquid-${env.HYPERLIQUID_NETWORK}`;
 const sourceName = `Hyperliquid ${env.HYPERLIQUID_NETWORK === "mainnet" ? "Mainnet" : "Testnet"}`;
 const hyperliquidRepository = new HyperliquidRepository(prisma, sourceKey, sourceName);
 const sourceId = await hyperliquidRepository.ensureSource();
+const discoveryRepository = new HyperliquidDiscoveryRepository(prisma, sourceId);
+await discoveryRepository.ensureInfrastructure({
+  enabled: env.HYPERLIQUID_DISCOVERY_ENABLED,
+  minimumEnrichmentIntervalMin: env.HYPERLIQUID_DISCOVERY_MIN_ENRICHMENT_INTERVAL_MIN,
+  minimumObservedNotionalUsd: env.HYPERLIQUID_DISCOVERY_MIN_NOTIONAL_USD,
+  minimumObservedTradeCount: env.HYPERLIQUID_DISCOVERY_MIN_TRADES,
+  mode: env.HYPERLIQUID_DISCOVERY_MODE,
+  priorityCoins: env.HYPERLIQUID_DISCOVERY_PRIORITY_COINS,
+  recentActivityHours: env.HYPERLIQUID_DISCOVERY_RECENT_HOURS,
+});
+const recoveredOrphanedEnrichmentAttempts =
+  await discoveryRepository.closeOrphanedEnrichmentAttempts();
+if (recoveredOrphanedEnrichmentAttempts > 0) {
+  logger.warn(
+    { recoveredAttempts: recoveredOrphanedEnrichmentAttempts },
+    "Recovered orphaned candidate enrichment attempts",
+  );
+}
+const rateLimiter = new WeightedRateLimiter(
+  env.HYPERLIQUID_API_WEIGHT_PER_MINUTE,
+  60_000,
+  undefined,
+  (usage) => discoveryRepository.recordApiUsage(usage),
+);
 const hyperliquidClient = new HyperliquidClient(env.HYPERLIQUID_API_URL, {
+  defaultPriority: 0,
+  rateLimiter,
+  timeoutMs: env.HYPERLIQUID_HTTP_TIMEOUT_MS,
+});
+const candidateClient = new HyperliquidClient(env.HYPERLIQUID_API_URL, {
+  defaultPriority: 10,
+  rateLimiter,
   timeoutMs: env.HYPERLIQUID_HTTP_TIMEOUT_MS,
 });
 const websocketSupervisor = new HyperliquidWebSocketSupervisor(
@@ -68,6 +119,31 @@ const scheduler = new HyperliquidScheduler(
   env.HYPERLIQUID_SYNC_INTERVAL_MS,
   logger,
 );
+const discoverySupervisor = new HyperliquidDiscoveryWebSocketSupervisor(
+  env.HYPERLIQUID_WS_URL,
+  hyperliquidClient,
+  discoveryRepository,
+  discoveryQueue,
+  logger,
+  {
+    maximumReconnectAttempts: env.HYPERLIQUID_DISCOVERY_MAX_RECONNECT_ATTEMPTS,
+  },
+);
+const candidateEnrichmentService = new CandidateEnrichmentService(
+  candidateClient,
+  discoveryRepository,
+  logger,
+);
+const discoveryScheduler = new HyperliquidDiscoveryScheduler(
+  discoveryRepository,
+  discoveryQueue,
+  candidateQueue,
+  discoverySupervisor,
+  sourceKey,
+  env.HYPERLIQUID_DISCOVERY_SCHEDULER_INTERVAL_MS,
+  () => scheduler.hasLeadership(),
+  logger,
+);
 const hyperliquidProcessor = new HyperliquidJobProcessor(
   prisma,
   redis,
@@ -76,6 +152,20 @@ const hyperliquidProcessor = new HyperliquidJobProcessor(
   websocketSupervisor,
   sourceId,
   () => scheduler.hasLeadership(),
+  logger,
+);
+const hyperliquidSyncSerialExecutor = new KeyedSerialExecutor();
+const discoveryProcessor = new HyperliquidDiscoveryJobProcessor(
+  prisma,
+  discoveryQueue,
+  candidateQueue,
+  hyperliquidQueue,
+  discoveryRepository,
+  candidateEnrichmentService,
+  discoverySupervisor,
+  sourceId,
+  () => scheduler.hasLeadership(),
+  new Set(env.HYPERLIQUID_DISCOVERY_KNOWN_SYSTEM_ADDRESSES.map((address) => address.toLowerCase())),
   logger,
 );
 
@@ -170,7 +260,10 @@ systemWorker.on("error", (error) => {
 
 const hyperliquidWorker = new Worker<HyperliquidJobData>(
   hyperliquidQueueName,
-  (job) => hyperliquidProcessor.process(job),
+  (job) =>
+    hyperliquidSyncSerialExecutor.run(job.data.walletAddressId, () =>
+      hyperliquidProcessor.process(job),
+    ),
   {
     connection: redis,
     concurrency: 4,
@@ -189,9 +282,9 @@ hyperliquidWorker.on("failed", (job, error) => {
     error: errorDetails(error),
     jobId: job?.id,
     jobName: job?.name,
-    retryScheduled: attemptsMade < attempts,
+    retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
   };
-  if (attemptsMade < attempts) {
+  if (context.retryScheduled) {
     logger.warn(context, "Hyperliquid BullMQ job failed; retry scheduled");
     return;
   }
@@ -204,6 +297,105 @@ hyperliquidWorker.on("error", (error) => {
   logger.error({ error: errorDetails(error) }, "Hyperliquid BullMQ worker error");
 });
 
+const discoveryWorker = new Worker<HyperliquidDiscoveryJobData>(
+  hyperliquidDiscoveryQueueName,
+  (job) => discoveryProcessor.process(job),
+  {
+    connection: redis,
+    concurrency: 8,
+  },
+);
+
+discoveryWorker.on("failed", (job, error) => {
+  const attempts = job?.opts.attempts ?? 1;
+  const attemptsMade = job?.attemptsMade ?? attempts;
+  logger.error(
+    {
+      attempts,
+      attemptsMade,
+      error: errorDetails(error),
+      jobId: job?.id,
+      jobName: job?.name,
+      retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
+    },
+    "Hyperliquid discovery BullMQ job failed",
+  );
+  recoverInterruptedCandidateEnrichment(job, error);
+});
+discoveryWorker.on("error", (error) => {
+  logger.error({ error: errorDetails(error) }, "Hyperliquid discovery BullMQ worker error");
+});
+
+const candidateWorker = new Worker<HyperliquidDiscoveryJobData>(
+  hyperliquidCandidateQueueName,
+  (job) => discoveryProcessor.process(job, hyperliquidCandidateQueueName),
+  {
+    connection: redis,
+    concurrency: env.HYPERLIQUID_DISCOVERY_ENRICHMENT_CONCURRENCY,
+  },
+);
+
+candidateWorker.on("failed", (job, error) => {
+  const attempts = job?.opts.attempts ?? 1;
+  const attemptsMade = job?.attemptsMade ?? attempts;
+  logger.error(
+    {
+      attempts,
+      attemptsMade,
+      error: errorDetails(error),
+      jobId: job?.id,
+      jobName: job?.name,
+      retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
+    },
+    "Hyperliquid candidate BullMQ job failed",
+  );
+  recoverInterruptedCandidateEnrichment(job, error);
+});
+candidateWorker.on("error", (error) => {
+  logger.error({ error: errorDetails(error) }, "Hyperliquid candidate BullMQ worker error");
+});
+
+function recoverInterruptedCandidateEnrichment(
+  job: Job<HyperliquidDiscoveryJobData> | undefined,
+  error: Error,
+): void {
+  if (
+    job?.name !== hyperliquidDiscoveryJobNames.candidateEnrichment ||
+    job.data.kind !== "candidate"
+  ) {
+    return;
+  }
+  const candidateId = job.data.candidateId;
+  void discoveryRepository
+    .failInterruptedEnrichment(candidateId, error.message)
+    .then((recovered) => {
+      if (recovered) {
+        logger.warn(
+          {
+            candidateId,
+            error: errorDetails(error),
+            jobId: job.id,
+          },
+          "Recovered interrupted candidate enrichment state",
+        );
+      }
+    })
+    .catch((recoveryError: unknown) => {
+      logger.error(
+        {
+          candidateId,
+          error: errorDetails(recoveryError),
+          jobId: job.id,
+        },
+        "Failed to recover interrupted candidate enrichment state",
+      );
+    });
+}
+
+function isRetryScheduled(error: Error, attemptsMade: number, attempts: number): boolean {
+  return error.name !== "UnrecoverableError" && attemptsMade < attempts;
+}
+
 const healthServer = await startHealthServer({
   database: prisma,
   logger,
@@ -213,11 +405,17 @@ const healthServer = await startHealthServer({
 
 const queuedJobId = await enqueueSampleHealthJob(systemQueue);
 await scheduler.start();
+await discoveryScheduler.start();
 logger.info(
   {
     healthPort: env.WORKER_HEALTH_PORT,
     jobId: queuedJobId,
-    queues: [systemQueueName, hyperliquidQueueName],
+    queues: [
+      systemQueueName,
+      hyperliquidQueueName,
+      hyperliquidDiscoveryQueueName,
+      hyperliquidCandidateQueueName,
+    ],
     sourceKey,
   },
   "Worker started",
@@ -244,8 +442,13 @@ async function shutdown(signal: string): Promise<void> {
 
   await close("health-server", () => closeServer());
   await close("hyperliquid-scheduler", () => scheduler.stop());
+  await close("hyperliquid-discovery-scheduler", () => discoveryScheduler.stop());
   await close("hyperliquid-worker", () => hyperliquidWorker.close());
+  await close("hyperliquid-discovery-worker", () => discoveryWorker.close());
+  await close("hyperliquid-candidate-worker", () => candidateWorker.close());
   await close("system-worker", () => systemWorker.close());
+  await close("hyperliquid-candidate-queue", () => candidateQueue.close());
+  await close("hyperliquid-discovery-queue", () => discoveryQueue.close());
   await close("hyperliquid-queue", () => hyperliquidQueue.close());
   await close("system-queue", () => systemQueue.close());
   await close("redis", async () => {

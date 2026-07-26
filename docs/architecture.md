@@ -29,7 +29,11 @@ flowchart LR
       HL --> Worker
     end
 
-    subgraph Future["Phase 3以降"]
+    Worker --> Discovery["Market discovery<br/>dedupe / candidate filter"]
+    Discovery --> DB
+    Discovery --> Queue
+
+    subgraph Future["今回のPhase 3対象外"]
       Sui["Sui<br/>GraphQL / gRPC"]
       Cetus["Cetus<br/>Events / SDK"]
       Notify["Resend"]
@@ -39,6 +43,29 @@ flowchart LR
     end
 ```
 
+## Phase 3 自動探索データフロー
+
+```mermaid
+flowchart LR
+    Meta["Info API meta"] --> Coins["主要銘柄 / 全銘柄"]
+    Coins --> Trades["trades WebSocket"]
+    Trades --> Validate["Zod + lossless mapping"]
+    Validate --> TradeJob["candidate-upsert<br/>fixed trade job ID"]
+    TradeJob --> Dedupe["discovery_trades<br/>candidate participation uniqueness"]
+    Dedupe --> Stats["Decimal candidate stats"]
+    Stats --> Light["lightweight filter"]
+    Light -->|eligible| Enrich["low-priority Info API enrichment"]
+    Enrich --> Full["history completeness + full filter"]
+    Full -->|owner promotes| Wallet["wallet_addresses"]
+    Wallet --> Phase2["Phase 2 wallet backfill queue"]
+```
+
+市場探索はPhase 2 schedulerのRedis lease leaderだけが所有する。候補upsertは取引単位、filterは候補統計version単位、Enrichmentは候補と要求時間範囲、昇格は候補単位の固定BullMQ IDを使う。PostgreSQL一意制約を最終防衛線とする。
+
+通常監視と候補Enrichmentは同じweighted rate limiterを共有するが、通常監視を高優先度とする。候補Enrichmentは専用の`hyperliquid-candidate-enrichment` queueと低いWorker concurrencyへ分離し、市場イベントupsertと既存監視同期を塞がない。
+
+公式のIP単位weight予算は単一Worker process内で共有する。現在のCompose構成はWorker replicaを1に固定し、複数replicaへ拡張する場合はRedis等を使う分散weight予算を先に追加する。
+
 ## Phase 2 データフロー
 
 1. 認証済み Web BFF が Fastify Address API へ internal secret を付けて転送する。
@@ -47,6 +74,8 @@ flowchart LR
 4. HTTP backfill は DB cursor の timestamp から再開し、最後の timestamp を inclusive に再取得して DB uniqueness で重複を除く。
 5. WS イベントは受信順に処理し、切断を `GAP_DETECTED` として記録する。再接続後は切断区間を HTTP で補完する。
 6. cursor は保存が完了した場合だけ更新する。古い gap や position snapshot は現在 cursor/state を巻き戻さない。
+
+同期Workerは異なる監視アドレスを最大4並列で処理する。同じ監視アドレスのジョブはWorker内で直列化し、複数Worker間ではRedisロックを使うことで、ロック競合による不要な再試行を防ぐ。
 
 Queue と Redis lease は再生成可能な一時状態であり、同期位置、実行結果、品質問題の正本は PostgreSQL に置く。
 

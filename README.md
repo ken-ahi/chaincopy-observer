@@ -1,6 +1,6 @@
 # ChainCopy Observer
 
-Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所有者1名専用の Web アプリケーションです。現在は Phase 2 まで実装済みで、Hyperliquid の公開アドレスを登録し、HTTP 履歴同期、WebSocket 購読、PostgreSQL 保存、Web 表示を行えます。
+Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所有者1名専用の Web アプリケーションです。現在は Phase 3 まで実装済みで、既存のHyperliquid監視に加え、公式市場ストリームから公開アドレス候補を自動発見できます。
 
 実売買、注文送信、ウォレット接続、署名、秘密鍵・シードフレーズ・API Wallet の取扱いはありません。
 
@@ -16,6 +16,21 @@ Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所
 - PostgreSQL cursor、外部ID/fingerprint、一意制約による再実行安全性
 - SIGINT/SIGTERM 時の scheduler、Worker、Queue、Redis、Prisma の graceful shutdown
 - Pino 構造化ログと Data Quality Issue
+
+## Phase 3 の機能
+
+- 公式 `meta` Info APIからPerpetuals銘柄を取得
+- 主要5銘柄（BTC、ETH、SOL、HYPE、SUI）または全銘柄の公式 `trades` WebSocket購読
+- `users[0]` buyer、`users[1]` sellerの抽出、EVMアドレス正規化
+- `(block_time, coin, tid)` とfingerprintによる市場取引・候補統計の冪等保存
+- Decimalによる推定取引額、銘柄数、maker/taker、buy/sell、活動日・時間の集計
+- 軽量フィルター、低優先度Enrichment、履歴完全性・打ち切り理由、Data Quality評価
+- weighted API rate limiter、通常同期優先、同時実行上限、429 `Retry-After`、指数Backoff
+- heartbeat、再接続、再購読、Discovery Cursor、回収不能な市場欠損のData Quality Issue
+- `/dashboard/discovery` と `/dashboard/discovery/:address`
+- 手動Enrichment、候補除外、適格候補の既存Phase 2監視Queueへの昇格
+
+候補供給にCSV/JSONインポート、スクレイピング、有料API、Requester Pays S3、自前ノードは使用しません。
 
 ## Phase 1 基盤として継続する機能
 
@@ -183,6 +198,23 @@ GET    /api/admin/hyperliquid/health
 
 一覧・履歴 API は `limit`（最大200）と opaque な `cursor` を受け付けます。アドレス一覧は `search`、`isWatched`、`syncStatus` でも絞り込めます。
 
+## Discovery API
+
+全エンドポイントはAddress APIと同じ内部認証境界で保護されます。
+
+```text
+GET   /api/discovery/candidates
+GET   /api/discovery/candidates/:address
+GET   /api/discovery/settings
+PATCH /api/discovery/settings
+POST  /api/discovery/start
+POST  /api/discovery/stop
+GET   /api/discovery/stats
+POST  /api/discovery/candidates/:address/enrich
+POST  /api/discovery/candidates/:address/exclude
+POST  /api/discovery/candidates/:address/promote
+```
+
 ## 実データ検証
 
 公開アドレスだけを使い、0件からの初回同期、同一同期の再実行、WebSocket 初期 snapshot を検証できます。
@@ -239,7 +271,7 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
-Phase 1 の Migration は認証と運用基盤、Phase 2 の Migration は Hyperliquid 公開データの保存に限定しています。全体の論理 ER は [docs/database.md](docs/database.md) にあります。
+Phase 1 のMigrationは認証と運用基盤、Phase 2は監視アドレスの公開データ、Phase 3は市場探索・候補・Enrichment状態を保存します。全体の論理 ER は [docs/database.md](docs/database.md) にあります。
 
 ## リポジトリ構成
 
@@ -278,4 +310,4 @@ tests/e2e/
 - [Phase別計画](docs/implementation-plan.md)
 - [正本仕様](docs/SPEC.md)
 
-次の作業は Phase 3 の Sui/Cetus 連携です。Phase 2 の範囲には含めません。
+Phase 3 はHyperliquidアドレス自動探索までです。Phase 4の収益計算・戦略分類・ランキング・デモトレード、およびSui/Cetus連携には進んでいません。

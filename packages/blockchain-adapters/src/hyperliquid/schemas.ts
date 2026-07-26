@@ -1,6 +1,8 @@
 import { isLosslessNumber } from "lossless-json";
 import { z } from "zod";
 
+import { hyperliquidAddressSchema } from "./address.js";
+
 const decimalPattern = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 const integerPattern = /^\d+$/;
 
@@ -220,6 +222,37 @@ export const userRateLimitSchema = z
   })
   .passthrough();
 
+export const perpetualMetaSchema = z
+  .object({
+    universe: z.array(
+      z
+        .object({
+          isDelisted: z.boolean().optional(),
+          maxLeverage: z.number().int().safe().or(exactIntegerStringSchema.transform(Number)),
+          name: z.string().min(1),
+          onlyIsolated: z.boolean().optional(),
+          szDecimals: z.number().int().safe().or(exactIntegerStringSchema.transform(Number)),
+        })
+        .passthrough(),
+    ),
+  })
+  .passthrough();
+
+export const websocketTradeSchema = z
+  .object({
+    coin: z.string().min(1),
+    hash: z.string().min(1),
+    px: exactDecimalSchema,
+    side: z.enum(["A", "B"]),
+    sz: exactDecimalSchema,
+    tid: exactIntegerStringSchema,
+    time: timestampSchema,
+    users: z.tuple([hyperliquidAddressSchema, hyperliquidAddressSchema]),
+  })
+  .passthrough();
+
+export const websocketTradesSchema = z.array(websocketTradeSchema);
+
 const websocketControlEnvelopeSchema = z
   .object({
     channel: z.enum(["pong", "subscriptionResponse"]),
@@ -318,3 +351,5 @@ export type HyperliquidOrder = z.infer<typeof basicOrderSchema>;
 export type HyperliquidHistoricalOrder = z.infer<typeof historicalOrderSchema>;
 export type HyperliquidPortfolio = z.infer<typeof portfolioSchema>;
 export type HyperliquidUserRateLimit = z.infer<typeof userRateLimitSchema>;
+export type HyperliquidPerpetualMeta = z.infer<typeof perpetualMetaSchema>;
+export type HyperliquidWebSocketTrade = z.infer<typeof websocketTradeSchema>;

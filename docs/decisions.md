@@ -152,3 +152,44 @@
 - 理由: WS payload には HTTP の hash がなく、小数も `-40` と `-40.0` のように表現差があるため。
 - 方式: wallet、timestamp、coin、amount、position size、funding rate を Decimal で正規化し external ID と fingerprint を作る。
 - 検証: 公開アドレスの HTTP 履歴2,102件に対し WS 初期 snapshot を受信しても Funding 件数が増えないことを確認した。
+
+## ADR-019: 今回の明示スコープをPhase 3自動探索として扱う
+
+- 状態: 採用
+- 背景: `AGENTS.md`とSPECの既存順序では自動探索は後段だが、所有者からPhase 1/2完了後の次作業としてHyperliquid自動探索が明示された。
+- 影響: 今回の変更名をPhase 3とし、Sui/Cetus、収益計算、分類、ランキング、シグナル、デモトレードへ進まない。既存ADR-011の一般順序との差異を本ADRで明示する。
+
+## ADR-020: 市場探索は公式無料APIだけを使う
+
+- 状態: 採用
+- 方式: `meta` Info APIとcoin別`trades` WebSocketだけで候補を供給し、候補履歴は既存Info API adapterを再利用する。
+- 不採用: ファイルimport、scraping、有料indexer/API、Requester Pays S3、自前node、Exchange endpoint。
+
+## ADR-021: 市場取引と候補参加を分離して冪等集計する
+
+- 状態: 採用
+- 方式: 公式推奨の`(block_time, coin, tid)`を外部取引IDとし、source/fingerprintでも一意化する。候補参加は`(candidate, discovery_trade)`で一意化する。
+- 自己取引: buyerとsellerが同一なら1参加だけを作り、aggressor sideのtaker取引として数える。
+- 方向: buyerをbuy、sellerをsellとする。WsTrade sideが`B`ならbuyer、`A`ならsellerをtakerとする。WsTradeだけではlong/shortを確定できないため推測せず、Enrichmentで取得した`userFillsByTime.dir`からlong/short関連件数を更新する。
+
+## ADR-022: 候補Enrichmentを通常監視より低優先度にする
+
+- 状態: 採用
+- 方式: 共有weighted limiterで通常監視をpriority 0、候補をpriority 10とする。候補は専用BullMQ queueへ分離し、同時実行数2と24時間の既定再取得間隔を置く。
+- weight: レスポンス件数で追加weightが決まるendpointは、送信前に最大レスポンス分を予約して同時応答による上限超過を防ぐ。
+- pagination: 高頻度候補がqueueを占有し続けないよう、fills、funding、ledgerは各10,000件で保守的に打ち切る。打ち切り理由を保存し、完全履歴や5年評価済みとして扱わない。
+- retry: 429の`Retry-After`、HTTP内部最大3回、BullMQ最大5回の指数Backoffを組み合わせる。
+
+## ADR-023: 市場WebSocketの設定反映をsingle-flight化する
+
+- 状態: 採用
+- 背景: `meta`取得がrate limiter待ちになった間に探索を停止すると、古い設定を読んだ複数control jobが停止後に接続を再生成できた。
+- 方式: supervisorの`ensureRunning`全体を1つのPromiseとして共有し、`meta`取得後に最新設定を再取得する。停止済みなら接続せず、同時control jobは同じ結果を待つ。
+- 検証: 停止への変更中は接続0件、同時control jobは接続1件となる回帰テストを追加した。
+
+## ADR-024: Worker停止時はscheduler leaseを外部接続停止より先に解放する
+
+- 状態: 採用
+- 背景: Candidate Enrichmentでweighted limiterが埋まっていると、Discovery supervisorの`meta`待ちによりshutdownが長引き、後段のPhase 2 scheduler lease解放がコンテナ停止猶予を超えることがあった。
+- 方式: WorkerはPhase 2 schedulerをDiscovery schedulerより先に停止し、Phase 2 schedulerはactive tick完了後、WebSocket停止を待つ前に所有token一致のleaseを解放する。BullMQ Workerも通常監視、Discovery、Candidate Enrichmentの順に閉じ、低優先度候補の長時間処理で通常監視lockの解放が妨げられないようにする。
+- 検証: WebSocket停止Promiseが未完了でも別schedulerがleadershipを取得できる回帰テストを追加した。実コンテナ停止後のRedis `PTTL`は`-2`となり、次のWorkerは起動時に即時leaderを取得した。

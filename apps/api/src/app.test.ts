@@ -9,6 +9,7 @@ import {
   type AddressSummary,
 } from "./address-service.js";
 import { type HealthService } from "./health.js";
+import { type DiscoveryService } from "./discovery-service.js";
 
 const env = apiEnvSchema.parse({
   NODE_ENV: "test",
@@ -64,6 +65,18 @@ const addressService: AddressService = {
   getHyperliquidHealth: async () => ({}),
 };
 
+const discoveryService: DiscoveryService = {
+  enqueueEnrichment: async () => ({}),
+  enqueuePromotion: async () => ({}),
+  excludeCandidate: async () => ({}),
+  getCandidate: async () => ({}),
+  getSettings: async () => ({}),
+  getStats: async () => ({}),
+  listCandidates: async () => ({ items: [], nextCursor: null }),
+  setEnabled: async () => ({}),
+  updateSettings: async () => ({}),
+};
+
 const addressSummary: AddressSummary = {
   address: "0x1111111111111111111111111111111111111111",
   currentPositionCount: 0,
@@ -86,6 +99,7 @@ function withAddressService(overrides: Partial<AddressService>): AddressService 
 async function createTestApi(service: AddressService = addressService) {
   const app = await createApi({
     addressService: service,
+    discoveryService,
     env,
     healthService,
     logger: createLogger("api-test", "fatal"),
@@ -220,5 +234,16 @@ describe("address routes", () => {
       jobId: "wallet-backfill-test",
       status: "QUEUED",
     });
+  });
+});
+
+describe("discovery routes", () => {
+  it("rejects unauthenticated discovery API requests", async () => {
+    const app = await createTestApi();
+
+    const response = await app.inject({ method: "GET", url: "/api/discovery/stats" });
+
+    expect(response.statusCode).toBe(401);
+    expect(response.json()).toMatchObject({ error: "unauthorized" });
   });
 });

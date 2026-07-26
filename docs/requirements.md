@@ -1,4 +1,4 @@
-# Phase 0–2 要件定義
+# Phase 0–3 要件定義
 
 最終更新: 2026-07-26
 
@@ -9,6 +9,23 @@ ChainCopy Observer は、Hyperliquid および Sui/Cetus の公開取引デー�
 Phase 0 は仕様を実装可能な設計へ落とし込み、Phase 1 は外部チェーンデータ取得を始める前に、Web、API、常駐Worker、PostgreSQL、Redis、認証、テスト、CIをローカルで再現可能にする。
 
 Phase 2 は公開 Hyperliquid アドレスを登録し、Info API と WebSocket から読み取り専用データを取得して、再実行可能な形で保存・表示する。実売買、署名、秘密鍵処理は対象外とする。
+
+Phase 3 は公式Hyperliquid `trades` WebSocketからbuyer/sellerを自動発見し、短期観測統計で選別した候補だけを公式Info APIでEnrichmentする。手動ファイル取込、有料データ、スクレイピング、S3、自前ノードは使用しない。
+
+## Phase 3 受入要件
+
+- 公式`meta`からactive Perpetuals銘柄を取得し、主要銘柄または全銘柄を選べる。
+- WsTradeのbuyer/seller、価格、数量、時刻、hash、tidを検証して保存する。
+- 同一市場取引、候補参加、候補/時間範囲jobを一意キーで重複処理しない。
+- 候補統計はDecimalで更新し、自己取引は候補件数・統計を1回だけ加算する。
+- 軽量フィルター通過候補だけをEnrichment Queueへ登録する。
+- 直近10,000 fills上限などで履歴が不足する場合は推測せず`INSUFFICIENT_HISTORY`とする。
+- 通常監視同期を高優先度、候補Enrichmentを低優先度とし、weight・同時実行・頻度を制御する。
+- Discovery WebSocketはheartbeat、再接続、再購読、上限付きretry、永続Cursorを持つ。
+- 無料APIで補完できない市場全体の欠損はData Quality Issueとして残す。
+- 認証済み所有者だけが探索画面、設定、Enrichment、除外、昇格を操作できる。
+- 適格候補の昇格時だけ`wallet_addresses`へ接続し、Phase 2詳細同期Queueを再利用する。
+- 実売買、Exchange endpoint、署名、秘密鍵、API Walletを含まない。
 
 ## Phase 2 受入要件
 
@@ -142,8 +159,8 @@ Phase 2 は公開 Hyperliquid アドレスを登録し、Info API と WebSocket 
 1. Phase 0: 設計
 2. Phase 1: 開発基盤
 3. Phase 2: Hyperliquid取得
-4. Phase 3: Sui/Cetus取得
-5. Phase 4: 分析エンジン
+4. Phase 3: Hyperliquidアドレス自動探索（今回の明示スコープ）
+5. Phase 4: 未着手（収益計算・分類・ランキングへ進まない）
 6. Phase 5: シグナル
 7. Phase 6: デモトレード
 8. Phase 7: メール通知

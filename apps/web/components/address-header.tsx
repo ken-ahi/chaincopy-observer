@@ -1,5 +1,5 @@
 import { Badge } from "@chaincopy/ui";
-import { ArrowLeft, Radar } from "lucide-react";
+import { Activity, ArrowLeft, Radar, Telescope } from "lucide-react";
 import Link from "next/link";
 
 import { SignOutButton } from "./sign-out-button";
@@ -18,16 +18,32 @@ export function AddressHeader({ email }: { readonly email: string }) {
               <p className="text-[9px] uppercase tracking-[0.24em] text-slate-700">Observer</p>
             </div>
           </Link>
-          <Link
-            className="flex items-center gap-2 text-xs text-slate-500 transition hover:text-slate-200"
-            href="/dashboard"
-          >
-            <ArrowLeft aria-hidden="true" className="size-3.5" />
-            概要
-          </Link>
+          <nav className="flex items-center gap-3" aria-label="Dashboard">
+            <Link
+              className="flex items-center gap-1.5 text-xs text-slate-500 transition hover:text-slate-200"
+              href="/dashboard"
+            >
+              <ArrowLeft aria-hidden="true" className="size-3.5" />
+              概要
+            </Link>
+            <Link
+              className="hidden items-center gap-1.5 text-xs text-slate-500 transition hover:text-cyan-200 md:flex"
+              href="/dashboard/addresses"
+            >
+              <Activity aria-hidden="true" className="size-3.5" />
+              監視
+            </Link>
+            <Link
+              className="hidden items-center gap-1.5 text-xs text-slate-500 transition hover:text-cyan-200 md:flex"
+              href="/dashboard/discovery"
+            >
+              <Telescope aria-hidden="true" className="size-3.5" />
+              探索
+            </Link>
+          </nav>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="info">Phase 2 · Hyperliquid</Badge>
+          <Badge variant="info">Phase 3 · Discovery</Badge>
           <span className="hidden max-w-48 truncate text-xs text-slate-500 sm:block">{email}</span>
           <SignOutButton />
         </div>

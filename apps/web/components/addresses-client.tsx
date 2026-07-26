@@ -3,7 +3,7 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@chaincopy/ui";
 import { Eye, EyeOff, LoaderCircle, Plus, RefreshCw, Search } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 
 import {
   ApiRequestError,
@@ -25,9 +25,12 @@ export function AddressesClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const requestSequence = useRef(0);
 
   const loadAddresses = useCallback(
     async (cursor?: string) => {
+      const requestId = requestSequence.current + 1;
+      requestSequence.current = requestId;
       setLoading(true);
       setError(null);
       const query = new URLSearchParams({ limit: "50" });
@@ -37,12 +40,19 @@ export function AddressesClient() {
       if (cursor) query.set("cursor", cursor);
       try {
         const page = await apiRequest<Page<AddressSummary>>(`/api/addresses?${query.toString()}`);
+        if (requestId !== requestSequence.current) {
+          return;
+        }
         setAddresses((current) => (cursor ? [...current, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
       } catch (cause) {
-        setError(errorMessage(cause));
+        if (requestId === requestSequence.current) {
+          setError(errorMessage(cause));
+        }
       } finally {
-        setLoading(false);
+        if (requestId === requestSequence.current) {
+          setLoading(false);
+        }
       }
     },
     [search, syncStatus, watchFilter],

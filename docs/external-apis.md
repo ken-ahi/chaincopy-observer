@@ -2,7 +2,7 @@
 
 確認日: 2026-07-26
 
-Phase 2 では Hyperliquid の読み取り専用 API だけへ接続する。Sui/Cetus とメールは後続 Phase のままである。
+Phase 2–3 では Hyperliquid の読み取り専用 API だけへ接続する。Sui/Cetus とメールは後続 Phase のままである。
 
 ## 1. Hyperliquid
 
@@ -32,9 +32,22 @@ Phase 2 では Hyperliquid の読み取り専用 API だけへ接続する。Sui
 - raw eventの外部ID候補はtransaction hash、trade id、ledger updateの複合キーから決定する。
 - snapshotとstreamを区別し、snapshot再受信を一意制約で安全にする。
 - 長期分析には継続保存または別の履歴ソースが必要。
-- `userFillsByTime` は1レスポンス2,000件、利用可能履歴10,000件、その他の時間範囲レスポンスは原則500件である。上限到達や同一 timestamp だけでページが埋まる場合は Data Quality Issue とする。
+- `userFillsByTime` は1レスポンス2,000件、利用可能履歴10,000件、その他の時間範囲レスポンスは原則500件である。候補Enrichmentはfills、funding、ledgerを各10,000件で保守的に打ち切り、上限到達や同一 timestamp だけでページが埋まる場合は履歴を不完全としてData Quality Issueにする。
 - server は client から60秒間 message がない接続を閉じ得るため、30秒 heartbeat を送る。
 - HTTP は timeout 10秒、最大3回の内部 retry、BullMQ は最大5 attempt の指数 backoff を既定とする。
+
+### Phase 3探索で確認した公式仕様
+
+- `meta`の`universe`をPerpetuals銘柄一覧の正本とし、`isDelisted=true`は購読しない。
+- `trades`購読はcoin単位。`WsTrade.users`は`[buyer, seller]`。
+- `tid`はbuyer/seller order id由来の50-bit hashであり、グローバル一意キーは`(block_time, coin, tid)`。
+- IP単位REST aggregate weightは1分1,200。`clearinghouseState`はweight 2、その他の本Phase Info requestは原則weight 20で、履歴endpointは返却20件ごとの追加weightを持つ。
+- 返却件数で追加weightが決まる履歴endpointは、送信前に公式最大件数分を保守的に予約する。画面のAPI weightはこの安全側の予約使用量を表示する。
+- WebSocketは最大10接続、1分30新規接続、1,000購読、1分2,000送信message、同時inflight post 100。
+- 実装は1市場探索接続、最大1,000購読、30秒heartbeat、購読数に応じた再接続下限、最大12回の連続再接続を採用する。
+- 429は`Retry-After`を優先し、ない場合は指数Backoffを使う。
+- 市場全体の欠損区間を無料Info APIで完全再構成できるとは扱わず、Data Quality Issueへ記録する。
+- Exchange endpoint、S3、外部indexer、scrapingは呼び出さない。
 
 ## 2. Sui
 

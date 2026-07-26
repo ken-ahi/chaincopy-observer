@@ -93,8 +93,8 @@ export class HyperliquidScheduler {
     if (this.activeTick) {
       await this.activeTick;
     }
-    await this.websocketSupervisor.stop();
     await this.releaseLeadership();
+    await this.websocketSupervisor.stop();
   }
 
   public hasLeadership(): boolean {
