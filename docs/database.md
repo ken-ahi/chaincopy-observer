@@ -136,3 +136,27 @@ erDiagram
 - ログはアプリ外のログ基盤で90日以上保持する。
 - 個人専用アプリでも、不要になったOAuth Account/Sessionは削除可能にする。
 - Phase 8でPostgreSQLの日次バックアップと復元試験を定義する。
+
+## 8. Phase 4A分析モデル案
+
+Phase 4AではschemaとMigrationを変更しない。Phase 4Bで計算結果の再現性が必要になった時点で、既存の取引・snapshotを正本のまま参照し、次の最小構成を検討する。
+
+| model                      | 主な役割・フィールド                                                                                                                       |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `MetricVersion`            | version、計算規則JSON、Decimal設定、作成日時                                                                                               |
+| `MetricCalculationRun`     | wallet、metric version、`calculationFrom`、`calculationTo`、`dataCompleteness`、`calculationStatus`、`calculationError`、input fingerprint |
+| `DailyNav`                 | run、UTC日、NAV、external cash flow、daily return、precision                                                                               |
+| `PositionCycle`            | run、coin、side、open/close時刻、gross PnL、fee、Funding、net PnL、完全性                                                                  |
+| `AddressPerformanceMetric` | run、metric key、Decimal値、precision、補足metadata                                                                                        |
+
+`ReturnSeries`は独立modelにせず、初期案では`DailyNav.dailyReturn`で代替する。異なる頻度の系列が必要と実証された場合だけ追加する。既存`PortfolioSnapshot`、`PerpPositionEvent`、`NormalizedTrade`、`FundingPayment`、`CashFlow`を複製しない。
+
+入力側では次の追加保存を検討する。
+
+- spotを含む全口座NAV用の、同一時点のcash、spot mark price/value、Perp含み損益、liability内訳
+- `builderFee`、rebate、feeの通貨とUSD換算
+- ledgerの正規化cash flow区分、口座/subaccount境界、符号付きUSD額
+- Fillまたは専用eventの明示的liquidation flagと一意ID
+- 計算開始時の完全なbalance/position状態と、範囲別のgap・truncation情報
+
+raw payloadは監査・再正規化の根拠として維持するが、分析処理がraw JSONの偶発的なfield名へ恒常的に依存しないようにする。

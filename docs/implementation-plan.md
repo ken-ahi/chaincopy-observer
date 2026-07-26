@@ -1,8 +1,8 @@
 # Phase別実装計画
 
-> 2026-07-26の所有者指示により、Phase 1/2の直後にHyperliquid自動探索を「Phase 3」として実施する。既存のSui/Cetus以降の順序は今回変更・実装せず、差異はADR-019を正とする。
+> 2026-07-26の所有者指示により、Phase 1/2の直後にHyperliquid自動探索を「Phase 3」として実施した。Phase 4は監査・仕様確定（4A）と純粋計算実装（4B）に分ける。
 
-最終更新: 2026-07-25
+最終更新: 2026-07-26
 
 ## 共通完了ゲート
 
@@ -82,12 +82,23 @@
 
 ## Phase 4: 分析エンジン
 
-- cash flow分類とportfolio再構築
-- TWR、年率、drawdown、risk指標
-- DCA/Leverage分類
-- score、ranking、data quality
-- 計算根拠、version、provenance
-- Decimal test vector
+### Phase 4A: データ監査と計算仕様確定
+
+- 保存済みHyperliquidデータの充足性と精度区分
+- closed PnL、Position Cycle、cash flow、NAV、TWR、risk指標の規則
+- 履歴完全性とfail-closed条件
+- 分析model案と固定Decimal test vector
+
+完了条件: `docs/calculations.md`、DB案、ADRが整合し、コード、schema、Migrationを変更していない。
+
+### Phase 4B: 決定論的な純粋計算
+
+- cash flow分類とPosition Cycle構築
+- Perp NAV、TWR、年率、drawdown、risk・trade・leverage指標
+- 型付き計算エラー、precision、data completeness
+- Phase 4Aの固定Decimal test vector
+
+Phase 4BではDCA/Leverage分類、score、ranking、シグナルへ進まない。全口座NAV、清算回数など入力不足の指標は、必要データの保存が実装されるまで値を作らない。
 
 ## Phase 5: シグナル
 

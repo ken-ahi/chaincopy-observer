@@ -193,3 +193,12 @@
 - 背景: Candidate Enrichmentでweighted limiterが埋まっていると、Discovery supervisorの`meta`待ちによりshutdownが長引き、後段のPhase 2 scheduler lease解放がコンテナ停止猶予を超えることがあった。
 - 方式: WorkerはPhase 2 schedulerをDiscovery schedulerより先に停止し、Phase 2 schedulerはactive tick完了後、WebSocket停止を待つ前に所有token一致のleaseを解放する。BullMQ Workerも通常監視、Discovery、Candidate Enrichmentの順に閉じ、低優先度候補の長時間処理で通常監視lockの解放が妨げられないようにする。
 - 検証: WebSocket停止Promiseが未完了でも別schedulerがleadershipを取得できる回帰テストを追加した。実コンテナ停止後のRedis `PTTL`は`-2`となり、次のWorkerは起動時に即時leaderを取得した。
+
+## ADR-025: Phase 4の計算は公式値を正本とし、品質不足時は停止する
+
+- 状態: 採用
+- 実現損益: Fillの公式`closedPnl`を正本とし、平均取得価格方式による再計算値は検算だけに使う。集計単位はFillではなく、positionが0からopenされ0へ戻るまでのcoin・方向別Position Cycleとする。部分決済は同一cycle、反転は旧cycleの終了と新cycleの開始に分割する。
+- NAV: `PortfolioSnapshot.accountValue`はPerpetuals口座snapshotとして扱う。spot時価、cash、liabilityが同時点で保存されていないため、全口座純資産へ読み替えない。
+- return: TWRは外部cash flow時刻で分割し、直前・直後NAVがない場合は日初・日末へ寄せて推定しない。非正NAV、未知cash flow、gap、API打切りを跨ぐ計算はfail closedにする。
+- risk: UTC日次return、risk-free rate 0、年率係数365をv1規則とする。30日未満は年率換算せず、30～179日は参考値、180日以上を通常評価とする。
+- 影響: Phase 4Bは純粋関数と固定Decimal test vectorから開始する。DB modelとMigrationは計算出力・version・完全性の永続化設計を確定してから別変更で追加する。
