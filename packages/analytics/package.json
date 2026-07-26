@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build": "tsc --noEmit",
+    "test": "vitest run --root ../.. packages/analytics/src",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

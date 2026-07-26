@@ -1,13 +1,38 @@
-import { Decimal } from "decimal.js";
-
 export const ANALYTICS_IMPLEMENTATION_PHASE = 4 as const;
 
-const decimalStringPattern = /^-?(?:0|[1-9]\d*)(?:\.\d+)?$/;
-
-export function parseDecimalString(value: string): Decimal {
-  if (!decimalStringPattern.test(value)) {
-    throw new TypeError(`Invalid decimal string: ${value}`);
-  }
-
-  return new Decimal(value);
-}
+export { parseDecimalString } from "./core.js";
+export {
+  calculateCoinConcentration,
+  calculateEffectiveLeverage,
+  calculateLeverageMetrics,
+} from "./leverage.js";
+export {
+  buildPositionCycles,
+  calculateAggregatePnl,
+  calculateCyclePnl,
+} from "./position-cycles.js";
+export {
+  calculateCalmar,
+  calculateDrawdownSeries,
+  calculateMaxDrawdown,
+  calculateSharpe,
+  calculateSortino,
+  calculateVolatility,
+} from "./risk.js";
+export {
+  calculateAnnualizedReturn,
+  calculateCumulativeReturn,
+  calculateDailyNav,
+  calculateTwr,
+  normalizeCashFlows,
+  splitReturnPeriodsAtCashFlows,
+} from "./returns.js";
+export {
+  calculateAverageWinLoss,
+  calculateMaxLosingStreak,
+  calculateProfitDependency,
+  calculateProfitFactor,
+  calculateTradeStatistics,
+  calculateWinRate,
+} from "./trade-statistics.js";
+export type * from "./types.js";
