@@ -5,6 +5,9 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@chaincopy/analytics": fileURLToPath(
+        new URL("./packages/analytics/src/index.ts", import.meta.url),
+      ),
       "@chaincopy/blockchain-adapters": fileURLToPath(
         new URL("./packages/blockchain-adapters/src/index.ts", import.meta.url),
       ),
