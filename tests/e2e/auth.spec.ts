@@ -20,5 +20,5 @@ test("rejects an unauthenticated address API request", async ({ request }) => {
   const response = await request.get("/api/addresses");
 
   expect(response.status()).toBe(401);
-  await expect(response.json()).resolves.toMatchObject({ error: "unauthorized" });
+  await expect(response.json()).resolves.toMatchObject({ error: "authentication_required" });
 });

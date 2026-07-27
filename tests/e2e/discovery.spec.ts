@@ -49,5 +49,5 @@ test("rejects unauthenticated discovery API requests", async ({ request }) => {
   const response = await request.get("/api/discovery/stats");
 
   expect(response.status()).toBe(401);
-  await expect(response.json()).resolves.toMatchObject({ error: "unauthorized" });
+  await expect(response.json()).resolves.toMatchObject({ error: "authentication_required" });
 });
