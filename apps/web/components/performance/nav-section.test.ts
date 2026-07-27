@@ -187,7 +187,7 @@ describe("日次NAV表示", () => {
     const chart = renderToStaticMarkup(React.createElement(NavChart, { items: [item] }));
     const table = renderToStaticMarkup(React.createElement(NavTable, { items: [item] }));
     expect(chart).toContain("NAVチャートを表示できません");
-    expect(table).toContain("無効な値");
+    expect(table).toContain("—");
   });
 
   it("次ページを取得済み行へ追加しcursorを更新する", () => {

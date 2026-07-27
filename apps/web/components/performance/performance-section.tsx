@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 import { NavSection } from "./nav-section";
 import { PerformanceOverview } from "./performance-overview";
+import { PositionCycleSection } from "./position-cycle-section";
 import { getAddressPerformance, type AddressPerformanceDto } from "../../lib/performance-api";
 
 export function PerformanceSection({ address }: { readonly address: string }) {
@@ -46,6 +47,12 @@ export function PerformanceSection({ address }: { readonly address: string }) {
         enabled={!loading && !error && latestSuccessfulRun !== null}
         overviewLoading={loading}
         overviewSummary={data?.navSummary ?? null}
+        runId={latestSuccessfulRun?.runId ?? null}
+      />
+      <PositionCycleSection
+        address={address}
+        enabled={!loading && !error && latestSuccessfulRun !== null}
+        overviewLoading={loading}
         runId={latestSuccessfulRun?.runId ?? null}
       />
     </>

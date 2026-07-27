@@ -59,13 +59,31 @@ export function formatPerformanceAmount(
   }
   const parts = parseDecimal(value);
   if (parts === null) {
-    return "無効な値";
+    return "—";
   }
   const formatted = formatDecimal(value, 12);
   if (options.signed && parts.sign > 0 && !isZeroDecimal(parts)) {
     return `+${formatted}`;
   }
   return formatted;
+}
+
+export function formatPerformancePnl(value: string | null): string {
+  const formatted = formatPerformanceAmount(value, { signed: true });
+  if (value === null) {
+    return formatted;
+  }
+  const comparison = comparePerformanceDecimals(value, "0");
+  if (comparison === null) {
+    return "—";
+  }
+  if (comparison > 0) {
+    return `${formatted} · Profit`;
+  }
+  if (comparison < 0) {
+    return `${formatted} · Loss`;
+  }
+  return `${formatted} · Break-even`;
 }
 
 export function comparePerformanceDecimals(left: string, right: string): number | null {
