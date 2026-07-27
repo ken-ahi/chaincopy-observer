@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { NavSection } from "./nav-section";
 import { PerformanceOverview } from "./performance-overview";
 import { getAddressPerformance, type AddressPerformanceDto } from "../../lib/performance-api";
 
@@ -35,5 +36,18 @@ export function PerformanceSection({ address }: { readonly address: string }) {
     };
   }, [address]);
 
-  return <PerformanceOverview data={data} error={error} loading={loading} />;
+  const latestSuccessfulRun = data?.latestSuccessfulRun ?? null;
+
+  return (
+    <>
+      <PerformanceOverview data={data} error={error} loading={loading} />
+      <NavSection
+        address={address}
+        enabled={!loading && !error && latestSuccessfulRun !== null}
+        overviewLoading={loading}
+        overviewSummary={data?.navSummary ?? null}
+        runId={latestSuccessfulRun?.runId ?? null}
+      />
+    </>
+  );
 }
