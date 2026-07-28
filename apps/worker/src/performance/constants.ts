@@ -1,4 +1,6 @@
-export const PERFORMANCE_CALCULATION_VERSION = "performance-v1";
+import { performanceCalculationVersion } from "@chaincopy/domain";
+
+export const PERFORMANCE_CALCULATION_VERSION = performanceCalculationVersion;
 
 export const performanceRetryPolicy = {
   attempts: 3,

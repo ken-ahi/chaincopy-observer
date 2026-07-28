@@ -24,6 +24,8 @@ import {
   type EnrichmentStatus,
 } from "@/lib/discovery-api";
 
+import { exclusionAction, isManuallyExcluded } from "./discovery-candidate-actions";
+
 export function DiscoveryClient() {
   const [candidates, setCandidates] = useState<ReadonlyArray<DiscoveryCandidate>>([]);
   const [settings, setSettings] = useState<DiscoverySettings | null>(null);
@@ -35,6 +37,8 @@ export function DiscoveryClient() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [pendingCandidateAddress, setPendingCandidateAddress] = useState<string | null>(null);
+  const candidateActionInFlight = useRef<string | null>(null);
   const requestSequence = useRef(0);
 
   const load = useCallback(
@@ -93,16 +97,26 @@ export function DiscoveryClient() {
     candidate: DiscoveryCandidate,
     action: "enrich" | "exclude" | "promote",
   ) {
-    await runAction(async () => {
-      const result = await apiRequest<{ readonly jobId?: string }>(
-        `/api/discovery/candidates/${candidate.address}/${action}`,
-        { method: "POST" },
-      );
-      await load();
-      if (action === "enrich") return `Enrichmentを登録しました: ${result.jobId ?? "queued"}`;
-      if (action === "promote") return `昇格ジョブを登録しました: ${result.jobId ?? "queued"}`;
-      return "候補を除外しました。";
-    });
+    if (candidateActionInFlight.current !== null) return;
+    candidateActionInFlight.current = candidate.address;
+    setPendingCandidateAddress(candidate.address);
+    try {
+      await runAction(async () => {
+        const exclusion = exclusionAction(candidate);
+        const result = await apiRequest<{ readonly jobId?: string }>(
+          `/api/discovery/candidates/${candidate.address}/${action}`,
+          { method: action === "exclude" ? exclusion.method : "POST" },
+        );
+        await load();
+        if (action === "enrich") return `詳細分析を登録しました: ${result.jobId ?? "queued"}`;
+        if (action === "promote")
+          return `監視対象への追加を登録しました: ${result.jobId ?? "queued"}`;
+        return exclusion.successMessage;
+      });
+    } finally {
+      candidateActionInFlight.current = null;
+      setPendingCandidateAddress(null);
+    }
   }
 
   async function runAction(action: () => Promise<string>) {
@@ -127,7 +141,7 @@ export function DiscoveryClient() {
           </h1>
           <p className="mt-2 max-w-3xl text-sm text-slate-500">
             公式trades WebSocketからbuyer / sellerを抽出し、有望な公開アドレスだけをInfo
-            APIでEnrichmentします。
+            APIで詳細分析します。
           </p>
         </div>
         <div className="flex gap-2">
@@ -155,6 +169,33 @@ export function DiscoveryClient() {
       {message ? <Notice tone="success">{message}</Notice> : null}
 
       <StatsGrid settings={settings} stats={stats} />
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>探索からPerformanceまで</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ol className="grid gap-2 text-xs text-slate-400 sm:grid-cols-3 xl:grid-cols-6">
+            {[
+              "1. 候補を発見",
+              "2. 詳細分析",
+              "3. 適格性を判定",
+              "4. 監視対象に追加",
+              "5. 履歴を同期",
+              "6. Performanceを計算",
+            ].map((step) => (
+              <li className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3" key={step}>
+                {step}
+              </li>
+            ))}
+          </ol>
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            詳細分析では、候補アドレスの過去取引、Funding、注文、ポジションを取得し、履歴完全性・データ品質・監視適格性を判定します。
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            除外解除後、候補の適格性を再評価します。状態は一時的にPENDINGになることがあります。
+          </p>
+        </CardContent>
+      </Card>
       {settings ? (
         <DiscoverySettingsCard
           onSaved={(next) => {
@@ -198,12 +239,12 @@ export function DiscoveryClient() {
               />
             </label>
             <select
-              aria-label="Enrichment状態"
+              aria-label="詳細分析状態"
               className="input-field"
               onChange={(event) => setEnrichmentStatus(event.target.value as EnrichmentStatus | "")}
               value={enrichmentStatus}
             >
-              <option value="">Enrichment: すべて</option>
+              <option value="">詳細分析: すべて</option>
               {["PENDING", "QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "RATE_LIMITED"].map(
                 (value) => (
                   <option key={value} value={value}>
@@ -259,7 +300,7 @@ export function DiscoveryClient() {
                     <th>推定取引額</th>
                     <th>銘柄</th>
                     <th>最大取引額</th>
-                    <th>Enrichment</th>
+                    <th>詳細分析</th>
                     <th>Filter</th>
                     <th>履歴完全性</th>
                     <th>品質</th>
@@ -302,41 +343,45 @@ export function DiscoveryClient() {
                       <td>
                         <div className="flex gap-1.5">
                           <Button
-                            aria-label={`${candidate.address} をEnrichment`}
+                            aria-label={`${candidate.address} を詳細分析`}
                             disabled={
+                              pendingCandidateAddress === candidate.address ||
                               candidate.promotedAt !== null ||
                               candidate.enrichmentStatus === "QUEUED" ||
                               candidate.enrichmentStatus === "RUNNING" ||
-                              candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")
+                              isManuallyExcluded(candidate)
                             }
                             onClick={() => void candidateAction(candidate, "enrich")}
                             size="sm"
                             variant="outline"
                           >
                             <Sparkles aria-hidden="true" className="size-3.5" />
-                            Enrich
+                            詳細分析
                           </Button>
                           <Button
-                            aria-label={`${candidate.address} を除外`}
+                            aria-label={`${candidate.address} を${exclusionAction(candidate).label}`}
                             disabled={
-                              candidate.promotedAt !== null ||
-                              candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")
+                              pendingCandidateAddress === candidate.address ||
+                              candidate.promotedAt !== null
                             }
                             onClick={() => void candidateAction(candidate, "exclude")}
                             size="sm"
                             variant="ghost"
                           >
                             <Ban aria-hidden="true" className="size-3.5" />
-                            除外
+                            {exclusionAction(candidate).label}
                           </Button>
                           <Button
-                            aria-label={`${candidate.address} を監視対象へ昇格`}
-                            disabled={candidate.filterStatus !== "ELIGIBLE"}
+                            aria-label={`${candidate.address} を監視対象に追加`}
+                            disabled={
+                              pendingCandidateAddress === candidate.address ||
+                              candidate.filterStatus !== "ELIGIBLE"
+                            }
                             onClick={() => void candidateAction(candidate, "promote")}
                             size="sm"
                           >
                             <ShieldCheck aria-hidden="true" className="size-3.5" />
-                            昇格
+                            監視対象に追加
                           </Button>
                         </div>
                       </td>
@@ -377,7 +422,7 @@ function StatsGrid({
     ["重複除外", stats?.duplicateTradeEvents ?? "0"],
     ["発見アドレス", stats?.discoveredAddresses ?? "0"],
     ["新規候補", stats?.newCandidates ?? "0"],
-    ["Enrichment待ち", String(stats?.enrichmentWaiting ?? 0)],
+    ["詳細分析待ち", String(stats?.enrichmentWaiting ?? 0)],
     ["成功 / 失敗", `${stats?.enrichmentSucceeded ?? "0"} / ${stats?.enrichmentFailed ?? "0"}`],
     ["通過 / 除外", `${stats?.filterPassed ?? 0} / ${stats?.excluded ?? 0}`],
     ["API weight / min", String(stats?.apiWeightUsed ?? 0)],
@@ -548,5 +593,5 @@ function errorMessage(cause: unknown): string {
   if (cause instanceof ApiRequestError) {
     return cause.message;
   }
-  return cause instanceof Error ? cause.message : "処理に失敗しました。";
+  return "処理に失敗しました。";
 }

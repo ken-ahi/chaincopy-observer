@@ -7,6 +7,7 @@ import { isAllowedAdminEmail } from "./authorization";
 
 export interface InternalApiProxyOptions {
   readonly allowedQueryKeys?: ReadonlyArray<string>;
+  readonly conflictMessage?: string;
   readonly safeJsonResponse?: boolean;
 }
 
@@ -68,7 +69,7 @@ export async function proxyInternalApi(
       signal: AbortSignal.any([request.signal, AbortSignal.timeout(10_000)]),
     });
     if (options.safeJsonResponse) {
-      return safeJsonResponse(response);
+      return safeJsonResponse(response, options.conflictMessage);
     }
     return new NextResponse(await response.text(), {
       headers: {
@@ -104,7 +105,10 @@ function authenticationError(
   return NextResponse.json({ error: code, message }, { status });
 }
 
-async function safeJsonResponse(response: Response): Promise<NextResponse> {
+async function safeJsonResponse(
+  response: Response,
+  conflictMessage?: string,
+): Promise<NextResponse> {
   if (!response.headers.get("content-type")?.toLowerCase().includes("application/json")) {
     return safeProxyError(
       502,
@@ -141,6 +145,12 @@ async function safeJsonResponse(response: Response): Promise<NextResponse> {
       return safeProxyError(403, "upstream_forbidden", "The internal API rejected access.");
     case 404:
       return safeProxyError(404, "not_found", "The requested resource was not found.");
+    case 409:
+      return safeProxyError(
+        409,
+        "conflict",
+        conflictMessage ?? "A calculation is already in progress.",
+      );
     case 429:
       return safeProxyError(429, "rate_limited", "Too many requests.");
     default:

@@ -17,15 +17,27 @@ function createProcessor(
   database: PrismaClient,
   websocketSupervisor: ConstructorParameters<typeof HyperliquidJobProcessor>[4],
   isSchedulerLeader = false,
+  syncService = {} as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+  performanceScheduler = {
+    enqueue: vi.fn(async () => ({
+      calculationFrom: "2026-01-01T00:00:00.000Z",
+      calculationTo: "2026-07-25T12:00:00.000Z",
+      jobId: "performance-job-1",
+    })),
+  } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[7],
 ): HyperliquidJobProcessor {
   return new HyperliquidJobProcessor(
     database,
-    {} as unknown as Redis,
+    {
+      eval: vi.fn(async () => 1),
+      set: vi.fn(async () => "OK"),
+    } as unknown as Redis,
     {} as unknown as Queue<HyperliquidJobData>,
-    {} as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+    syncService,
     websocketSupervisor,
     "source-1",
     () => isSchedulerLeader,
+    performanceScheduler,
     pino({ level: "silent" }),
   );
 }
@@ -121,5 +133,112 @@ describe("HyperliquidJobProcessor", () => {
         }),
       }),
     );
+  });
+
+  it("registers one performance job after a successful sync batch audit", async () => {
+    const enqueue = vi.fn(async () => ({
+      calculationFrom: "2026-01-01T00:00:00.000Z",
+      calculationTo: "2026-07-25T12:00:00.000Z",
+      jobId: "performance-job-1",
+    }));
+    const database = {
+      syncJob: {
+        findUnique: vi.fn(async () => null),
+        update: vi.fn(async () => undefined),
+        upsert: vi.fn(async () => undefined),
+      },
+    } as unknown as PrismaClient;
+    const processor = createProcessor(
+      database,
+      {} as ConstructorParameters<typeof HyperliquidJobProcessor>[4],
+      false,
+      {
+        auditDataQuality: vi.fn(async () => ({ openIssues: 0 })),
+      } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+      { enqueue } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[7],
+    );
+
+    await processor.process({
+      attemptsMade: 0,
+      data: jobData,
+      id: "audit-job-1",
+      name: hyperliquidJobNames.dataQualityAudit,
+    } as Job<HyperliquidJobData>);
+
+    expect(enqueue).toHaveBeenCalledOnce();
+    expect(enqueue).toHaveBeenCalledWith(
+      jobData.walletAddressId,
+      new Date(jobData.requestedAt),
+      `automatic:${hyperliquidJobNames.dataQualityAudit}`,
+    );
+  });
+
+  it("does not register performance when history synchronization fails", async () => {
+    const enqueue = vi.fn();
+    const database = {
+      syncJob: {
+        findUnique: vi.fn(async () => null),
+        update: vi.fn(async () => undefined),
+        upsert: vi.fn(async () => undefined),
+      },
+    } as unknown as PrismaClient;
+    const processor = createProcessor(
+      database,
+      {} as ConstructorParameters<typeof HyperliquidJobProcessor>[4],
+      false,
+      {
+        auditDataQuality: vi.fn(async () => {
+          throw new Error("sync failed");
+        }),
+      } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+      { enqueue } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[7],
+    );
+
+    await expect(
+      processor.process({
+        attemptsMade: 0,
+        data: jobData,
+        id: "audit-job-failure",
+        name: hyperliquidJobNames.dataQualityAudit,
+      } as Job<HyperliquidJobData>),
+    ).rejects.toThrow("sync failed");
+    expect(enqueue).not.toHaveBeenCalled();
+  });
+
+  it("registers performance recalculation after successful gap recovery", async () => {
+    const enqueue = vi.fn(async () => ({
+      calculationFrom: "2026-01-01T00:00:00.000Z",
+      calculationTo: "2026-07-25T12:00:00.000Z",
+      jobId: "performance-gap-job",
+    }));
+    const database = {
+      syncJob: {
+        findUnique: vi.fn(async () => null),
+        update: vi.fn(async () => undefined),
+        upsert: vi.fn(async () => undefined),
+      },
+    } as unknown as PrismaClient;
+    const processor = createProcessor(
+      database,
+      {} as ConstructorParameters<typeof HyperliquidJobProcessor>[4],
+      false,
+      {
+        recoverGap: vi.fn(async () => ({ recovered: true })),
+      } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+      { enqueue } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[7],
+    );
+
+    await processor.process({
+      attemptsMade: 0,
+      data: {
+        ...jobData,
+        endTime: "2026-07-25T12:00:00.000Z",
+        startTime: "2026-07-25T11:00:00.000Z",
+      },
+      id: "gap-job-1",
+      name: hyperliquidJobNames.gapRecovery,
+    } as Job<HyperliquidJobData>);
+
+    expect(enqueue).toHaveBeenCalledOnce();
   });
 });

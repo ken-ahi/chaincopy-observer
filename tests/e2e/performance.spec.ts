@@ -1,7 +1,9 @@
 import { expect, test, type Page } from "@playwright/test";
+import { PrismaClient } from "@prisma/client";
 
 import {
   e2eInsufficientPerformanceAddress,
+  e2eManualPerformanceAddress,
   e2ePerformanceAddress,
   e2eSessionToken,
 } from "./fixtures";
@@ -46,6 +48,25 @@ test.describe("Performance browser E2E", () => {
       await expect(page.getByText("表示できる日次NAVデータがありません")).toBeVisible();
       await expect(page.getByText("表示できるPosition Cycleがありません")).toBeVisible();
       await expect(page.getByText("累積収益率")).toHaveCount(0);
+      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
+    });
+
+    test("未計算の監視アドレスを手動計算し、完了状態まで更新する", async ({ page }) => {
+      await openAddressDetail(page, e2eManualPerformanceAddress);
+
+      await expect(page.getByText(/パフォーマンス計算はまだ実行されていません/)).toBeVisible();
+      const calculateButton = page.getByRole("button", { name: "Performanceを計算" });
+      await expect(calculateButton).toBeEnabled();
+      await calculateButton.click();
+      await expect(page.getByText("PENDING · 計算待ち")).toBeVisible();
+      await expect(page.getByRole("button", { name: "計算待ち" })).toBeDisabled();
+
+      await completeManualPerformanceFixture();
+
+      await expect(page.getByText("INSUFFICIENT_DATA · データ不足").first()).toBeVisible({
+        timeout: 10_000,
+      });
+      await expect(page.getByRole("button", { name: "Performanceを再計算" })).toBeEnabled();
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
@@ -148,6 +169,17 @@ test.describe("Performance browser E2E", () => {
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
   });
+
+  test("未認証のPerformance計算要求を拒否する", async ({ request }) => {
+    const response = await request.post(
+      `/api/addresses/${e2eManualPerformanceAddress}/performance/calculate`,
+    );
+
+    expect(response.status()).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({
+      error: { code: "authentication_required" },
+    });
+  });
 });
 
 async function openAddressDetail(page: Page, address: string): Promise<void> {
@@ -178,5 +210,45 @@ async function assertNoSensitiveData(
   expect(await page.locator("html").innerText()).not.toMatch(sensitivePattern);
   for (const body of await Promise.all(responseBodies)) {
     expect(body).not.toMatch(sensitivePattern);
+  }
+}
+
+async function completeManualPerformanceFixture(): Promise<void> {
+  const database = new PrismaClient({
+    datasources: {
+      db: {
+        url:
+          process.env.DATABASE_URL ??
+          "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=chaincopy_e2e",
+      },
+    },
+  });
+  try {
+    const wallet = await database.walletAddress.findFirstOrThrow({
+      where: { address: e2eManualPerformanceAddress },
+    });
+    await database.metricCalculationRun.create({
+      data: {
+        calculationFrom: wallet.createdAt,
+        calculationTo: wallet.createdAt,
+        calculationVersion: "performance-v1",
+        completedAt: new Date(),
+        deduplicationKey: `phase4-completion-e2e-${Date.now()}`,
+        errorCode: "INSUFFICIENT_DATA",
+        errorMessage: "Not enough persisted history.",
+        historyCompleteness: "INSUFFICIENT_HISTORY",
+        inputFingerprint: `phase4-completion-${Date.now()}`.padEnd(64, "0").slice(0, 64),
+        precision: "UNAVAILABLE",
+        requestedAt: new Date(),
+        requestedBy: "phase4-completion-e2e",
+        startedAt: new Date(),
+        status: "INSUFFICIENT_DATA",
+        walletAddressId: wallet.id,
+        warningCodes: ["MINIMUM_HISTORY_NOT_MET"],
+        warningCount: 1,
+      },
+    });
+  } finally {
+    await database.$disconnect();
   }
 }

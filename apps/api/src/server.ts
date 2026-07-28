@@ -4,8 +4,10 @@ import {
   hyperliquidCandidateQueueName,
   hyperliquidDiscoveryQueueName,
   hyperliquidQueueName,
+  performanceQueueName,
   type HyperliquidDiscoveryJobData,
   type HyperliquidJobData,
+  type PerformanceJobData,
 } from "@chaincopy/domain";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
@@ -34,9 +36,12 @@ const discoveryQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidDiscove
 const candidateQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidCandidateQueueName, {
   connection: redis,
 });
+const performanceQueue = new Queue<PerformanceJobData>(performanceQueueName, {
+  connection: redis,
+});
 const addressService = new PrismaAddressService(prisma, hyperliquidQueue);
 const discoveryService = new PrismaDiscoveryService(prisma, discoveryQueue, candidateQueue);
-const performanceService = new PrismaPerformanceService(prisma);
+const performanceService = new PrismaPerformanceService(prisma, performanceQueue);
 const app = await createApi({
   addressService,
   discoveryService,
@@ -50,6 +55,7 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Stopping API");
   await app.close();
   await candidateQueue.close();
+  await performanceQueue.close();
   await discoveryQueue.close();
   await hyperliquidQueue.close();
   await redis.quit();
@@ -72,6 +78,7 @@ try {
 } catch (error) {
   logger.fatal({ error: errorDetails(error) }, "API failed to start");
   await candidateQueue.close();
+  await performanceQueue.close();
   await discoveryQueue.close();
   await hyperliquidQueue.close();
   await redis.quit();

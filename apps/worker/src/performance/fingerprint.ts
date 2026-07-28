@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import type { DataCompleteness } from "@chaincopy/analytics";
+export { createPerformanceJobFingerprint } from "@chaincopy/domain";
 
 import type { PerformanceCalculationInput } from "./types.js";
 
@@ -26,26 +27,6 @@ export function createPerformanceInputFingerprint(value: PerformanceFingerprintI
     walletAddress: value.input.walletAddress.toLowerCase(),
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
-}
-
-export function createPerformanceJobFingerprint(parts: {
-  readonly calculationFrom: string;
-  readonly calculationTo: string;
-  readonly calculationVersion: string;
-  readonly requestedAt?: string;
-  readonly walletAddressId: string;
-}): string {
-  return createHash("sha256")
-    .update(
-      JSON.stringify({
-        calculationFrom: parts.calculationFrom,
-        calculationTo: parts.calculationTo,
-        calculationVersion: parts.calculationVersion,
-        requestedAt: parts.requestedAt ?? null,
-        walletAddressId: parts.walletAddressId,
-      }),
-    )
-    .digest("hex");
 }
 
 function sorted(values: readonly string[]): readonly string[] {

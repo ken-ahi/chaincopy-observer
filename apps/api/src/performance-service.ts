@@ -8,6 +8,14 @@ import {
   Prisma,
   type PrismaClient,
 } from "@chaincopy/database";
+import {
+  createPerformanceJobFingerprint,
+  hyperliquidJobPriorities,
+  performanceCalculationVersion,
+  performanceJobNames,
+  type PerformanceJobData,
+} from "@chaincopy/domain";
+import { type Queue } from "bullmq";
 
 import { AddressNotFoundError } from "./address-service.js";
 
@@ -105,6 +113,14 @@ export interface PerformancePage<T> {
   readonly nextCursor: string | null;
 }
 
+export interface PerformanceCalculationRequestDto {
+  readonly jobId: string;
+  readonly status: "QUEUED";
+  readonly force: boolean;
+  readonly walletAddress: string;
+  readonly calculationVersion: string;
+}
+
 export interface PerformancePageQuery {
   readonly cursor?: string;
   readonly limit: number;
@@ -115,6 +131,8 @@ export interface PerformanceRunPageQuery extends PerformancePageQuery {
 }
 
 export interface PerformanceService {
+  calculate(address: string): Promise<PerformanceCalculationRequestDto>;
+  recalculate(address: string): Promise<PerformanceCalculationRequestDto>;
   getOverview(address: string): Promise<PerformanceOverviewDto>;
   listRuns(
     address: string,
@@ -142,6 +160,13 @@ export class PerformanceCursorError extends Error {
   }
 }
 
+export class PerformanceCalculationConflictError extends Error {
+  public constructor() {
+    super("A performance calculation is already pending or running for this address and period.");
+    this.name = "PerformanceCalculationConflictError";
+  }
+}
+
 const runSelect = {
   calculationFrom: true,
   calculationTo: true,
@@ -163,7 +188,19 @@ const runSelect = {
 type RunRow = Prisma.MetricCalculationRunGetPayload<{ select: typeof runSelect }>;
 
 export class PrismaPerformanceService implements PerformanceService {
-  public constructor(private readonly database: PrismaClient) {}
+  public constructor(
+    private readonly database: PrismaClient,
+    private readonly queue: Queue<PerformanceJobData>,
+    private readonly now: () => Date = () => new Date(),
+  ) {}
+
+  public calculate(address: string): Promise<PerformanceCalculationRequestDto> {
+    return this.enqueueCalculation(address, false);
+  }
+
+  public recalculate(address: string): Promise<PerformanceCalculationRequestDto> {
+    return this.enqueueCalculation(address, true);
+  }
 
   public async getOverview(addressInput: string): Promise<PerformanceOverviewDto> {
     const address = normalizeHyperliquidAddress(addressInput);
@@ -395,6 +432,94 @@ export class PrismaPerformanceService implements PerformanceService {
     return toPage(rows, query.limit, toPositionCycleDto);
   }
 
+  private async enqueueCalculation(
+    addressInput: string,
+    force: boolean,
+  ): Promise<PerformanceCalculationRequestDto> {
+    const address = normalizeHyperliquidAddress(addressInput);
+    const wallet = await this.database.walletAddress.findFirst({
+      select: { createdAt: true, id: true },
+      where: {
+        address,
+        isWatched: true,
+        source: { kind: "HYPERLIQUID" },
+      },
+    });
+    if (!wallet) {
+      throw new AddressNotFoundError(address);
+    }
+    const range = await resolvePerformanceCalculationRange(
+      this.database,
+      wallet.id,
+      wallet.createdAt,
+    );
+    const calculationFrom = range.calculationFrom.toISOString();
+    const calculationTo = range.calculationTo.toISOString();
+    const existingRun = await this.database.metricCalculationRun.findFirst({
+      select: { id: true },
+      where: {
+        calculationFrom: range.calculationFrom,
+        calculationTo: range.calculationTo,
+        calculationVersion: performanceCalculationVersion,
+        status: { in: ["PENDING", "RUNNING"] },
+        walletAddressId: wallet.id,
+      },
+    });
+    const queuedJobs = await this.queue.getJobs(
+      ["active", "waiting", "delayed", "prioritized"],
+      0,
+      100,
+      true,
+    );
+    if (
+      existingRun ||
+      queuedJobs.some(
+        (job) =>
+          job.data.walletAddressId === wallet.id &&
+          job.data.calculationFrom === calculationFrom &&
+          job.data.calculationTo === calculationTo &&
+          job.data.calculationVersion === performanceCalculationVersion,
+      )
+    ) {
+      throw new PerformanceCalculationConflictError();
+    }
+
+    const requestedAt = this.now().toISOString();
+    const data: PerformanceJobData = {
+      calculationFrom,
+      calculationTo,
+      calculationVersion: performanceCalculationVersion,
+      force,
+      requestedAt,
+      requestedBy: "admin-api",
+      walletAddressId: wallet.id,
+    };
+    const name = force ? performanceJobNames.recalculate : performanceJobNames.calculate;
+    const fingerprint = createPerformanceJobFingerprint({
+      calculationFrom,
+      calculationTo,
+      calculationVersion: performanceCalculationVersion,
+      walletAddressId: wallet.id,
+      ...(force ? { requestedAt } : {}),
+    });
+    const jobId = `${name}-${fingerprint}`;
+    const job = await this.queue.add(name, data, {
+      attempts: 3,
+      backoff: { delay: 5_000, type: "exponential" },
+      jobId,
+      priority: hyperliquidJobPriorities.addressPerformance,
+      removeOnComplete: { age: 24 * 60 * 60, count: 1_000 },
+      removeOnFail: { age: 7 * 24 * 60 * 60, count: 2_000 },
+    });
+    return {
+      calculationVersion: performanceCalculationVersion,
+      force,
+      jobId: job.id ?? jobId,
+      status: "QUEUED",
+      walletAddress: address,
+    };
+  }
+
   private async findAddress(address: string) {
     const wallet = await this.database.walletAddress.findFirst({
       select: { id: true },
@@ -453,6 +578,80 @@ export class PrismaPerformanceService implements PerformanceService {
       throw new PerformanceCursorError();
     }
   }
+}
+
+async function resolvePerformanceCalculationRange(
+  database: PrismaClient,
+  walletAddressId: string,
+  registeredAt: Date,
+): Promise<{ readonly calculationFrom: Date; readonly calculationTo: Date }> {
+  const [fills, funding, cashFlows, snapshots, positions, cursors] = await Promise.all([
+    database.normalizedTrade.aggregate({
+      _max: { occurredAt: true },
+      _min: { occurredAt: true },
+      where: { walletAddressId },
+    }),
+    database.fundingPayment.aggregate({
+      _max: { occurredAt: true },
+      _min: { occurredAt: true },
+      where: { walletAddressId },
+    }),
+    database.cashFlow.aggregate({
+      _max: { occurredAt: true },
+      _min: { occurredAt: true },
+      where: { walletAddressId },
+    }),
+    database.portfolioSnapshot.aggregate({
+      _max: { capturedAt: true },
+      _min: { capturedAt: true },
+      where: { walletAddressId },
+    }),
+    database.perpPositionEvent.aggregate({
+      _max: { occurredAt: true },
+      _min: { occurredAt: true },
+      where: { walletAddressId },
+    }),
+    database.syncCursor.aggregate({
+      _max: { lastSuccessfulAt: true, lastTimestamp: true },
+      where: { walletAddressId },
+    }),
+  ]);
+  const earliestInput = minimumDate([
+    fills._min.occurredAt,
+    funding._min.occurredAt,
+    cashFlows._min.occurredAt,
+    snapshots._min.capturedAt,
+    positions._min.occurredAt,
+  ]);
+  const latestInput = maximumDate([
+    fills._max.occurredAt,
+    funding._max.occurredAt,
+    cashFlows._max.occurredAt,
+    snapshots._max.capturedAt,
+    positions._max.occurredAt,
+  ]);
+  const calculationFrom = earliestInput ?? registeredAt;
+  const fallbackTo =
+    maximumDate([cursors._max.lastTimestamp, cursors._max.lastSuccessfulAt]) ?? calculationFrom;
+  const calculationTo = latestInput ?? fallbackTo;
+  return {
+    calculationFrom,
+    calculationTo: calculationTo < calculationFrom ? calculationFrom : calculationTo,
+  };
+}
+
+function minimumDate(values: ReadonlyArray<Date | null>): Date | null {
+  return values.reduce<Date | null>(
+    (current, value) => (!value || (current && current <= value) ? current : value),
+    null,
+  );
+}
+
+function maximumDate(values: ReadonlyArray<Date | null>): Date | null {
+  return values.reduce<Date | null>(
+    (current, value) => (!value || (current && current >= value) ? current : value),
+    null,
+  );
 }
 
 function toCalculationRunDto(run: RunRow): CalculationRunDto {

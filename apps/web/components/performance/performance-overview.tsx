@@ -14,6 +14,7 @@ import {
   type CalculationRunDto,
   type PerformanceMetricDto,
 } from "../../lib/performance-api";
+import { isPerformanceActionDisabled } from "./performance-polling";
 
 const metricGroups = [
   {
@@ -59,16 +60,27 @@ const metricGroups = [
 ] as const;
 
 export interface PerformanceOverviewProps {
+  readonly actionError?: string | null;
+  readonly actionQueued?: boolean;
+  readonly actionSubmitting?: boolean;
   readonly data: AddressPerformanceDto | null;
   readonly error: boolean;
   readonly loading: boolean;
+  readonly onAction?: () => void;
 }
 
 export function PerformanceOverview({
+  actionError = null,
+  actionQueued = false,
+  actionSubmitting = false,
   data,
   error,
   loading,
+  onAction,
 }: PerformanceOverviewProps): React.JSX.Element {
+  const runStatus = data?.latestRun?.status ?? null;
+  const actionDisabled = isPerformanceActionDisabled(runStatus, actionSubmitting, actionQueued);
+  const actionLabel = data?.latestRun ? "Performanceを再計算" : "Performanceを計算";
   return (
     <section aria-labelledby="performance-title" className="scroll-mt-5" id="performance">
       <div className="mb-4">
@@ -88,10 +100,40 @@ export function PerformanceOverview({
         </StateMessage>
       ) : null}
       {!loading && !error && data && !data.latestRun ? (
-        <StateMessage role="status">パフォーマンス計算はまだ実行されていません</StateMessage>
+        <StateMessage role="status">
+          パフォーマンス計算はまだ実行されていません。履歴同期完了後に自動計算されます。すぐに実行する場合は「Performanceを計算」を押してください。
+        </StateMessage>
       ) : null}
       {!loading && !error && data?.latestRun ? (
         <PerformanceResult data={data} run={data.latestRun} />
+      ) : null}
+      {!loading && !error && data ? (
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <button
+            className="rounded-lg border border-cyan-300/20 bg-cyan-300/10 px-4 py-2 text-xs font-medium text-cyan-100 disabled:cursor-not-allowed disabled:opacity-50"
+            disabled={actionDisabled}
+            onClick={onAction}
+            type="button"
+          >
+            {actionSubmitting
+              ? "登録中"
+              : actionQueued || runStatus === "PENDING"
+                ? "計算待ち"
+                : runStatus === "RUNNING"
+                  ? "計算中"
+                  : actionLabel}
+          </button>
+          {actionQueued ? (
+            <p className="text-xs text-amber-200" role="status">
+              PENDING · 計算待ち
+            </p>
+          ) : null}
+          {actionError ? (
+            <p className="text-xs text-rose-200" role="alert">
+              {actionError}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </section>
   );
@@ -186,7 +228,7 @@ function RunNotice({ run }: { readonly run: CalculationRunDto }) {
   if (run.status === "INSUFFICIENT_DATA") {
     return (
       <Notice>
-        データ不足のため評価できません。
+        Performance計算は実行されましたが、正式評価に必要な履歴が不足しています。
         {run.warningCodes.length > 0 ? ` Warning Codes: ${run.warningCodes.join(", ")}` : ""}
       </Notice>
     );
@@ -194,7 +236,7 @@ function RunNotice({ run }: { readonly run: CalculationRunDto }) {
   if (run.status === "FAILED") {
     return (
       <Notice role="alert">
-        {`計算に失敗しました。再計算が必要です。 Error Code: ${formatSafeErrorCode(run.errorCode)}`}
+        {`Performance計算に失敗しました。再計算を実行できます。 Error Code: ${formatSafeErrorCode(run.errorCode)}`}
       </Notice>
     );
   }

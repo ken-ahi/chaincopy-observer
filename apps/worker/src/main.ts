@@ -30,6 +30,7 @@ import { HyperliquidWebSocketSupervisor } from "./hyperliquid/websocket-supervis
 import { PerformanceJobProcessor } from "./performance/processor.js";
 import { PerformanceRepository } from "./performance/repository.js";
 import { PerformanceCalculationService } from "./performance/service.js";
+import { PerformanceJobScheduler } from "./performance/scheduler.js";
 import {
   enqueueSampleHealthJob,
   sampleJobId,
@@ -160,6 +161,7 @@ const hyperliquidProcessor = new HyperliquidJobProcessor(
   websocketSupervisor,
   sourceId,
   () => scheduler.hasLeadership(),
+  new PerformanceJobScheduler(prisma, performanceQueue),
   logger,
 );
 const hyperliquidSyncSerialExecutor = new KeyedSerialExecutor();

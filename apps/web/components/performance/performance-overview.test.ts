@@ -84,6 +84,8 @@ describe("Performance overview", () => {
     });
 
     expect(html).toContain("パフォーマンス計算はまだ実行されていません");
+    expect(html).toContain("履歴同期完了後に自動計算されます");
+    expect(html).toContain("Performanceを計算");
   });
 
   it("renders SUCCEEDED with saved metrics", () => {
@@ -105,7 +107,7 @@ describe("Performance overview", () => {
     );
 
     expect(html).toContain("INSUFFICIENT_DATA · データ不足");
-    expect(html).toContain("データ不足のため評価できません");
+    expect(html).toContain("正式評価に必要な履歴が不足しています");
     expect(html).toContain("MINIMUM_HISTORY_NOT_MET");
     expect(html).not.toContain('data-metric-key="twr"');
   });
@@ -120,7 +122,7 @@ describe("Performance overview", () => {
     );
 
     expect(html).toContain("FAILED · 計算失敗");
-    expect(html).toContain("再計算が必要です");
+    expect(html).toContain("再計算を実行できます");
     expect(html).not.toContain('data-metric-key="twr"');
   });
 
@@ -138,6 +140,48 @@ describe("Performance overview", () => {
     expect(html).toContain("RUNNING · 計算中");
     expect(html).toContain("計算中です");
     expect(html).not.toContain('data-metric-key="twr"');
+  });
+
+  it("renders a recalculation action for terminal runs", () => {
+    const html = renderPerformance(performance());
+
+    expect(html).toContain("Performanceを再計算");
+    expect(html).not.toContain("<button disabled");
+  });
+
+  it.each(["PENDING", "RUNNING"] as const)(
+    "disables the action while the latest run is %s",
+    (status) => {
+      const html = renderPerformance(performance({ status, completedAt: null }));
+
+      expect(html).toContain("<button");
+      expect(html).toContain("disabled");
+      expect(html).toContain(status === "PENDING" ? "計算待ち" : "計算中");
+    },
+  );
+
+  it("shows an optimistic pending state and a safe action error", () => {
+    const pendingHtml = renderToStaticMarkup(
+      createElement(PerformanceOverview, {
+        actionQueued: true,
+        data: { ...performance(), latestRun: null, latestSuccessfulRun: null },
+        error: false,
+        loading: false,
+      }),
+    );
+    const errorHtml = renderToStaticMarkup(
+      createElement(PerformanceOverview, {
+        actionError: "Performance計算を登録できませんでした。",
+        data: performance(),
+        error: false,
+        loading: false,
+      }),
+    );
+
+    expect(pendingHtml).toContain("PENDING · 計算待ち");
+    expect(pendingHtml).toContain("disabled");
+    expect(errorHtml).toContain("Performance計算を登録できませんでした。");
+    expect(errorHtml).not.toContain("INTERNAL_API_SECRET");
   });
 
   it("renders every required metric group", () => {

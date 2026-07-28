@@ -84,13 +84,13 @@ export function Dashboard({ email, name }: DashboardProps) {
             <Brand />
           </div>
           <div className="hidden lg:block">
-            <p className="text-xs text-slate-600">Phase 3 · Read-only discovery</p>
+            <p className="text-xs text-slate-600">Phase 4 · Performance analytics</p>
             <p className="mt-0.5 text-sm font-medium text-slate-200">おかえりなさい、{name}</p>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="success">
               <span className="size-1.5 rounded-full bg-emerald-300" />
-              Phase 3 active
+              Phase 4 complete
             </Badge>
             <div className="hidden text-right sm:block">
               <p className="max-w-48 truncate text-xs text-slate-300">{email}</p>
@@ -149,7 +149,7 @@ export function Dashboard({ email, name }: DashboardProps) {
                   <div>
                     <p className="text-xs font-medium text-emerald-100">自動探索を開く</p>
                     <p className="mt-1 text-[10px] text-slate-600">
-                      市場trades、候補統計、Enrichment、昇格
+                      市場trades、候補統計、詳細分析、監視対象に追加
                     </p>
                   </div>
                   <a

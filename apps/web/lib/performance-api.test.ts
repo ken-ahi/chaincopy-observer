@@ -27,11 +27,13 @@ vi.mock("./auth", () => ({
 
 import { proxyInternalApi } from "./api-proxy.js";
 import {
+  calculateAddressPerformance,
   getAddressPerformance,
   getAddressPerformanceCycles,
   getAddressPerformanceNav,
   getAddressPerformanceRun,
   getAddressPerformanceRuns,
+  recalculateAddressPerformance,
   type AddressPerformanceDto,
 } from "./performance-api.js";
 
@@ -112,6 +114,37 @@ describe("Performance API BFF", () => {
     expect(target.toString()).toBe(`http://api.internal:3001/api/addresses/${address}/performance`);
     expect(new Headers(init.headers).get("x-internal-api-secret")).toBe("internal-secret-value");
   });
+
+  it.each(["calculate", "recalculate"] as const)(
+    "forwards POST /performance/%s without query parameters",
+    async (action) => {
+      testState.fetch.mockResolvedValue(
+        jsonResponse(
+          {
+            calculationVersion: "performance-v1",
+            force: action === "recalculate",
+            jobId: `${action}-job`,
+            status: "QUEUED",
+            walletAddress: address,
+          },
+          202,
+        ),
+      );
+
+      const response = await performanceProxy(
+        `/${action}?debug=discard`,
+        ["addresses", address, "performance", action],
+        [],
+        "POST",
+      );
+
+      expect(response.status).toBe(202);
+      const [target, init] = lastFetch();
+      expect(target.search).toBe("");
+      expect(init.method).toBe("POST");
+      expect(new Headers(init.headers).get("x-internal-api-secret")).toBe("internal-secret-value");
+    },
+  );
 
   it("forwards only allowed runs query parameters", async () => {
     await performanceProxy(
@@ -247,6 +280,24 @@ describe("Performance API BFF", () => {
     });
   });
 
+  it("maps an upstream 409 to a safe conflict", async () => {
+    testState.fetch.mockResolvedValue(
+      jsonResponse({ error: "calculation_in_progress", secret: "internal-secret-value" }, 409),
+    );
+
+    const response = await performanceProxy(
+      "/calculate",
+      ["addresses", address, "performance", "calculate"],
+      [],
+      "POST",
+    );
+
+    expect(response.status).toBe(409);
+    expect(await response.json()).toEqual({
+      error: { code: "conflict", message: "A calculation is already in progress." },
+    });
+  });
+
   it("maps a non-JSON upstream response to a safe 502", async () => {
     testState.fetch.mockResolvedValue(
       new Response("postgresql://user:password@database.internal/chaincopy", {
@@ -366,15 +417,43 @@ describe("Performance API browser client", () => {
       `/api/addresses/${address}/performance/cycles?runId=run+1&cursor=cycle+cursor&limit=50`,
     ]);
   });
+
+  it("builds calculate and recalculate requests without exposing the internal secret", async () => {
+    testState.fetch.mockImplementation(async () =>
+      jsonResponse(
+        {
+          calculationVersion: "performance-v1",
+          force: false,
+          jobId: "performance-job",
+          status: "QUEUED",
+          walletAddress: address,
+        },
+        202,
+      ),
+    );
+
+    await calculateAddressPerformance(address);
+    await recalculateAddressPerformance(address);
+
+    expect(testState.fetch.mock.calls.map(([input]) => input)).toEqual([
+      `/api/addresses/${address}/performance/calculate`,
+      `/api/addresses/${address}/performance/recalculate`,
+    ]);
+    for (const [, init] of testState.fetch.mock.calls as Array<[string, RequestInit]>) {
+      expect(init.method).toBe("POST");
+      expect(new Headers(init.headers).has("x-internal-api-secret")).toBe(false);
+    }
+  });
 });
 
 async function performanceProxy(
   path: string,
   pathSegments: ReadonlyArray<string>,
   allowedQueryKeys: ReadonlyArray<string> = [],
+  method = "GET",
 ) {
   return proxyInternalApi(
-    new NextRequest(`http://localhost/api/addresses/${address}/performance${path}`),
+    new NextRequest(`http://localhost/api/addresses/${address}/performance${path}`, { method }),
     pathSegments,
     {
       allowedQueryKeys,

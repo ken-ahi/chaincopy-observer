@@ -108,6 +108,12 @@ export function registerDiscoveryRoutes<LoggerType extends FastifyBaseLogger>(
   registerCandidateAction(app, "/api/discovery/candidates/:address/exclude", (address) =>
     service.excludeCandidate(address),
   );
+  registerCandidateAction(
+    app,
+    "/api/discovery/candidates/:address/exclude",
+    (address) => service.unexcludeCandidate(address),
+    "DELETE",
+  );
   registerCandidateAction(app, "/api/discovery/candidates/:address/promote", (address) =>
     service.enqueuePromotion(address),
   );
@@ -117,17 +123,22 @@ function registerCandidateAction<LoggerType extends FastifyBaseLogger>(
   app: ApiInstance<LoggerType>,
   url: string,
   action: (address: string) => Promise<Readonly<Record<string, unknown>>>,
+  method: "DELETE" | "POST" = "POST",
 ): void {
-  app.post(url, async (request, reply) => {
-    const params = addressParamsSchema.safeParse(request.params);
-    if (!params.success) {
-      return reply.code(400).send(validationResponse(params.error));
-    }
-    try {
-      return reply.code(202).send(await action(params.data.address));
-    } catch (error) {
-      return sendDiscoveryError(error, reply);
-    }
+  app.route({
+    method,
+    url,
+    handler: async (request, reply) => {
+      const params = addressParamsSchema.safeParse(request.params);
+      if (!params.success) {
+        return reply.code(400).send(validationResponse(params.error));
+      }
+      try {
+        return reply.code(202).send(await action(params.data.address));
+      } catch (error) {
+        return sendDiscoveryError(error, reply);
+      }
+    },
   });
 }
 

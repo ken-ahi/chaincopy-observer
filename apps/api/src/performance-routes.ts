@@ -11,6 +11,7 @@ import type { z } from "zod";
 import { AddressNotFoundError } from "./address-service.js";
 import {
   PerformanceCursorError,
+  PerformanceCalculationConflictError,
   PerformanceRunNotFoundError,
   type PerformanceService,
 } from "./performance-service.js";
@@ -33,6 +34,30 @@ export function registerPerformanceRoutes<LoggerType extends FastifyBaseLogger>(
   app: ApiInstance<LoggerType>,
   service: PerformanceService,
 ): void {
+  app.post("/api/addresses/:address/performance/calculate", async (request, reply) => {
+    const params = performanceAddressParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send(validationResponse(params.error));
+    }
+    try {
+      return reply.code(202).send(await service.calculate(params.data.address));
+    } catch (error) {
+      return sendPerformanceError(error, reply);
+    }
+  });
+
+  app.post("/api/addresses/:address/performance/recalculate", async (request, reply) => {
+    const params = performanceAddressParamsSchema.safeParse(request.params);
+    if (!params.success) {
+      return reply.code(400).send(validationResponse(params.error));
+    }
+    try {
+      return reply.code(202).send(await service.recalculate(params.data.address));
+    } catch (error) {
+      return sendPerformanceError(error, reply);
+    }
+  });
+
   app.get("/api/addresses/:address/performance", async (request, reply) => {
     const params = performanceAddressParamsSchema.safeParse(request.params);
     if (!params.success) {
@@ -123,6 +148,9 @@ function sendPerformanceError(error: unknown, reply: FastifyReply) {
   }
   if (error instanceof PerformanceCursorError) {
     return reply.code(400).send({ error: "invalid_cursor", message: error.message });
+  }
+  if (error instanceof PerformanceCalculationConflictError) {
+    return reply.code(409).send({ error: "calculation_in_progress", message: error.message });
   }
   throw error;
 }

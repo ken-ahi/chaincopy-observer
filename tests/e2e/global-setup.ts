@@ -8,6 +8,7 @@ import {
   e2eAdminEmail,
   e2eDiscoveryAddress,
   e2eInsufficientPerformanceAddress,
+  e2eManualPerformanceAddress,
   e2ePerformanceAddress,
   e2eSessionToken,
 } from "./fixtures";
@@ -96,6 +97,15 @@ export default async function globalSetup() {
       address: e2eInsufficientPerformanceAddress,
       displayName: "E2E Performance Insufficient",
       isWatched: false,
+      ownerUserId: user.id,
+      sourceId: source.id,
+    },
+  });
+  await database.walletAddress.create({
+    data: {
+      address: e2eManualPerformanceAddress,
+      displayName: "E2E Performance Manual",
+      isWatched: true,
       ownerUserId: user.id,
       sourceId: source.id,
     },

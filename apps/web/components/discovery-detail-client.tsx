@@ -3,16 +3,20 @@
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@chaincopy/ui";
 import { ArrowLeft, Ban, LoaderCircle, RefreshCw, ShieldCheck, Sparkles } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/address-api";
 import { type DiscoveryCandidateDetail } from "@/lib/discovery-api";
+
+import { exclusionAction, isManuallyExcluded } from "./discovery-candidate-actions";
 
 export function DiscoveryDetailClient({ address }: { readonly address: string }) {
   const [candidate, setCandidate] = useState<DiscoveryCandidateDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const actionInFlight = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,21 +37,28 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
   }, [load]);
 
   async function action(kind: "enrich" | "exclude" | "promote") {
+    if (actionInFlight.current || !candidate) return;
+    actionInFlight.current = true;
+    setActing(true);
     setError(null);
     setMessage(null);
     try {
+      const exclusion = exclusionAction(candidate);
       const result = await apiRequest<{ readonly jobId?: string }>(
         `/api/discovery/candidates/${address}/${kind}`,
-        { method: "POST" },
+        { method: kind === "exclude" ? exclusion.method : "POST" },
       );
       setMessage(
         kind === "exclude"
-          ? "候補を除外しました。"
-          : `${kind === "enrich" ? "Enrichment" : "昇格"}ジョブ: ${result.jobId ?? "queued"}`,
+          ? exclusion.successMessage
+          : `${kind === "enrich" ? "詳細分析" : "監視対象への追加"}ジョブ: ${result.jobId ?? "queued"}`,
       );
       await load();
     } catch (cause) {
       setError(errorMessage(cause));
+    } finally {
+      actionInFlight.current = false;
+      setActing(false);
     }
   }
 
@@ -96,37 +107,36 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
         <div className="flex flex-wrap gap-2">
           <Button
             disabled={
+              acting ||
               candidate.promotedAt !== null ||
               candidate.enrichmentStatus === "QUEUED" ||
               candidate.enrichmentStatus === "RUNNING" ||
-              candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")
+              isManuallyExcluded(candidate)
             }
             onClick={() => void action("enrich")}
             size="sm"
             variant="outline"
           >
             <Sparkles aria-hidden="true" className="size-3.5" />
-            手動Enrichment
+            詳細分析を再実行
           </Button>
           <Button
-            disabled={
-              candidate.promotedAt !== null ||
-              candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")
-            }
+            aria-label={`${candidate.address} を${exclusionAction(candidate).label}`}
+            disabled={acting || candidate.promotedAt !== null}
             onClick={() => void action("exclude")}
             size="sm"
             variant="ghost"
           >
             <Ban aria-hidden="true" className="size-3.5" />
-            除外
+            {exclusionAction(candidate).label}
           </Button>
           <Button
-            disabled={candidate.filterStatus !== "ELIGIBLE"}
+            disabled={acting || candidate.filterStatus !== "ELIGIBLE"}
             onClick={() => void action("promote")}
             size="sm"
           >
             <ShieldCheck aria-hidden="true" className="size-3.5" />
-            監視対象へ昇格
+            監視対象に追加
           </Button>
           <Button
             aria-label="候補詳細を再読み込み"
@@ -145,6 +155,41 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
       {error ? <Notice tone="error">{error}</Notice> : null}
       {message ? <Notice tone="success">{message}</Notice> : null}
 
+      <Card className="mt-5">
+        <CardHeader>
+          <CardTitle>処理ステップ</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ol className="grid gap-2 text-xs text-slate-400 sm:grid-cols-3 xl:grid-cols-6">
+            {[
+              "1. 候補を発見",
+              "2. 詳細分析",
+              "3. 適格性を判定",
+              "4. 監視対象に追加",
+              "5. 履歴を同期",
+              "6. Performanceを計算",
+            ].map((step, index) => (
+              <li
+                className={
+                  index === currentStep(candidate)
+                    ? "rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3 text-cyan-100"
+                    : "rounded-lg border border-white/[0.07] bg-white/[0.025] p-3"
+                }
+                key={step}
+              >
+                {step}
+              </li>
+            ))}
+          </ol>
+          <p className="mt-3 text-xs leading-5 text-slate-500">
+            詳細分析では、候補アドレスの過去取引、Funding、注文、ポジションを取得し、履歴完全性・データ品質・監視適格性を判定します。
+          </p>
+          <p className="mt-2 text-xs leading-5 text-slate-500">
+            除外解除後、候補の適格性を再評価します。状態は一時的にPENDINGになることがあります。
+          </p>
+        </CardContent>
+      </Card>
+
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <Metric label="発見日時" value={dateTime(candidate.firstSeenAt)} />
         <Metric label="最終活動" value={dateTime(candidate.lastSeenAt)} />
@@ -160,7 +205,7 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
         <Metric label="Retrieved fills" value={String(candidate.retrievedFillCount)} />
         <Metric label="Available from" value={nullableDate(candidate.availableFrom)} />
         <Metric label="Available to" value={nullableDate(candidate.availableTo)} />
-        <Metric label="Promoted" value={nullableDate(candidate.promotedAt)} />
+        <Metric label="監視対象への追加日時" value={nullableDate(candidate.promotedAt)} />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
@@ -181,7 +226,7 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
               />
               <Data label="Distinct coins" value={String(candidate.distinctCoins)} />
               <Data label="発見元" value={candidate.discoverySource} />
-              <Data label="最終Enrichment" value={nullableDate(candidate.lastEnrichedAt)} />
+              <Data label="最終詳細分析" value={nullableDate(candidate.lastEnrichedAt)} />
             </dl>
             <div className="mt-5 overflow-x-auto">
               <table className="data-table">
@@ -245,7 +290,7 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
 
       <Card className="mt-5">
         <CardHeader>
-          <CardTitle>Enrichment履歴</CardTitle>
+          <CardTitle>詳細分析履歴</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
@@ -291,6 +336,16 @@ function Metric({ label, value }: { readonly label: string; readonly value: stri
       </CardContent>
     </Card>
   );
+}
+
+function currentStep(candidate: DiscoveryCandidateDetail): number {
+  if (candidate.promotedAt) return 4;
+  if (candidate.filterStatus === "ELIGIBLE") return 3;
+  if (candidate.enrichmentStatus === "SUCCEEDED") return 2;
+  if (candidate.enrichmentStatus === "QUEUED" || candidate.enrichmentStatus === "RUNNING") {
+    return 1;
+  }
+  return 0;
 }
 
 function Data({ label, value }: { readonly label: string; readonly value: string }) {
@@ -356,5 +411,5 @@ function errorMessage(cause: unknown): string {
   if (cause instanceof ApiRequestError) {
     return cause.message;
   }
-  return cause instanceof Error ? cause.message : "処理に失敗しました。";
+  return "処理に失敗しました。";
 }

@@ -124,6 +124,14 @@ export interface PerformanceRunPageOptions extends PerformancePageOptions {
   readonly runId?: string;
 }
 
+export interface PerformanceCalculationRequestDto {
+  readonly jobId: string;
+  readonly status: "QUEUED";
+  readonly force: boolean;
+  readonly walletAddress: string;
+  readonly calculationVersion: string;
+}
+
 export function getAddressPerformance(address: string): Promise<AddressPerformanceDto> {
   return apiRequest(`/api/addresses/${encodeURIComponent(address)}/performance`);
 }
@@ -162,6 +170,22 @@ export function getAddressPerformanceCycles(
   return apiRequest(
     withQuery(`/api/addresses/${encodeURIComponent(address)}/performance/cycles`, options),
   );
+}
+
+export function calculateAddressPerformance(
+  address: string,
+): Promise<PerformanceCalculationRequestDto> {
+  return apiRequest(`/api/addresses/${encodeURIComponent(address)}/performance/calculate`, {
+    method: "POST",
+  });
+}
+
+export function recalculateAddressPerformance(
+  address: string,
+): Promise<PerformanceCalculationRequestDto> {
+  return apiRequest(`/api/addresses/${encodeURIComponent(address)}/performance/recalculate`, {
+    method: "POST",
+  });
 }
 
 function withQuery(

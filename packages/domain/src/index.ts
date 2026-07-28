@@ -8,6 +8,7 @@ export const hyperliquidQueueName = "hyperliquid-sync";
 export const hyperliquidDiscoveryQueueName = "hyperliquid-discovery";
 export const hyperliquidCandidateQueueName = "hyperliquid-candidate-enrichment";
 export const performanceQueueName = "address-performance";
+export const performanceCalculationVersion = "performance-v1";
 
 export const hyperliquidJobNames = {
   walletBackfill: "hyperliquid-wallet-backfill",
@@ -110,6 +111,26 @@ export interface PerformanceJobData {
   readonly walletAddressId: string;
 }
 
+export function createPerformanceJobFingerprint(parts: {
+  readonly calculationFrom: string;
+  readonly calculationTo: string;
+  readonly calculationVersion: string;
+  readonly requestedAt?: string;
+  readonly walletAddressId: string;
+}): string {
+  return createHash("sha256")
+    .update(
+      JSON.stringify({
+        calculationFrom: parts.calculationFrom,
+        calculationTo: parts.calculationTo,
+        calculationVersion: parts.calculationVersion,
+        requestedAt: parts.requestedAt ?? null,
+        walletAddressId: parts.walletAddressId,
+      }),
+    )
+    .digest("hex");
+}
+
 export type ComponentStatus = "up" | "down";
 
 export interface HealthComponent {
@@ -123,3 +144,4 @@ export interface ServiceHealth {
   readonly service: string;
   readonly status: "healthy" | "unhealthy";
 }
+import { createHash } from "node:crypto";

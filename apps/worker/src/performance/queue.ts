@@ -1,5 +1,6 @@
 import {
   hyperliquidJobPriorities,
+  createPerformanceJobFingerprint,
   performanceJobNames,
   type PerformanceJobData,
   type PerformanceJobName,
@@ -7,7 +8,6 @@ import {
 import { type JobsOptions, type Queue } from "bullmq";
 
 import { PERFORMANCE_CALCULATION_VERSION, performanceRetryPolicy } from "./constants.js";
-import { createPerformanceJobFingerprint } from "./fingerprint.js";
 
 export const performanceJobOptions: JobsOptions = {
   attempts: performanceRetryPolicy.attempts,

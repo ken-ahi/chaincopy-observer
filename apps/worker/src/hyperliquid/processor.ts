@@ -14,6 +14,7 @@ import { withRedisLock } from "./lock.js";
 import { enqueueWalletBackfillChildren } from "./queue.js";
 import type { HyperliquidSyncService } from "./sync-service.js";
 import type { HyperliquidWebSocketSupervisor } from "./websocket-supervisor.js";
+import type { PerformanceJobScheduler } from "../performance/scheduler.js";
 
 const supportedJobNames = new Set<string>(Object.values(hyperliquidJobNames));
 
@@ -26,6 +27,7 @@ export class HyperliquidJobProcessor {
     private readonly websocketSupervisor: HyperliquidWebSocketSupervisor,
     private readonly sourceId: string,
     private readonly isSchedulerLeader: () => boolean,
+    private readonly performanceScheduler: PerformanceJobScheduler,
     private readonly logger: Logger,
   ) {}
 
@@ -92,11 +94,23 @@ export class HyperliquidJobProcessor {
               `hyperliquid:wallet-sync:${job.data.walletAddressId}`,
               () => this.runJob(jobName, job.data, queueJobId),
             );
+      const performance =
+        jobName === hyperliquidJobNames.dataQualityAudit ||
+        jobName === hyperliquidJobNames.gapRecovery
+          ? await this.performanceScheduler.enqueue(
+              job.data.walletAddressId,
+              new Date(job.data.requestedAt),
+              `automatic:${jobName}`,
+            )
+          : null;
       await this.database.syncJob.update({
         data: {
           errorMessage: null,
           finishedAt: new Date(),
-          metadata: { result: JSON.stringify(result) },
+          metadata: {
+            performance: performance ? JSON.stringify(performance) : null,
+            result: JSON.stringify(result),
+          },
           status: "SUCCEEDED",
         },
         where: { idempotencyKey },
@@ -111,7 +125,7 @@ export class HyperliquidJobProcessor {
         },
         "Hyperliquid job completed",
       );
-      return result;
+      return performance ? { ...result, performance } : result;
     } catch (error) {
       const details = errorDetails(error);
       await this.database.syncJob.update({

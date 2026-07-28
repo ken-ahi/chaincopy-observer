@@ -10,12 +10,17 @@ import {
   type AddressSummary,
 } from "./address-service.js";
 import { type HealthService } from "./health.js";
-import { type DiscoveryService } from "./discovery-service.js";
+import {
+  CandidateActionConflictError,
+  CandidateNotFoundError,
+  type DiscoveryService,
+} from "./discovery-service.js";
 import {
   type CalculationRunDto,
   type DailyNavDto,
   type MetricDto,
   type PerformanceOverviewDto,
+  PerformanceCalculationConflictError,
   PerformanceRunNotFoundError,
   type PerformanceService,
   type PositionCycleDto,
@@ -79,6 +84,7 @@ const discoveryService: DiscoveryService = {
   enqueueEnrichment: async () => ({}),
   enqueuePromotion: async () => ({}),
   excludeCandidate: async () => ({}),
+  unexcludeCandidate: async () => ({}),
   getCandidate: async () => ({}),
   getSettings: async () => ({}),
   getStats: async () => ({}),
@@ -112,6 +118,20 @@ const emptyPerformanceOverview: PerformanceOverviewDto = {
 };
 
 const performanceService: PerformanceService = {
+  calculate: async () => ({
+    calculationVersion: "performance-v1",
+    force: false,
+    jobId: "calculate-address-performance-test",
+    status: "QUEUED",
+    walletAddress: emptyPerformanceOverview.walletAddress,
+  }),
+  recalculate: async () => ({
+    calculationVersion: "performance-v1",
+    force: true,
+    jobId: "recalculate-address-performance-test",
+    status: "QUEUED",
+    walletAddress: emptyPerformanceOverview.walletAddress,
+  }),
   getOverview: async () => emptyPerformanceOverview,
   listRuns: async () => ({ items: [], nextCursor: null }),
   getRun: async (_address, runId) => {
@@ -144,13 +164,18 @@ function withPerformanceService(overrides: Partial<PerformanceService>): Perform
   return { ...performanceService, ...overrides };
 }
 
+function withDiscoveryService(overrides: Partial<DiscoveryService>): DiscoveryService {
+  return { ...discoveryService, ...overrides };
+}
+
 async function createTestApi(
   service: AddressService = addressService,
   performance: PerformanceService = performanceService,
+  discovery: DiscoveryService = discoveryService,
 ) {
   const app = await createApi({
     addressService: service,
-    discoveryService,
+    discoveryService: discovery,
     env,
     healthService,
     logger: createLogger("api-test", "fatal"),
@@ -290,6 +315,8 @@ describe("address routes", () => {
 });
 
 describe("discovery routes", () => {
+  const address = "0x1111111111111111111111111111111111111111";
+
   it("rejects unauthenticated discovery API requests", async () => {
     const app = await createTestApi();
 
@@ -297,6 +324,132 @@ describe("discovery routes", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({ error: "unauthorized" });
+  });
+
+  it("excludes a candidate through the existing POST action", async () => {
+    let receivedAddress: string | null = null;
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      withDiscoveryService({
+        excludeCandidate: async (candidateAddress) => {
+          receivedAddress = candidateAddress;
+          return { filterStatus: "EXCLUDED" };
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      method: "POST",
+      url: `/api/discovery/candidates/${address}/exclude`,
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(receivedAddress).toBe(address);
+    expect(response.json()).toEqual({ filterStatus: "EXCLUDED" });
+  });
+
+  it("removes a manual exclusion through DELETE and queues re-evaluation", async () => {
+    let receivedAddress: string | null = null;
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      withDiscoveryService({
+        unexcludeCandidate: async (candidateAddress) => {
+          receivedAddress = candidateAddress;
+          return { jobId: "filter-candidate-1-manual-unexclude", status: "QUEUED" };
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      method: "DELETE",
+      url: `/api/discovery/candidates/${address}/exclude`,
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(receivedAddress).toBe(address);
+    expect(response.json()).toEqual({
+      jobId: "filter-candidate-1-manual-unexclude",
+      status: "QUEUED",
+    });
+  });
+
+  it("returns 404 when the candidate does not exist", async () => {
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      withDiscoveryService({
+        unexcludeCandidate: async () => {
+          throw new CandidateNotFoundError(address);
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      method: "DELETE",
+      url: `/api/discovery/candidates/${address}/exclude`,
+    });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: "not_found" });
+  });
+
+  it("returns 409 when the candidate cannot be safely changed", async () => {
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      withDiscoveryService({
+        unexcludeCandidate: async () => {
+          throw new CandidateActionConflictError("Candidate state changed.");
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      method: "DELETE",
+      url: `/api/discovery/candidates/${address}/exclude`,
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: "conflict",
+      message: "Candidate state changed.",
+    });
+  });
+
+  it("does not expose secrets or stack traces from unexclude failures", async () => {
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      withDiscoveryService({
+        unexcludeCandidate: async () => {
+          throw new Error(
+            `redis://secret@internal:6379\n${env.INTERNAL_API_SECRET}\nstack: private`,
+          );
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+      method: "DELETE",
+      url: `/api/discovery/candidates/${address}/exclude`,
+    });
+    const body = response.body;
+
+    expect(response.statusCode).toBe(500);
+    expect(body).not.toContain("redis://");
+    expect(body).not.toContain(env.INTERNAL_API_SECRET);
+    expect(body).not.toContain("stack:");
+    expect(response.json()).toEqual({
+      error: "internal_server_error",
+      message: "The API could not complete the request.",
+    });
   });
 });
 
@@ -397,6 +550,84 @@ describe("performance routes", () => {
 
     expect(response.statusCode).toBe(401);
     expect(response.json()).toMatchObject({ error: "unauthorized" });
+  });
+
+  it.each(["calculate", "recalculate"] as const)(
+    "rejects unauthenticated performance %s requests",
+    async (action) => {
+      const app = await createTestApi();
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/api/addresses/${address}/performance/${action}`,
+      });
+
+      expect(response.statusCode).toBe(401);
+      expect(response.json()).toMatchObject({ error: "unauthorized" });
+    },
+  );
+
+  it("queues an initial calculation with HTTP 202", async () => {
+    const app = await createTestApi();
+
+    const response = await authorizedPost(app, `/api/addresses/${address}/performance/calculate`);
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toEqual({
+      calculationVersion: "performance-v1",
+      force: false,
+      jobId: "calculate-address-performance-test",
+      status: "QUEUED",
+      walletAddress: address,
+    });
+  });
+
+  it("queues a forced recalculation with HTTP 202", async () => {
+    const app = await createTestApi();
+
+    const response = await authorizedPost(app, `/api/addresses/${address}/performance/recalculate`);
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({
+      force: true,
+      status: "QUEUED",
+    });
+  });
+
+  it("returns not found when calculating an unregistered or unwatched address", async () => {
+    const app = await createTestApi(
+      addressService,
+      withPerformanceService({
+        calculate: async (requestedAddress) => {
+          throw new AddressNotFoundError(requestedAddress);
+        },
+      }),
+    );
+
+    const response = await authorizedPost(app, `/api/addresses/${address}/performance/calculate`);
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toMatchObject({ error: "not_found" });
+  });
+
+  it("rejects a duplicate pending or running calculation", async () => {
+    const app = await createTestApi(
+      addressService,
+      withPerformanceService({
+        calculate: async () => {
+          throw new PerformanceCalculationConflictError();
+        },
+      }),
+    );
+
+    const response = await authorizedPost(app, `/api/addresses/${address}/performance/calculate`);
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json()).toEqual({
+      error: "calculation_in_progress",
+      message:
+        "A performance calculation is already pending or running for this address and period.",
+    });
   });
 
   it("returns not found for an unregistered address", async () => {
@@ -698,6 +929,14 @@ function calculationRun(overrides: Partial<CalculationRunDto> = {}): Calculation
 async function authorizedGet(app: Awaited<ReturnType<typeof createApi>>, url: string) {
   return app.inject({
     method: "GET",
+    url,
+    headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+  });
+}
+
+async function authorizedPost(app: Awaited<ReturnType<typeof createApi>>, url: string) {
+  return app.inject({
+    method: "POST",
     url,
     headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
   });

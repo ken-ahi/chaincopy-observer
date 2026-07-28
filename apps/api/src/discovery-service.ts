@@ -7,6 +7,8 @@ import {
 } from "@chaincopy/domain";
 import { type Queue } from "bullmq";
 
+import { enqueueCandidateFilter } from "../../worker/src/hyperliquid/discovery/queue.js";
+
 export class CandidateNotFoundError extends Error {
   public constructor(address: string) {
     super(`Hyperliquid discovery candidate ${address} was not found.`);
@@ -44,6 +46,7 @@ export interface DiscoveryService {
   getStats(): Promise<Readonly<Record<string, unknown>>>;
   enqueueEnrichment(address: string): Promise<Readonly<Record<string, unknown>>>;
   excludeCandidate(address: string): Promise<Readonly<Record<string, unknown>>>;
+  unexcludeCandidate(address: string): Promise<Readonly<Record<string, unknown>>>;
   enqueuePromotion(address: string): Promise<Readonly<Record<string, unknown>>>;
 }
 
@@ -336,17 +339,102 @@ export class PrismaDiscoveryService implements DiscoveryService {
 
   public async excludeCandidate(addressInput: string): Promise<Readonly<Record<string, unknown>>> {
     const candidate = await this.findCandidate(addressInput);
-    if (candidate.promotedAt) {
-      throw new CandidateActionConflictError("A promoted candidate cannot be excluded.");
+    await this.assertCandidateCanBeManuallyChanged(candidate);
+    if (candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
+      return toCandidateSummary(candidate);
     }
-    const updated = await this.database.addressCandidate.update({
+    const exclusionReasons = [...new Set([...candidate.exclusionReasons, "MANUALLY_EXCLUDED"])];
+    const reserved = await this.database.addressCandidate.updateMany({
       data: {
-        exclusionReasons: ["MANUALLY_EXCLUDED"],
+        exclusionReasons,
         filterStatus: "EXCLUDED",
       },
+      where: {
+        id: candidate.id,
+        promotedAt: null,
+        updatedAt: candidate.updatedAt,
+      },
+    });
+    if (reserved.count !== 1) {
+      throw new CandidateActionConflictError(
+        "The candidate changed while the exclusion was being applied.",
+      );
+    }
+    const updated = await this.database.addressCandidate.findUniqueOrThrow({
       where: { id: candidate.id },
     });
     return toCandidateSummary(updated);
+  }
+
+  public async unexcludeCandidate(
+    addressInput: string,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    const candidate = await this.findCandidate(addressInput);
+    await this.assertCandidateCanBeManuallyChanged(candidate);
+    if (!candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
+      throw new CandidateActionConflictError("The candidate is not manually excluded.");
+    }
+
+    const exclusionReasons = candidate.exclusionReasons.filter(
+      (reason) => reason !== "MANUALLY_EXCLUDED",
+    );
+    const reserved = await this.database.addressCandidate.updateMany({
+      data: {
+        exclusionReasons,
+        filterStatus: "PENDING",
+      },
+      where: {
+        id: candidate.id,
+        promotedAt: null,
+        updatedAt: candidate.updatedAt,
+      },
+    });
+    if (reserved.count !== 1) {
+      throw new CandidateActionConflictError(
+        "The candidate changed while the exclusion was being removed.",
+      );
+    }
+    const pendingCandidate = await this.database.addressCandidate.findUniqueOrThrow({
+      where: { id: candidate.id },
+    });
+    const requestedAt = new Date();
+    try {
+      const jobId = await enqueueCandidateFilter(
+        this.discoveryQueue,
+        {
+          address: candidate.address,
+          automatic: false,
+          candidateId: candidate.id,
+          kind: "candidate",
+          requestedAt: requestedAt.toISOString(),
+        },
+        `manual-unexclude-${candidate.updatedAt.getTime()}`,
+      );
+      return {
+        candidate: toCandidateSummary(pendingCandidate),
+        jobId,
+        status: "QUEUED",
+      };
+    } catch (error) {
+      const restored = await this.database.addressCandidate.updateMany({
+        data: {
+          exclusionReasons: candidate.exclusionReasons,
+          filterStatus: candidate.filterStatus,
+        },
+        where: {
+          exclusionReasons: { equals: exclusionReasons },
+          filterStatus: "PENDING",
+          id: candidate.id,
+          updatedAt: pendingCandidate.updatedAt,
+        },
+      });
+      if (restored.count !== 1) {
+        throw new CandidateActionConflictError(
+          "Candidate re-evaluation could not be queued and its state changed concurrently.",
+        );
+      }
+      throw error;
+    }
   }
 
   public async enqueuePromotion(addressInput: string): Promise<Readonly<Record<string, unknown>>> {
@@ -405,6 +493,34 @@ export class PrismaDiscoveryService implements DiscoveryService {
       throw new CandidateNotFoundError(address);
     }
     return candidate;
+  }
+
+  private async assertCandidateCanBeManuallyChanged(candidate: {
+    readonly address: string;
+    readonly enrichmentStatus: string;
+    readonly promotedAt: Date | null;
+    readonly promotedWalletId: string | null;
+    readonly sourceId: string;
+  }): Promise<void> {
+    if (candidate.promotedAt || candidate.promotedWalletId) {
+      throw new CandidateActionConflictError("A promoted candidate cannot be excluded.");
+    }
+    if (candidate.enrichmentStatus === "QUEUED" || candidate.enrichmentStatus === "RUNNING") {
+      throw new CandidateActionConflictError(
+        "A candidate being enriched cannot have its exclusion changed.",
+      );
+    }
+    const watched = await this.database.walletAddress.findFirst({
+      select: { id: true },
+      where: {
+        address: candidate.address,
+        isWatched: true,
+        sourceId: candidate.sourceId,
+      },
+    });
+    if (watched) {
+      throw new CandidateActionConflictError("A monitored address cannot be excluded.");
+    }
   }
 }
 
