@@ -6,10 +6,14 @@ describe("discovery and phase copy", () => {
   it("uses user-facing Japanese terms without changing internal API actions", () => {
     const list = readFileSync(new URL("./discovery-client.tsx", import.meta.url), "utf8");
     const detail = readFileSync(new URL("./discovery-detail-client.tsx", import.meta.url), "utf8");
+    const actions = readFileSync(
+      new URL("./discovery-candidate-actions.ts", import.meta.url),
+      "utf8",
+    );
 
     expect(list).toContain("詳細分析");
     expect(list).toContain("監視対象に追加");
-    expect(list).toContain("/${action}");
+    expect(actions).toContain("/${kind}");
     expect(list).not.toContain(">Enrich<");
     expect(detail).toContain("詳細分析を再実行");
     expect(detail).toContain("詳細分析履歴");
