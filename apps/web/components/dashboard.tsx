@@ -18,6 +18,7 @@ import {
 } from "lucide-react";
 
 import { SignOutButton } from "./sign-out-button";
+import { SystemVersion } from "./system-version";
 
 interface DashboardProps {
   readonly email: string;
@@ -88,10 +89,13 @@ export function Dashboard({ email, name }: DashboardProps) {
             <p className="mt-0.5 text-sm font-medium text-slate-200">おかえりなさい、{name}</p>
           </div>
           <div className="flex items-center gap-3">
-            <Badge variant="success">
-              <span className="size-1.5 rounded-full bg-emerald-300" />
-              Phase 4 complete
-            </Badge>
+            <SystemVersion />
+            <span className="hidden xl:inline-flex">
+              <Badge variant="success">
+                <span className="size-1.5 rounded-full bg-emerald-300" />
+                Phase 4 complete
+              </Badge>
+            </span>
             <div className="hidden text-right sm:block">
               <p className="max-w-48 truncate text-xs text-slate-300">{email}</p>
               <p className="text-[10px] text-slate-600">許可済み所有者</p>

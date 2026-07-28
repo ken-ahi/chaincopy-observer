@@ -8,6 +8,7 @@ import { type Logger } from "pino";
 
 import { registerAddressRoutes } from "./address-routes.js";
 import { type AddressService } from "./address-service.js";
+import { API_BUILD_INFO } from "./build-info.js";
 import { registerDiscoveryRoutes } from "./discovery-routes.js";
 import { type DiscoveryService } from "./discovery-service.js";
 import { type HealthService } from "./health.js";
@@ -59,6 +60,10 @@ export async function createApi(options: CreateApiOptions) {
       service: "api",
       status: "up",
     };
+  });
+
+  app.get("/version", async (_request, reply) => {
+    return reply.header("Cache-Control", "no-store").send(API_BUILD_INFO);
   });
 
   app.get("/ready", async (_request, reply) => {
