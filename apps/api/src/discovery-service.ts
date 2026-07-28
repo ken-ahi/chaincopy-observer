@@ -359,7 +359,10 @@ export class PrismaDiscoveryService implements DiscoveryService {
   public async excludeCandidate(addressInput: string): Promise<Readonly<Record<string, unknown>>> {
     const candidate = await this.findCandidate(addressInput);
     await this.assertCandidateCanBeManuallyChanged(candidate);
-    if (candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
+    if (
+      candidate.exclusionReasons.includes("MANUALLY_EXCLUDED") &&
+      candidate.filterStatus === "EXCLUDED"
+    ) {
       return {
         candidate: toCandidateSummary(candidate),
         status: "EXCLUDED",
@@ -374,6 +377,7 @@ export class PrismaDiscoveryService implements DiscoveryService {
       where: {
         id: candidate.id,
         promotedAt: null,
+        promotedWalletId: null,
         updatedAt: candidate.updatedAt,
       },
     });
@@ -414,6 +418,7 @@ export class PrismaDiscoveryService implements DiscoveryService {
       where: {
         id: candidate.id,
         promotedAt: null,
+        promotedWalletId: null,
         updatedAt: candidate.updatedAt,
       },
     });
@@ -525,7 +530,6 @@ export class PrismaDiscoveryService implements DiscoveryService {
 
   private async assertCandidateCanBeManuallyChanged(candidate: {
     readonly address: string;
-    readonly enrichmentStatus: string;
     readonly promotedAt: Date | null;
     readonly promotedWalletId: string | null;
     readonly sourceId: string;
@@ -534,12 +538,6 @@ export class PrismaDiscoveryService implements DiscoveryService {
       throw new CandidateActionConflictError(
         "A promoted candidate cannot be excluded.",
         "CANDIDATE_MONITORED",
-      );
-    }
-    if (candidate.enrichmentStatus === "QUEUED" || candidate.enrichmentStatus === "RUNNING") {
-      throw new CandidateActionConflictError(
-        "A candidate being enriched cannot have its exclusion changed.",
-        "CANDIDATE_ENRICHMENT_IN_PROGRESS",
       );
     }
     const watched = await this.database.walletAddress.findFirst({
