@@ -47,9 +47,9 @@ export function DiscoveryClient() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingCandidateAddress, setPendingCandidateAddress] = useState<string | null>(null);
-  const [promotionPendingAddresses, setPromotionPendingAddresses] = useState<
-    ReadonlySet<string>
-  >(() => new Set());
+  const [promotionPendingAddresses, setPromotionPendingAddresses] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const candidateActionInFlight = useRef<string | null>(null);
   const promotionPendingAddressesRef = useRef<ReadonlySet<string>>(new Set());
   const requestSequence = useRef(0);
@@ -106,10 +106,7 @@ export function DiscoveryClient() {
     });
   }
 
-  async function candidateAction(
-    candidate: DiscoveryCandidate,
-    action: CandidateActionKind,
-  ) {
+  async function candidateAction(candidate: DiscoveryCandidate, action: CandidateActionKind) {
     if (
       candidateActionInFlight.current !== null ||
       (action === "promote" && promotionPendingAddressesRef.current.has(candidate.address))
@@ -119,22 +116,17 @@ export function DiscoveryClient() {
     candidateActionInFlight.current = candidate.address;
     setPendingCandidateAddress(candidate.address);
     try {
-      await runAction(
-        async () => {
-          const result = await requestCandidateAction(candidate, action);
-          setCandidates((current) =>
-            current.map((item) => applyCandidateActionState(item, result)),
-          );
-          if (result.kind === "promote") {
-            const nextPendingAddresses = new Set(promotionPendingAddressesRef.current);
-            nextPendingAddresses.add(result.address);
-            promotionPendingAddressesRef.current = nextPendingAddresses;
-            setPromotionPendingAddresses(nextPendingAddresses);
-          }
-          return result.message;
-        },
-        candidateActionErrorMessage,
-      );
+      await runAction(async () => {
+        const result = await requestCandidateAction(candidate, action);
+        setCandidates((current) => current.map((item) => applyCandidateActionState(item, result)));
+        if (result.kind === "promote") {
+          const nextPendingAddresses = new Set(promotionPendingAddressesRef.current);
+          nextPendingAddresses.add(result.address);
+          promotionPendingAddressesRef.current = nextPendingAddresses;
+          setPromotionPendingAddresses(nextPendingAddresses);
+        }
+        return result.message;
+      }, candidateActionErrorMessage);
     } finally {
       candidateActionInFlight.current = null;
       setPendingCandidateAddress(null);

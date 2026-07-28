@@ -3,10 +3,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import { ApiRequestError } from "../lib/address-api";
-import {
-  type CandidateFilterStatus,
-  type EnrichmentStatus,
-} from "../lib/discovery-api";
+import { type CandidateFilterStatus, type EnrichmentStatus } from "../lib/discovery-api";
 import {
   applyCandidateActionState,
   candidateActionErrorMessage,
@@ -38,7 +35,7 @@ describe("discovery candidate actions", () => {
     expect(exclusionAction(candidate)).toEqual({
       label: "除外解除",
       method: "DELETE",
-      successMessage: "候補の除外を解除しました。",
+      successMessage: "候補の除外を解除し、再評価を登録しました。",
     });
   });
 
@@ -90,19 +87,13 @@ describe("discovery candidate actions", () => {
 
   it("keeps exclusion enabled for a QUEUED candidate", () => {
     expect(
-      isCandidateExclusionDisabled(
-        candidateState([], "LIGHT_ELIGIBLE", "QUEUED"),
-        false,
-      ),
+      isCandidateExclusionDisabled(candidateState([], "LIGHT_ELIGIBLE", "QUEUED"), false),
     ).toBe(false);
   });
 
   it("keeps exclusion enabled for a RUNNING candidate", () => {
     expect(
-      isCandidateExclusionDisabled(
-        candidateState([], "LIGHT_ELIGIBLE", "RUNNING"),
-        false,
-      ),
+      isCandidateExclusionDisabled(candidateState([], "LIGHT_ELIGIBLE", "RUNNING"), false),
     ).toBe(false);
   });
 
@@ -117,10 +108,7 @@ describe("discovery candidate actions", () => {
       candidate: candidateState([]),
       expectedMethod: "POST",
       kind: "exclude",
-      response: exclusionResponse(
-        candidateState(["MANUALLY_EXCLUDED"], "EXCLUDED"),
-        "EXCLUDED",
-      ),
+      response: exclusionResponse(candidateState(["MANUALLY_EXCLUDED"], "EXCLUDED"), "EXCLUDED"),
       title: "exclusion",
     },
     {
@@ -144,20 +132,18 @@ describe("discovery candidate actions", () => {
       response: { jobId: "promote-1", status: "QUEUED" },
       title: "promotion",
     },
-  ])("does not fetch the candidate list after $title", async ({
-    candidate,
-    expectedMethod,
-    kind,
-    response,
-  }) => {
-    const { calls, request } = createSequenceRequest([response]);
+  ])(
+    "does not fetch the candidate list after $title",
+    async ({ candidate, expectedMethod, kind, response }) => {
+      const { calls, request } = createSequenceRequest([response]);
 
-    await requestCandidateAction(candidate, kind, request);
+      await requestCandidateAction(candidate, kind, request);
 
-    expect(calls).toHaveLength(1);
-    expect(calls[0]?.input).not.toContain("/api/discovery/candidates?");
-    expect(calls[0]?.method).toBe(expectedMethod);
-  });
+      expect(calls).toHaveLength(1);
+      expect(calls[0]?.input).not.toContain("/api/discovery/candidates?");
+      expect(calls[0]?.method).toBe(expectedMethod);
+    },
+  );
 
   it("sets only the enriched candidate to QUEUED", async () => {
     const target = candidateState([], "LIGHT_ELIGIBLE", "SUCCEEDED");
@@ -201,12 +187,8 @@ describe("discovery candidate actions", () => {
 
   it("uses safe Japanese action errors", () => {
     expect(
-      candidateActionErrorMessage(
-        new ApiRequestError("conflict", "private upstream detail", 409),
-      ),
-    ).toBe(
-      "候補はすでに監視対象へ追加されているため操作できません。再読み込みしてください。",
-    );
+      candidateActionErrorMessage(new ApiRequestError("conflict", "private upstream detail", 409)),
+    ).toBe("候補はすでに監視対象へ追加されているため操作できません。再読み込みしてください。");
     expect(candidateActionErrorMessage(new Error("private detail"))).toBe(
       "候補の操作に失敗しました。必要に応じて再読み込みしてください。",
     );
@@ -290,7 +272,7 @@ function exclusionResult(
     kind: "exclude",
     message: isManuallyExcluded(candidate)
       ? "候補を除外しました。"
-      : "候補の除外を解除しました。",
+      : "候補の除外を解除し、再評価を登録しました。",
   };
 }
 

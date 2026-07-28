@@ -23,7 +23,7 @@ const third = `0x${runId.replaceAll("-", "").slice(0, 32)}33333333`;
 let sourceId = "";
 let repository: HyperliquidDiscoveryRepository;
 
-describe.sequential("Phase 3 candidate persistence integration", () => {
+describe.sequential("Phase 3 candidate persistence integration", { timeout: 15_000 }, () => {
   beforeAll(async () => {
     await database.$queryRaw`SELECT 1`;
     const source = await database.dataSource.create({

@@ -1,8 +1,10 @@
 export const e2eAdminEmail = "owner@example.com";
 export const e2eAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee000001";
 export const e2eDiscoveryAddress = "0xdddddddddddddddddddddddddddddddddd000003";
+export const e2eDiscoveryOtherAddress = "0xdddddddddddddddddddddddddddddddddd000005";
 export const e2eExclusionAddress = "0xdddddddddddddddddddddddddddddddddd000004";
 export const e2eInsufficientPerformanceAddress = "0xffffffffffffffffffffffffffffffffffffffff";
 export const e2eManualPerformanceAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 export const e2ePerformanceAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+export const e2ePromotionAddress = "0xdddddddddddddddddddddddddddddddddd000006";
 export const e2eSessionToken = "phase2-e2e-session-token";

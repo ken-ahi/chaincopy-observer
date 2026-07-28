@@ -61,9 +61,7 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
     setMessage(null);
     try {
       const result = await requestCandidateAction(candidate, kind);
-      setCandidate((current) =>
-        current ? applyCandidateActionState(current, result) : current,
-      );
+      setCandidate((current) => (current ? applyCandidateActionState(current, result) : current));
       if (result.kind === "promote") {
         promotionPendingRef.current = true;
         setPromotionPending(true);

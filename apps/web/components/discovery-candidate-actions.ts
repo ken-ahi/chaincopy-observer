@@ -1,8 +1,5 @@
 import { ApiRequestError, apiRequest } from "../lib/address-api";
-import {
-  type DiscoveryCandidate,
-  type EnrichmentStatus,
-} from "../lib/discovery-api";
+import { type DiscoveryCandidate, type EnrichmentStatus } from "../lib/discovery-api";
 
 export const manuallyExcludedReason = "MANUALLY_EXCLUDED";
 
@@ -61,7 +58,7 @@ export function exclusionAction(candidate: Pick<DiscoveryCandidate, "exclusionRe
     return {
       label: "除外解除",
       method: "DELETE",
-      successMessage: "候補の除外を解除しました。",
+      successMessage: "候補の除外を解除し、再評価を登録しました。",
     };
   }
   return {

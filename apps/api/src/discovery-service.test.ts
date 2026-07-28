@@ -135,24 +135,24 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     expect(fixture.updateMany).toHaveBeenCalledTimes(2);
   });
 
-  it.each([
-    { promotedAt: new Date("2026-07-27T00:00:00.000Z") },
-    { promotedWalletId: "wallet-1" },
-  ])("rejects exclusion changes for a promoted candidate", async (promotion) => {
-    const fixture = createFixture({
-      ...promotion,
-      exclusionReasons: ["MANUALLY_EXCLUDED"],
-      filterStatus: "EXCLUDED",
-    });
+  it.each([{ promotedAt: new Date("2026-07-27T00:00:00.000Z") }, { promotedWalletId: "wallet-1" }])(
+    "rejects exclusion changes for a promoted candidate",
+    async (promotion) => {
+      const fixture = createFixture({
+        ...promotion,
+        exclusionReasons: ["MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      });
 
-    await expect(fixture.service.excludeCandidate(address)).rejects.toBeInstanceOf(
-      CandidateActionConflictError,
-    );
-    await expect(fixture.service.unexcludeCandidate(address)).rejects.toBeInstanceOf(
-      CandidateActionConflictError,
-    );
-    expect(fixture.updateMany).not.toHaveBeenCalled();
-  });
+      await expect(fixture.service.excludeCandidate(address)).rejects.toBeInstanceOf(
+        CandidateActionConflictError,
+      );
+      await expect(fixture.service.unexcludeCandidate(address)).rejects.toBeInstanceOf(
+        CandidateActionConflictError,
+      );
+      expect(fixture.updateMany).not.toHaveBeenCalled();
+    },
+  );
 
   it("rejects exclusion changes for a candidate already added to monitoring", async () => {
     const fixture = createFixture(
@@ -175,8 +175,7 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     async (action) => {
       const fixture = createFixture(
         {
-          exclusionReasons:
-            action === "unexclude" ? ["MANUALLY_EXCLUDED"] : ["AUTOMATIC_REASON"],
+          exclusionReasons: action === "unexclude" ? ["MANUALLY_EXCLUDED"] : ["AUTOMATIC_REASON"],
           filterStatus: action === "unexclude" ? "EXCLUDED" : "PENDING",
         },
         { updateConflict: true },

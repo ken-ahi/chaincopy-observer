@@ -4,7 +4,13 @@ import { resolve } from "node:path";
 import { PrismaClient } from "@prisma/client";
 import { expect, test } from "@playwright/test";
 
-import { e2eDiscoveryAddress, e2eExclusionAddress, e2eSessionToken } from "./fixtures";
+import {
+  e2eDiscoveryAddress,
+  e2eDiscoveryOtherAddress,
+  e2eExclusionAddress,
+  e2ePromotionAddress,
+  e2eSessionToken,
+} from "./fixtures";
 
 test.describe.configure({ mode: "serial" });
 
@@ -23,6 +29,13 @@ test.beforeEach(async ({ context }) => {
 });
 
 test("shows discovery stats, settings, candidates, and candidate detail", async ({ page }) => {
+  let candidateListRequestCount = 0;
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (request.method() === "GET" && url.pathname === "/api/discovery/candidates") {
+      candidateListRequestCount += 1;
+    }
+  });
   await page.goto("/dashboard/discovery");
   await expect(page.getByRole("heading", { name: "Hyperliquid アドレス自動探索" })).toBeVisible();
   await expect(page.getByText("受信イベント")).toBeVisible();
@@ -34,17 +47,32 @@ test("shows discovery stats, settings, candidates, and candidate detail", async 
   await expect(page.getByText("2. 詳細分析")).toBeVisible();
   await expect(page.getByText("6. Performanceを計算")).toBeVisible();
 
-  await page.getByLabel("候補検索").fill(e2eDiscoveryAddress);
+  const search = page.getByLabel("候補検索");
+  await search.fill(e2eDiscoveryAddress);
   const candidateLink = page.locator(`a[href="/dashboard/discovery/${e2eDiscoveryAddress}"]`);
   await expect(candidateLink).toBeVisible();
   await expect(page.getByText("$15,000")).toBeVisible();
-  await expect(
-    page.getByRole("button", { name: `${e2eDiscoveryAddress} を詳細分析` }),
-  ).toBeVisible();
+  const enrich = page.getByRole("button", {
+    name: `${e2eDiscoveryAddress} を詳細分析`,
+  });
+  await expect(enrich).toBeVisible();
   await expect(
     page.getByRole("button", { name: `${e2eDiscoveryAddress} を監視対象に追加` }),
   ).toBeDisabled();
   await expect(page.getByRole("button", { name: /CSV|JSON/i })).toHaveCount(0);
+
+  const listRequestsBeforeEnrichment = candidateListRequestCount;
+  await enrich.click();
+  await expect(page.getByText("詳細分析を登録しました。")).toBeVisible();
+  expect(candidateListRequestCount).toBe(listRequestsBeforeEnrichment);
+  await expect(page.locator("tr").filter({ has: candidateLink })).toContainText("QUEUED");
+
+  await search.fill("");
+  const otherCandidateLink = page.locator(
+    `a[href="/dashboard/discovery/${e2eDiscoveryOtherAddress}"]`,
+  );
+  await expect(otherCandidateLink).toBeVisible();
+  await expect(page.locator("tr").filter({ has: otherCandidateLink })).toContainText("SUCCEEDED");
 
   await candidateLink.click();
   await expect(page).toHaveURL(new RegExp(`/dashboard/discovery/${e2eDiscoveryAddress}$`));
@@ -53,6 +81,77 @@ test("shows discovery stats, settings, candidates, and candidate detail", async 
   await expect(page.getByRole("heading", { name: "履歴完全性・除外理由" })).toBeVisible();
   await expect(page.getByRole("button", { name: "詳細分析を再実行" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "処理ステップ" })).toBeVisible();
+});
+
+test("prevents duplicate promotion while showing the pending state", async ({ page }) => {
+  let promotionRequestCount = 0;
+  page.on("request", (request) => {
+    if (
+      request.method() === "POST" &&
+      request.url().endsWith(`/api/discovery/candidates/${e2ePromotionAddress}/promote`)
+    ) {
+      promotionRequestCount += 1;
+    }
+  });
+  await page.goto("/dashboard/discovery");
+  await page.getByLabel("候補検索").fill(e2ePromotionAddress);
+
+  const promote = page.getByRole("button", {
+    name: `${e2ePromotionAddress} を監視対象に追加`,
+  });
+  await expect(promote).toBeEnabled();
+  await promote.click();
+
+  await expect(promote).toContainText("追加待ち");
+  await expect(promote).toBeDisabled();
+  expect(promotionRequestCount).toBe(1);
+});
+
+test("shows matching Web and API build information", async ({ page }) => {
+  await page.goto("/dashboard");
+
+  const version = page.getByLabel("稼働バージョン");
+  await expect(version).toContainText("Web v0.2.0");
+  await expect(version).toContainText("API v0.2.0");
+  await expect(version).toContainText("unknown");
+  await expect(version).toContainText("接続済み");
+});
+
+test("shows a Web/API mismatch warning", async ({ page }) => {
+  await page.route("**/api/system/version", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        builtAt: "2026-07-28T14:26:12.528Z",
+        commit: "1234567",
+        service: "api",
+        version: "0.2.0",
+      }),
+      contentType: "application/json",
+      status: 200,
+    });
+  });
+
+  await page.goto("/dashboard");
+
+  await expect(page.getByText("Web/APIのビルドが一致していません")).toBeVisible();
+});
+
+test("keeps the dashboard usable when API build information is unavailable", async ({ page }) => {
+  await page.route("**/api/system/version", async (route) => {
+    await route.fulfill({
+      body: JSON.stringify({
+        error: "service_unavailable",
+        message: "APIバージョン取得失敗",
+      }),
+      contentType: "application/json",
+      status: 503,
+    });
+  });
+
+  await page.goto("/dashboard");
+
+  await expect(page.getByRole("heading", { name: "Observation deck" })).toBeVisible();
+  await expect(page.getByText("APIバージョン取得失敗")).toBeVisible();
 });
 
 test("rejects unauthenticated discovery API requests", async ({ request }) => {
@@ -163,7 +262,7 @@ async function seedExclusionCandidate(): Promise<string> {
         averageTradeUsd: "1600",
         dataQualityScore: 70,
         distinctCoins: 1,
-        enrichmentStatus: "PENDING",
+        enrichmentStatus: "QUEUED",
         estimatedNotionalUsd: "16000",
         exclusionReasons: ["INSUFFICIENT_HISTORY"],
         filterStatus: "LIGHT_ELIGIBLE",
