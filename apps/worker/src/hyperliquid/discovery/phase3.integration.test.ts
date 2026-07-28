@@ -23,7 +23,7 @@ const third = `0x${runId.replaceAll("-", "").slice(0, 32)}33333333`;
 let sourceId = "";
 let repository: HyperliquidDiscoveryRepository;
 
-describe.sequential("Phase 3 candidate persistence integration", () => {
+describe.sequential("Phase 3 candidate persistence integration", { timeout: 15_000 }, () => {
   beforeAll(async () => {
     await database.$queryRaw`SELECT 1`;
     const source = await database.dataSource.create({
@@ -247,7 +247,7 @@ describe.sequential("Phase 3 candidate persistence integration", () => {
     });
   });
 
-  it("preserves manual and automatic reasons when a full filter runs later", async () => {
+  it("does not apply a full filter result while manually excluded", async () => {
     const candidate = await createCandidate("00000002", {
       enrichmentStatus: "SUCCEEDED",
       exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
@@ -268,11 +268,10 @@ describe.sequential("Phase 3 candidate persistence integration", () => {
       where: { id: candidate.id },
     });
     expect(updated.filterStatus).toBe("EXCLUDED");
-    expect(updated.exclusionReasons).toEqual([
-      "AUTOMATIC_REASON",
-      "MANUALLY_EXCLUDED",
-      "FULL_FILTER_REASON",
-    ]);
+    expect(updated.exclusionReasons).toEqual(["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"]);
+    expect(updated.availableFrom).toBeNull();
+    expect(updated.dataQualityScore).toBe(0);
+    expect(updated.historyCompleteness).toBe("UNKNOWN");
   });
 
   it("does not overwrite a manual exclusion added after filter context was read", async () => {
@@ -296,6 +295,40 @@ describe.sequential("Phase 3 candidate persistence integration", () => {
     ).resolves.toMatchObject({
       exclusionReasons: ["MANUALLY_EXCLUDED"],
       filterStatus: "EXCLUDED",
+    });
+  });
+
+  it("does not apply a stale full filter result after manual exclusion", async () => {
+    const candidate = await createCandidate("00000008", {
+      enrichmentStatus: "SUCCEEDED",
+    });
+    const context = await repository.getCandidateFilterContext(candidate.id);
+    expect(context.candidate.exclusionReasons).not.toContain("MANUALLY_EXCLUDED");
+    await database.addressCandidate.update({
+      data: {
+        exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      },
+      where: { id: candidate.id },
+    });
+
+    await expect(
+      repository.updateFullFilter(
+        candidate.id,
+        fullFilterResult(["STALE_FILTER_REASON"], "ELIGIBLE"),
+        0,
+        100,
+        false,
+      ),
+    ).resolves.toBe(false);
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      dataQualityScore: 0,
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+      historyCompleteness: "UNKNOWN",
     });
   });
 
@@ -354,6 +387,100 @@ describe.sequential("Phase 3 candidate persistence integration", () => {
     await expect(
       database.candidateEnrichmentAttempt.count({ where: { candidateId: candidate.id } }),
     ).resolves.toBe(0);
+  });
+
+  it("preserves manual exclusion when enrichment completes after the user excludes", async () => {
+    const candidate = await createCandidate("00000009", {
+      enrichmentStatus: "QUEUED",
+    });
+    const requestedFrom = new Date("2021-07-26T00:00:00.000Z");
+    const requestedTo = new Date("2026-07-26T00:00:00.000Z");
+    const start = await repository.beginEnrichment(candidate.id, requestedFrom, requestedTo);
+    expect(start).not.toBeNull();
+    if (!start) {
+      throw new Error("Expected enrichment to start.");
+    }
+
+    await database.addressCandidate.update({
+      data: {
+        exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      },
+      where: { id: candidate.id },
+    });
+    await repository.completeEnrichment(start, {
+      availableFrom: requestedFrom,
+      availableTo: requestedTo,
+      endpointResults: { analysis: { status: "ELIGIBLE" } },
+      historyCompleteness: "COMPLETE",
+      historyTruncated: false,
+      longRelatedCount: 10,
+      retrievedFillCount: 100,
+      shortRelatedCount: 5,
+      truncationReason: null,
+    });
+    await expect(
+      repository.updateFullFilter(
+        candidate.id,
+        fullFilterResult(["ENRICHMENT_FILTER_REASON"], "ELIGIBLE"),
+        0,
+        100,
+        false,
+      ),
+    ).resolves.toBe(false);
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      enrichmentStatus: "SUCCEEDED",
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+  });
+
+  it("preserves manual and automatic reasons when new market trades are added", async () => {
+    const candidate = await createCandidate("00000010", {
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await repository.upsertTrade(
+      marketTrade({
+        buyerAddress: candidate.address,
+        coin: "BTC",
+        externalTradeId: `1721862700000:BTC:${runId}`,
+        fingerprint: `fingerprint-${runId}-manual-exclusion-market-trade`,
+        notionalUsd: "100",
+        occurredAt: "2026-07-25T12:05:00.000Z",
+        sellerAddress: third,
+        side: "BUY",
+        tradeId: `manual-exclusion-${runId}`,
+      }),
+    );
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+  });
+
+  it("preserves manual exclusion during candidate quality audit", async () => {
+    const candidate = await createCandidate("00000011", {
+      enrichmentStatus: "SUCCEEDED",
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await repository.auditCandidates();
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
   });
 
   it("allows filtering again after the manual exclusion is explicitly removed", async () => {

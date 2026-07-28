@@ -25,10 +25,14 @@ import {
 } from "@/lib/discovery-api";
 
 import {
-  applyCandidateExclusionState,
-  type CandidateExclusionResponse,
-  exclusionAction,
+  applyCandidateActionState,
+  candidateActionErrorMessage,
+  type CandidateActionKind,
+  isCandidateExclusionDisabled,
+  isCandidatePromotionDisabled,
   isManuallyExcluded,
+  requestCandidateAction,
+  exclusionAction,
 } from "./discovery-candidate-actions";
 
 export function DiscoveryClient() {
@@ -43,7 +47,11 @@ export function DiscoveryClient() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [pendingCandidateAddress, setPendingCandidateAddress] = useState<string | null>(null);
+  const [promotionPendingAddresses, setPromotionPendingAddresses] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const candidateActionInFlight = useRef<string | null>(null);
+  const promotionPendingAddressesRef = useRef<ReadonlySet<string>>(new Set());
   const requestSequence = useRef(0);
 
   const load = useCallback(
@@ -98,50 +106,43 @@ export function DiscoveryClient() {
     });
   }
 
-  async function candidateAction(
-    candidate: DiscoveryCandidate,
-    action: "enrich" | "exclude" | "promote",
-  ) {
-    if (candidateActionInFlight.current !== null) return;
+  async function candidateAction(candidate: DiscoveryCandidate, action: CandidateActionKind) {
+    if (
+      candidateActionInFlight.current !== null ||
+      (action === "promote" && promotionPendingAddressesRef.current.has(candidate.address))
+    ) {
+      return;
+    }
     candidateActionInFlight.current = candidate.address;
     setPendingCandidateAddress(candidate.address);
     try {
       await runAction(async () => {
-        const exclusion = exclusionAction(candidate);
-        if (action === "exclude") {
-          const result = await apiRequest<CandidateExclusionResponse>(
-            `/api/discovery/candidates/${candidate.address}/exclude`,
-            { method: exclusion.method },
-          );
-          setCandidates((current) =>
-            current.map((item) => applyCandidateExclusionState(item, result.candidate)),
-          );
-          await load();
-          return exclusion.successMessage;
+        const result = await requestCandidateAction(candidate, action);
+        setCandidates((current) => current.map((item) => applyCandidateActionState(item, result)));
+        if (result.kind === "promote") {
+          const nextPendingAddresses = new Set(promotionPendingAddressesRef.current);
+          nextPendingAddresses.add(result.address);
+          promotionPendingAddressesRef.current = nextPendingAddresses;
+          setPromotionPendingAddresses(nextPendingAddresses);
         }
-        const result = await apiRequest<{ readonly jobId?: string }>(
-          `/api/discovery/candidates/${candidate.address}/${action}`,
-          { method: "POST" },
-        );
-        await load();
-        if (action === "enrich") return `詳細分析を登録しました: ${result.jobId ?? "queued"}`;
-        if (action === "promote")
-          return `監視対象への追加を登録しました: ${result.jobId ?? "queued"}`;
-        return "処理を登録しました。";
-      });
+        return result.message;
+      }, candidateActionErrorMessage);
     } finally {
       candidateActionInFlight.current = null;
       setPendingCandidateAddress(null);
     }
   }
 
-  async function runAction(action: () => Promise<string>) {
+  async function runAction(
+    action: () => Promise<string>,
+    getErrorMessage: (cause: unknown) => string = errorMessage,
+  ) {
     setError(null);
     setMessage(null);
     try {
       setMessage(await action());
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(getErrorMessage(cause));
     }
   }
 
@@ -376,10 +377,10 @@ export function DiscoveryClient() {
                           </Button>
                           <Button
                             aria-label={`${candidate.address} を${exclusionAction(candidate).label}`}
-                            disabled={
-                              pendingCandidateAddress === candidate.address ||
-                              candidate.promotedAt !== null
-                            }
+                            disabled={isCandidateExclusionDisabled(
+                              candidate,
+                              pendingCandidateAddress === candidate.address,
+                            )}
                             onClick={() => void candidateAction(candidate, "exclude")}
                             size="sm"
                             variant="ghost"
@@ -389,15 +390,18 @@ export function DiscoveryClient() {
                           </Button>
                           <Button
                             aria-label={`${candidate.address} を監視対象に追加`}
-                            disabled={
-                              pendingCandidateAddress === candidate.address ||
-                              candidate.filterStatus !== "ELIGIBLE"
-                            }
+                            disabled={isCandidatePromotionDisabled(
+                              candidate,
+                              pendingCandidateAddress === candidate.address,
+                              promotionPendingAddresses.has(candidate.address),
+                            )}
                             onClick={() => void candidateAction(candidate, "promote")}
                             size="sm"
                           >
                             <ShieldCheck aria-hidden="true" className="size-3.5" />
-                            監視対象に追加
+                            {promotionPendingAddresses.has(candidate.address)
+                              ? "追加待ち"
+                              : "監視対象に追加"}
                           </Button>
                         </div>
                       </td>

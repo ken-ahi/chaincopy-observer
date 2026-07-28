@@ -520,10 +520,11 @@ export class HyperliquidDiscoveryRepository {
         select: { exclusionReasons: true, filterStatus: true },
         where: { id: candidateId },
       });
-      const manuallyExcluded = current.exclusionReasons.includes("MANUALLY_EXCLUDED");
-      const effectiveStatus = manuallyExcluded ? "EXCLUDED" : result.status;
+      if (current.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
+        return false;
+      }
       const exclusionReasons =
-        manuallyExcluded || result.status === "EXCLUDED"
+        result.status === "EXCLUDED"
           ? mergeExclusionReasons(current.exclusionReasons, result.reasons)
           : [...result.reasons];
       const updated = await transaction.addressCandidate.updateMany({
@@ -532,32 +533,30 @@ export class HyperliquidDiscoveryRepository {
           availableTo: result.availableTo,
           dataQualityScore,
           exclusionReasons,
-          filterStatus: effectiveStatus,
+          filterStatus: result.status,
           historyCompleteness: result.completeness,
         },
         where: {
           id: candidateId,
-          ...(manuallyExcluded
-            ? { exclusionReasons: { has: "MANUALLY_EXCLUDED" } }
-            : { NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } } }),
+          NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } },
         },
       });
       if (updated.count !== 1) {
         return false;
       }
-      if (effectiveStatus === "ELIGIBLE" && current.filterStatus !== "ELIGIBLE") {
+      if (result.status === "ELIGIBLE" && current.filterStatus !== "ELIGIBLE") {
         await transaction.discoveryStats.update({
           data: { filterPassed: { increment: 1 } },
           where: { sourceId: this.sourceId },
         });
       }
-      if (effectiveStatus === "EXCLUDED" && current.filterStatus !== "EXCLUDED") {
+      if (result.status === "EXCLUDED" && current.filterStatus !== "EXCLUDED") {
         await transaction.discoveryStats.update({
           data: { excludedCandidates: { increment: 1 } },
           where: { sourceId: this.sourceId },
         });
       }
-      return !manuallyExcluded;
+      return true;
     });
   }
 

@@ -4,10 +4,12 @@
   "tasks": {
     "build": {
       "dependsOn": ["^build"],
+      "env": ["APP_VERSION", "BUILD_COMMIT", "BUILD_TIME"],
       "outputs": []
     },
     "@chaincopy/api#build": {
       "dependsOn": ["^build"],
+      "env": ["APP_VERSION", "BUILD_COMMIT", "BUILD_TIME"],
       "outputs": ["dist/**"]
     },
     "@chaincopy/worker#build": {
@@ -16,6 +18,7 @@
     },
     "@chaincopy/web#build": {
       "dependsOn": ["^build"],
+      "env": ["APP_VERSION", "BUILD_COMMIT", "BUILD_TIME"],
       "outputs": [".next/**", "!.next/cache/**", "!.next/standalone/**"]
     },
     "dev": {

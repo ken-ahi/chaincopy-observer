@@ -9,10 +9,14 @@ import { ApiRequestError, apiRequest } from "@/lib/address-api";
 import { type DiscoveryCandidateDetail } from "@/lib/discovery-api";
 
 import {
-  applyCandidateExclusionState,
-  type CandidateExclusionResponse,
+  applyCandidateActionState,
+  candidateActionErrorMessage,
+  type CandidateActionKind,
   exclusionAction,
+  isCandidateExclusionDisabled,
+  isCandidatePromotionDisabled,
   isManuallyExcluded,
+  requestCandidateAction,
 } from "./discovery-candidate-actions";
 
 export function DiscoveryDetailClient({ address }: { readonly address: string }) {
@@ -21,7 +25,9 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
+  const [promotionPending, setPromotionPending] = useState(false);
   const actionInFlight = useRef(false);
+  const promotionPendingRef = useRef(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -41,36 +47,28 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
     void load();
   }, [load]);
 
-  async function action(kind: "enrich" | "exclude" | "promote") {
-    if (actionInFlight.current || !candidate) return;
+  async function action(kind: CandidateActionKind) {
+    if (
+      actionInFlight.current ||
+      !candidate ||
+      (kind === "promote" && promotionPendingRef.current)
+    ) {
+      return;
+    }
     actionInFlight.current = true;
     setActing(true);
     setError(null);
     setMessage(null);
     try {
-      const exclusion = exclusionAction(candidate);
-      if (kind === "exclude") {
-        const result = await apiRequest<CandidateExclusionResponse>(
-          `/api/discovery/candidates/${address}/exclude`,
-          { method: exclusion.method },
-        );
-        setCandidate((current) =>
-          current ? applyCandidateExclusionState(current, result.candidate) : current,
-        );
-        setMessage(exclusion.successMessage);
-        await load();
-        return;
+      const result = await requestCandidateAction(candidate, kind);
+      setCandidate((current) => (current ? applyCandidateActionState(current, result) : current));
+      if (result.kind === "promote") {
+        promotionPendingRef.current = true;
+        setPromotionPending(true);
       }
-      const result = await apiRequest<{ readonly jobId?: string }>(
-        `/api/discovery/candidates/${address}/${kind}`,
-        { method: "POST" },
-      );
-      setMessage(
-        `${kind === "enrich" ? "詳細分析" : "監視対象への追加"}ジョブ: ${result.jobId ?? "queued"}`,
-      );
-      await load();
+      setMessage(result.message);
     } catch (cause) {
-      setError(errorMessage(cause));
+      setError(candidateActionErrorMessage(cause));
     } finally {
       actionInFlight.current = false;
       setActing(false);
@@ -137,7 +135,7 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
           </Button>
           <Button
             aria-label={`${candidate.address} を${exclusionAction(candidate).label}`}
-            disabled={acting || candidate.promotedAt !== null}
+            disabled={isCandidateExclusionDisabled(candidate, acting)}
             onClick={() => void action("exclude")}
             size="sm"
             variant="ghost"
@@ -146,12 +144,12 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
             {exclusionAction(candidate).label}
           </Button>
           <Button
-            disabled={acting || candidate.filterStatus !== "ELIGIBLE"}
+            disabled={isCandidatePromotionDisabled(candidate, acting, promotionPending)}
             onClick={() => void action("promote")}
             size="sm"
           >
             <ShieldCheck aria-hidden="true" className="size-3.5" />
-            監視対象に追加
+            {promotionPending ? "追加待ち" : "監視対象に追加"}
           </Button>
           <Button
             aria-label="候補詳細を再読み込み"

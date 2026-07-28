@@ -1,4 +1,12 @@
+ARG APP_VERSION
+ARG BUILD_COMMIT
+ARG BUILD_TIME
+
 FROM node:24.12.0-alpine AS workspace
+
+ARG APP_VERSION
+ARG BUILD_COMMIT
+ARG BUILD_TIME
 
 RUN apk add --no-cache libc6-compat openssl
 RUN corepack enable && corepack prepare pnpm@11.9.0 --activate

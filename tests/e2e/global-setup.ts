@@ -7,9 +7,11 @@ import {
   e2eAddress,
   e2eAdminEmail,
   e2eDiscoveryAddress,
+  e2eDiscoveryOtherAddress,
   e2eInsufficientPerformanceAddress,
   e2eManualPerformanceAddress,
   e2ePerformanceAddress,
+  e2ePromotionAddress,
   e2eSessionToken,
 } from "./fixtures";
 
@@ -276,7 +278,13 @@ export default async function globalSetup() {
       warningCount: 1,
     },
   });
-  await database.addressCandidate.deleteMany({ where: { address: e2eDiscoveryAddress } });
+  await database.addressCandidate.deleteMany({
+    where: {
+      address: {
+        in: [e2eDiscoveryAddress, e2eDiscoveryOtherAddress, e2ePromotionAddress],
+      },
+    },
+  });
   await database.discoverySettings.upsert({
     create: { enabled: false, sourceId: source.id },
     update: {
@@ -320,6 +328,42 @@ export default async function globalSetup() {
       sourceId: source.id,
       tradeCount: 12,
     },
+  });
+  await database.addressCandidate.createMany({
+    data: [
+      {
+        activeDays: 2,
+        activeHours: 10,
+        address: e2eDiscoveryOtherAddress,
+        averageTradeUsd: "1100",
+        dataQualityScore: 80,
+        distinctCoins: 1,
+        enrichmentStatus: "SUCCEEDED",
+        estimatedNotionalUsd: "13200",
+        filterStatus: "LIGHT_ELIGIBLE",
+        firstSeenAt: new Date("2026-07-25T00:00:00.000Z"),
+        largestTradeUsd: "4500",
+        lastSeenAt: new Date("2026-07-25T23:00:00.000Z"),
+        sourceId: source.id,
+        tradeCount: 12,
+      },
+      {
+        activeDays: 4,
+        activeHours: 16,
+        address: e2ePromotionAddress,
+        averageTradeUsd: "1800",
+        dataQualityScore: 90,
+        distinctCoins: 2,
+        enrichmentStatus: "SUCCEEDED",
+        estimatedNotionalUsd: "21600",
+        filterStatus: "ELIGIBLE",
+        firstSeenAt: new Date("2026-07-24T00:00:00.000Z"),
+        largestTradeUsd: "7000",
+        lastSeenAt: new Date("2026-07-25T22:00:00.000Z"),
+        sourceId: source.id,
+        tradeCount: 12,
+      },
+    ],
   });
   await database.$disconnect();
 }
