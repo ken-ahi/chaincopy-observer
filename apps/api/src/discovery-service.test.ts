@@ -12,27 +12,32 @@ import {
 const address = "0x1111111111111111111111111111111111111111";
 
 describe("PrismaDiscoveryService manual exclusion", () => {
-  it("adds MANUALLY_EXCLUDED without replacing automatic reasons", async () => {
-    const fixture = createFixture({
-      exclusionReasons: ["INSUFFICIENT_HISTORY"],
-      filterStatus: "INSUFFICIENT_HISTORY",
-    });
+  it.each(["PENDING", "QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "RATE_LIMITED"])(
+    "excludes a candidate while enrichment is %s",
+    async (enrichmentStatus) => {
+      const fixture = createFixture({
+        enrichmentStatus,
+        exclusionReasons: ["INSUFFICIENT_HISTORY"],
+        filterStatus: "INSUFFICIENT_HISTORY",
+      });
 
-    const result = await fixture.service.excludeCandidate(address);
+      const result = await fixture.service.excludeCandidate(address);
 
-    expect(fixture.candidate().exclusionReasons).toEqual([
-      "INSUFFICIENT_HISTORY",
-      "MANUALLY_EXCLUDED",
-    ]);
-    expect(fixture.candidate().filterStatus).toBe("EXCLUDED");
-    expect(result).toMatchObject({
-      candidate: {
-        exclusionReasons: ["INSUFFICIENT_HISTORY", "MANUALLY_EXCLUDED"],
-        filterStatus: "EXCLUDED",
-      },
-      status: "EXCLUDED",
-    });
-  });
+      expect(fixture.candidate().exclusionReasons).toEqual([
+        "INSUFFICIENT_HISTORY",
+        "MANUALLY_EXCLUDED",
+      ]);
+      expect(fixture.candidate().filterStatus).toBe("EXCLUDED");
+      expect(result).toMatchObject({
+        candidate: {
+          exclusionReasons: ["INSUFFICIENT_HISTORY", "MANUALLY_EXCLUDED"],
+          filterStatus: "EXCLUDED",
+        },
+        status: "EXCLUDED",
+      });
+      expect(Object.keys(result).sort()).toEqual(["candidate", "status"]);
+    },
+  );
 
   it("treats an already manually excluded candidate idempotently", async () => {
     const fixture = createFixture({
@@ -53,38 +58,64 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     });
   });
 
-  it("removes only MANUALLY_EXCLUDED, marks PENDING, and enqueues the existing filter job", async () => {
+  it("restores EXCLUDED when an existing manual exclusion has a stale filter status", async () => {
     const fixture = createFixture({
-      enrichmentStatus: "SUCCEEDED",
-      exclusionReasons: ["INSUFFICIENT_HISTORY", "MANUALLY_EXCLUDED"],
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "PENDING",
+    });
+
+    const result = await fixture.service.excludeCandidate(address);
+
+    expect(fixture.candidate()).toMatchObject({
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
       filterStatus: "EXCLUDED",
     });
-
-    const result = await fixture.service.unexcludeCandidate(address);
-
-    expect(fixture.candidate().exclusionReasons).toEqual(["INSUFFICIENT_HISTORY"]);
-    expect(fixture.candidate().filterStatus).toBe("PENDING");
-    expect(fixture.jobs).toHaveLength(1);
-    expect(fixture.jobs[0]).toMatchObject({
-      data: {
-        address,
-        automatic: false,
-        candidateId: "candidate-1",
-        kind: "candidate",
-      },
-      name: hyperliquidDiscoveryJobNames.candidateFilter,
-    });
-    expect(fixture.jobs[0]?.options.jobId).toBe(
-      "filter-candidate-1-manual-unexclude-1785196800000",
-    );
     expect(result).toMatchObject({
       candidate: {
-        exclusionReasons: ["INSUFFICIENT_HISTORY"],
-        filterStatus: "PENDING",
+        exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
       },
-      status: "QUEUED",
+      status: "EXCLUDED",
     });
   });
+
+  it.each(["QUEUED", "RUNNING"])(
+    "removes only MANUALLY_EXCLUDED and queues re-evaluation while enrichment is %s",
+    async (enrichmentStatus) => {
+      const fixture = createFixture({
+        enrichmentStatus,
+        exclusionReasons: ["INSUFFICIENT_HISTORY", "MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      });
+
+      const result = await fixture.service.unexcludeCandidate(address);
+
+      expect(fixture.candidate().exclusionReasons).toEqual(["INSUFFICIENT_HISTORY"]);
+      expect(fixture.candidate().filterStatus).toBe("PENDING");
+      expect(fixture.jobs).toHaveLength(1);
+      expect(fixture.jobs[0]).toMatchObject({
+        data: {
+          address,
+          automatic: false,
+          candidateId: "candidate-1",
+          kind: "candidate",
+        },
+        name: hyperliquidDiscoveryJobNames.candidateFilter,
+      });
+      expect(fixture.jobs[0]?.options.jobId).toBe(
+        "filter-candidate-1-manual-unexclude-1785196800000",
+      );
+      expect(result).toMatchObject({
+        candidate: {
+          exclusionReasons: ["INSUFFICIENT_HISTORY"],
+          filterStatus: "PENDING",
+        },
+        jobId: "filter-candidate-1-manual-unexclude-1785196800000",
+        status: "QUEUED",
+      });
+      expect(Object.keys(result).sort()).toEqual(["candidate", "jobId", "status"]);
+    },
+  );
 
   it("restores the exclusion when filter queue registration fails", async () => {
     const fixture = createFixture(
@@ -92,7 +123,7 @@ describe("PrismaDiscoveryService manual exclusion", () => {
         exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
         filterStatus: "EXCLUDED",
       },
-      true,
+      { queueFailure: true },
     );
 
     await expect(fixture.service.unexcludeCandidate(address)).rejects.toThrow(
@@ -104,11 +135,14 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     expect(fixture.updateMany).toHaveBeenCalledTimes(2);
   });
 
-  it("rejects exclusion changes for promoted candidates", async () => {
+  it.each([
+    { promotedAt: new Date("2026-07-27T00:00:00.000Z") },
+    { promotedWalletId: "wallet-1" },
+  ])("rejects exclusion changes for a promoted candidate", async (promotion) => {
     const fixture = createFixture({
+      ...promotion,
       exclusionReasons: ["MANUALLY_EXCLUDED"],
       filterStatus: "EXCLUDED",
-      promotedAt: new Date("2026-07-27T00:00:00.000Z"),
     });
 
     await expect(fixture.service.excludeCandidate(address)).rejects.toBeInstanceOf(
@@ -126,8 +160,7 @@ describe("PrismaDiscoveryService manual exclusion", () => {
         exclusionReasons: ["MANUALLY_EXCLUDED"],
         filterStatus: "EXCLUDED",
       },
-      false,
-      true,
+      { watched: true },
     );
 
     await expect(fixture.service.unexcludeCandidate(address)).rejects.toBeInstanceOf(
@@ -137,17 +170,43 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     expect(fixture.jobs).toHaveLength(0);
   });
 
-  it("rejects exclusion changes while enrichment is queued or running", async () => {
-    const fixture = createFixture({
-      enrichmentStatus: "RUNNING",
-      exclusionReasons: ["MANUALLY_EXCLUDED"],
-      filterStatus: "EXCLUDED",
-    });
+  it.each(["exclude", "unexclude"] as const)(
+    "rejects an %s optimistic-lock conflict",
+    async (action) => {
+      const fixture = createFixture(
+        {
+          exclusionReasons:
+            action === "unexclude" ? ["MANUALLY_EXCLUDED"] : ["AUTOMATIC_REASON"],
+          filterStatus: action === "unexclude" ? "EXCLUDED" : "PENDING",
+        },
+        { updateConflict: true },
+      );
 
-    await expect(fixture.service.unexcludeCandidate(address)).rejects.toBeInstanceOf(
-      CandidateActionConflictError,
+      await expect(
+        action === "exclude"
+          ? fixture.service.excludeCandidate(address)
+          : fixture.service.unexcludeCandidate(address),
+      ).rejects.toMatchObject({
+        code: "CANDIDATE_STATE_CHANGED",
+        name: "CandidateActionConflictError",
+      });
+      expect(fixture.jobs).toHaveLength(0);
+    },
+  );
+
+  it("does not roll back a newer concurrent state when queue registration fails", async () => {
+    const fixture = createFixture(
+      {
+        exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      },
+      { queueFailure: true, rollbackConflict: true },
     );
-    expect(fixture.jobs).toHaveLength(0);
+
+    await expect(fixture.service.unexcludeCandidate(address)).rejects.toMatchObject({
+      code: "CANDIDATE_STATE_CHANGED",
+      name: "CandidateActionConflictError",
+    });
   });
 
   it("returns not found for an unknown candidate", async () => {
@@ -215,8 +274,12 @@ interface DecimalStub {
 
 function createFixture(
   overrides: Partial<CandidateRow> = {},
-  queueFailure = false,
-  watched = false,
+  options: {
+    readonly queueFailure?: boolean;
+    readonly rollbackConflict?: boolean;
+    readonly updateConflict?: boolean;
+    readonly watched?: boolean;
+  } = {},
 ): {
   candidate: () => CandidateRow;
   findFirst: ReturnType<typeof vi.fn>;
@@ -230,7 +293,15 @@ function createFixture(
 } {
   let candidate = candidateRow(overrides);
   const findFirst = vi.fn(async () => candidate);
+  let updateCall = 0;
   const updateMany = vi.fn(async ({ data }: { data: Partial<CandidateRow> }) => {
+    updateCall += 1;
+    if (
+      (options.updateConflict && updateCall === 1) ||
+      (options.rollbackConflict && updateCall === 2)
+    ) {
+      return { count: 0 };
+    }
     candidate = {
       ...candidate,
       ...data,
@@ -245,7 +316,7 @@ function createFixture(
       updateMany,
     },
     walletAddress: {
-      findFirst: vi.fn(async () => (watched ? { id: "wallet-1" } : null)),
+      findFirst: vi.fn(async () => (options.watched ? { id: "wallet-1" } : null)),
     },
   } as unknown as PrismaClient;
   const jobs: Array<{
@@ -255,12 +326,12 @@ function createFixture(
   }> = [];
   const queue = {
     add: vi.fn(
-      async (name: string, data: HyperliquidDiscoveryJobData, options: { jobId?: string }) => {
-        if (queueFailure) {
+      async (name: string, data: HyperliquidDiscoveryJobData, jobOptions: { jobId?: string }) => {
+        if (options.queueFailure) {
           throw new Error("candidate filter queue failed");
         }
-        jobs.push({ data, name, options });
-        return { id: options.jobId };
+        jobs.push({ data, name, options: jobOptions });
+        return { id: jobOptions.jobId };
       },
     ),
   } as unknown as Queue<HyperliquidDiscoveryJobData>;

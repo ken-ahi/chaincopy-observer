@@ -364,7 +364,14 @@ describe("discovery routes", () => {
       withDiscoveryService({
         unexcludeCandidate: async (candidateAddress) => {
           receivedAddress = candidateAddress;
-          return { jobId: "filter-candidate-1-manual-unexclude", status: "QUEUED" };
+          return {
+            candidate: {
+              exclusionReasons: ["INSUFFICIENT_HISTORY"],
+              filterStatus: "PENDING",
+            },
+            jobId: "filter-candidate-1-manual-unexclude",
+            status: "QUEUED",
+          };
         },
       }),
     );
@@ -378,6 +385,10 @@ describe("discovery routes", () => {
     expect(response.statusCode).toBe(202);
     expect(receivedAddress).toBe(address);
     expect(response.json()).toEqual({
+      candidate: {
+        exclusionReasons: ["INSUFFICIENT_HISTORY"],
+        filterStatus: "PENDING",
+      },
       jobId: "filter-candidate-1-manual-unexclude",
       status: "QUEUED",
     });
