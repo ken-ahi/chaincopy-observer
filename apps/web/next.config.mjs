@@ -1,8 +1,11 @@
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { resolveBuildMetadata } from "../../scripts/build-metadata.mjs";
+
 const directoryName = path.dirname(fileURLToPath(import.meta.url));
 const development = process.env.NODE_ENV !== "production";
+const buildMetadata = resolveBuildMetadata();
 const contentSecurityPolicy = [
   "default-src 'self'",
   `script-src 'self' 'unsafe-inline'${development ? " 'unsafe-eval'" : ""}`,
@@ -19,6 +22,11 @@ const contentSecurityPolicy = [
 /** @type {import("next").NextConfig} */
 const nextConfig = {
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  env: {
+    NEXT_PUBLIC_BUILD_VERSION: buildMetadata.version,
+    NEXT_PUBLIC_BUILD_COMMIT: buildMetadata.commit,
+    NEXT_PUBLIC_BUILD_TIME: buildMetadata.builtAt,
+  },
   output: "standalone",
   outputFileTracingRoot: path.join(directoryName, "../.."),
   poweredByHeader: false,

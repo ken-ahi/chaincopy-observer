@@ -3,6 +3,7 @@ import { Activity, ArrowLeft, Radar, Telescope } from "lucide-react";
 import Link from "next/link";
 
 import { SignOutButton } from "./sign-out-button";
+import { SystemVersion } from "./system-version";
 
 export function AddressHeader({ email }: { readonly email: string }) {
   return (
@@ -43,7 +44,10 @@ export function AddressHeader({ email }: { readonly email: string }) {
           </nav>
         </div>
         <div className="flex items-center gap-3">
-          <Badge variant="info">Phase 3 · Discovery</Badge>
+          <SystemVersion />
+          <span className="hidden xl:inline-flex">
+            <Badge variant="info">Phase 3 · Discovery</Badge>
+          </span>
           <span className="hidden max-w-48 truncate text-xs text-slate-500 sm:block">{email}</span>
           <SignOutButton />
         </div>

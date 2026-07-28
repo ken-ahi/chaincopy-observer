@@ -1,5 +1,10 @@
 name: chaincopy-observer
 
+x-build-metadata: &build-metadata
+  APP_VERSION: ${APP_VERSION:-}
+  BUILD_COMMIT: ${BUILD_COMMIT:-unknown}
+  BUILD_TIME: ${BUILD_TIME:-unknown}
+
 services:
   postgres:
     image: postgres:17-alpine
@@ -47,6 +52,7 @@ services:
 
   api:
     build:
+      args: *build-metadata
       context: .
       dockerfile: Dockerfile
       target: api
@@ -121,6 +127,7 @@ services:
 
   web:
     build:
+      args: *build-metadata
       context: .
       dockerfile: Dockerfile
       target: web

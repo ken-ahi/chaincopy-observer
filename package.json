@@ -1,6 +1,6 @@
 {
   "name": "chaincopy-observer",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "description": "Single-user analytics and monitoring foundation for public Hyperliquid and Sui/Cetus data.",
   "license": "UNLICENSED",
@@ -22,7 +22,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "tsx prisma/seed.ts"
+    "db:seed": "tsx prisma/seed.ts",
+    "deploy:local": "sh scripts/deploy-local.sh"
   },
   "devDependencies": {
     "@next/eslint-plugin-next": "16.2.11",
