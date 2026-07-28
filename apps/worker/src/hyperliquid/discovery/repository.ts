@@ -242,40 +242,73 @@ export class HyperliquidDiscoveryRepository {
     candidateId: string,
     status: "LIGHT_ELIGIBLE" | "EXCLUDED",
     reasons: ReadonlyArray<string>,
-  ): Promise<void> {
-    await this.database.$transaction(async (transaction) => {
+  ): Promise<boolean> {
+    return this.database.$transaction(async (transaction) => {
       const current = await transaction.addressCandidate.findUniqueOrThrow({
-        select: { filterStatus: true },
+        select: { exclusionReasons: true, filterStatus: true },
         where: { id: candidateId },
       });
-      await transaction.addressCandidate.update({
+      if (current.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
+        return false;
+      }
+      const exclusionReasons =
+        status === "EXCLUDED"
+          ? mergeExclusionReasons(current.exclusionReasons, reasons)
+          : [...reasons];
+      const updated = await transaction.addressCandidate.updateMany({
         data: {
-          exclusionReasons: [...reasons],
+          exclusionReasons,
           filterStatus: status,
         },
-        where: { id: candidateId },
+        where: {
+          id: candidateId,
+          NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } },
+        },
       });
+      if (updated.count !== 1) {
+        return false;
+      }
       if (status === "EXCLUDED" && current.filterStatus !== "EXCLUDED") {
         await transaction.discoveryStats.update({
           data: { excludedCandidates: { increment: 1 } },
           where: { sourceId: this.sourceId },
         });
       }
+      return true;
     });
   }
 
   public async markEnrichmentQueued(candidateId: string): Promise<boolean> {
     const now = new Date();
-    const updated = await this.database.addressCandidate.updateMany({
-      data: { enrichmentStatus: "QUEUED" },
-      where: {
-        id: candidateId,
-        OR: [{ nextEnrichmentAt: null }, { nextEnrichmentAt: { lte: now } }],
-        enrichmentStatus: { in: ["PENDING", "FAILED", "SUCCEEDED", "RATE_LIMITED"] },
-        promotedAt: null,
-      },
+    return this.database.$transaction(async (transaction) => {
+      const candidate = await transaction.addressCandidate.findUniqueOrThrow({
+        select: { address: true },
+        where: { id: candidateId },
+      });
+      const watched = await transaction.walletAddress.findFirst({
+        select: { id: true },
+        where: {
+          address: candidate.address,
+          isWatched: true,
+          sourceId: this.sourceId,
+        },
+      });
+      if (watched) {
+        return false;
+      }
+      const updated = await transaction.addressCandidate.updateMany({
+        data: { enrichmentStatus: "QUEUED" },
+        where: {
+          id: candidateId,
+          NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } },
+          OR: [{ nextEnrichmentAt: null }, { nextEnrichmentAt: { lte: now } }],
+          enrichmentStatus: { in: ["PENDING", "FAILED", "SUCCEEDED", "RATE_LIMITED"] },
+          promotedAt: null,
+          promotedWalletId: null,
+        },
+      });
+      return updated.count === 1;
     });
-    return updated.count === 1;
   }
 
   public async releaseEnrichmentQueue(candidateId: string): Promise<void> {
@@ -294,17 +327,48 @@ export class HyperliquidDiscoveryRepository {
       const candidate = await transaction.addressCandidate.findUniqueOrThrow({
         select: {
           address: true,
+          exclusionReasons: true,
           id: true,
           nextEnrichmentAt: true,
+          promotedAt: true,
+          promotedWalletId: true,
         },
         where: { id: candidateId },
       });
-      if (candidate.nextEnrichmentAt && candidate.nextEnrichmentAt > new Date()) {
+      if (
+        candidate.exclusionReasons.includes("MANUALLY_EXCLUDED") ||
+        candidate.promotedAt ||
+        candidate.promotedWalletId ||
+        (candidate.nextEnrichmentAt && candidate.nextEnrichmentAt > new Date())
+      ) {
+        return null;
+      }
+      const watched = await transaction.walletAddress.findFirst({
+        select: { id: true },
+        where: {
+          address: candidate.address,
+          isWatched: true,
+          sourceId: this.sourceId,
+        },
+      });
+      if (watched) {
         return null;
       }
       const settings = await transaction.discoverySettings.findUniqueOrThrow({
         where: { sourceId: this.sourceId },
       });
+      const started = await transaction.addressCandidate.updateMany({
+        data: { enrichmentStatus: "RUNNING" },
+        where: {
+          id: candidateId,
+          NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } },
+          promotedAt: null,
+          promotedWalletId: null,
+        },
+      });
+      if (started.count !== 1) {
+        return null;
+      }
       await transaction.candidateEnrichmentAttempt.updateMany({
         data: {
           errorMessage: "Superseded by a retried candidate enrichment attempt.",
@@ -322,13 +386,6 @@ export class HyperliquidDiscoveryRepository {
           requestedFrom,
           requestedTo,
         },
-      });
-      await transaction.addressCandidate.update({
-        data: {
-          enrichmentStatus: "RUNNING",
-          exclusionReasons: [],
-        },
-        where: { id: candidateId },
       });
       return {
         address: candidate.address,
@@ -451,41 +508,56 @@ export class HyperliquidDiscoveryRepository {
     endpointFailures: number,
     retrievedFillCount: number,
     historyTruncated: boolean,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const dataQualityScore = calculateDataQualityScore({
       activeDays: result.activeDays,
       endpointFailures,
       fillCount: retrievedFillCount,
       historyTruncated,
     });
-    await this.database.$transaction(async (transaction) => {
+    return this.database.$transaction(async (transaction) => {
       const current = await transaction.addressCandidate.findUniqueOrThrow({
-        select: { filterStatus: true },
+        select: { exclusionReasons: true, filterStatus: true },
         where: { id: candidateId },
       });
-      await transaction.addressCandidate.update({
+      const manuallyExcluded = current.exclusionReasons.includes("MANUALLY_EXCLUDED");
+      const effectiveStatus = manuallyExcluded ? "EXCLUDED" : result.status;
+      const exclusionReasons =
+        manuallyExcluded || result.status === "EXCLUDED"
+          ? mergeExclusionReasons(current.exclusionReasons, result.reasons)
+          : [...result.reasons];
+      const updated = await transaction.addressCandidate.updateMany({
         data: {
           availableFrom: result.availableFrom,
           availableTo: result.availableTo,
           dataQualityScore,
-          exclusionReasons: [...result.reasons],
-          filterStatus: result.status,
+          exclusionReasons,
+          filterStatus: effectiveStatus,
           historyCompleteness: result.completeness,
         },
-        where: { id: candidateId },
+        where: {
+          id: candidateId,
+          ...(manuallyExcluded
+            ? { exclusionReasons: { has: "MANUALLY_EXCLUDED" } }
+            : { NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } } }),
+        },
       });
-      if (result.status === "ELIGIBLE" && current.filterStatus !== "ELIGIBLE") {
+      if (updated.count !== 1) {
+        return false;
+      }
+      if (effectiveStatus === "ELIGIBLE" && current.filterStatus !== "ELIGIBLE") {
         await transaction.discoveryStats.update({
           data: { filterPassed: { increment: 1 } },
           where: { sourceId: this.sourceId },
         });
       }
-      if (result.status === "EXCLUDED" && current.filterStatus !== "EXCLUDED") {
+      if (effectiveStatus === "EXCLUDED" && current.filterStatus !== "EXCLUDED") {
         await transaction.discoveryStats.update({
           data: { excludedCandidates: { increment: 1 } },
           where: { sourceId: this.sourceId },
         });
       }
+      return !manuallyExcluded;
     });
   }
 
@@ -1041,6 +1113,13 @@ function toCandidateReference(
     id: candidate.id,
     tradeCount: candidate.tradeCount,
   };
+}
+
+function mergeExclusionReasons(
+  current: ReadonlyArray<string>,
+  evaluated: ReadonlyArray<string>,
+): Array<string> {
+  return [...new Set([...current, ...evaluated])];
 }
 
 function candidateActors(trade: DiscoveryMarketTradeData): ReadonlyArray<{

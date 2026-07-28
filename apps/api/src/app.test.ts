@@ -334,7 +334,10 @@ describe("discovery routes", () => {
       withDiscoveryService({
         excludeCandidate: async (candidateAddress) => {
           receivedAddress = candidateAddress;
-          return { filterStatus: "EXCLUDED" };
+          return {
+            candidate: { filterStatus: "EXCLUDED" },
+            status: "EXCLUDED",
+          };
         },
       }),
     );
@@ -347,7 +350,10 @@ describe("discovery routes", () => {
 
     expect(response.statusCode).toBe(202);
     expect(receivedAddress).toBe(address);
-    expect(response.json()).toEqual({ filterStatus: "EXCLUDED" });
+    expect(response.json()).toEqual({
+      candidate: { filterStatus: "EXCLUDED" },
+      status: "EXCLUDED",
+    });
   });
 
   it("removes a manual exclusion through DELETE and queues re-evaluation", async () => {
@@ -417,6 +423,7 @@ describe("discovery routes", () => {
 
     expect(response.statusCode).toBe(409);
     expect(response.json()).toEqual({
+      code: "CANDIDATE_STATE_CHANGED",
       error: "conflict",
       message: "Candidate state changed.",
     });

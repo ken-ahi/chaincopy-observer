@@ -77,7 +77,13 @@ test("toggles candidate exclusion, queues re-evaluation, and cleans up", async (
       name: `${e2eExclusionAddress} を除外`,
     });
     await expect(exclude).toBeEnabled();
+    const postRequest = page.waitForRequest(
+      (request) =>
+        request.method() === "POST" &&
+        request.url().endsWith(`/api/discovery/candidates/${e2eExclusionAddress}/exclude`),
+    );
     await exclude.click();
+    await expect(postRequest).resolves.toBeDefined();
     await expect(page.getByText("候補を除外しました。")).toBeVisible();
 
     const unexclude = page.getByRole("button", {
@@ -85,12 +91,24 @@ test("toggles candidate exclusion, queues re-evaluation, and cleans up", async (
     });
     await expect(unexclude).toBeEnabled();
     await expect(page.getByText("INSUFFICIENT_HISTORY, MANUALLY_EXCLUDED")).toBeVisible();
+    await page.waitForTimeout(2_000);
+    runLateLightweightFilter(candidateId);
+    await page.getByRole("button", { name: "探索候補を再読み込み" }).click();
+    await expect(unexclude).toBeEnabled();
+    await expect(page.getByText("INSUFFICIENT_HISTORY, MANUALLY_EXCLUDED")).toBeVisible();
     await page.locator(`a[href="/dashboard/discovery/${e2eExclusionAddress}"]`).click();
     await expect(page).toHaveURL(new RegExp(`/dashboard/discovery/${e2eExclusionAddress}$`));
-    await expect(
-      page.getByRole("button", { name: `${e2eExclusionAddress} を除外解除` }),
-    ).toBeEnabled();
-    await unexclude.click();
+    const detailUnexclude = page.getByRole("button", {
+      name: `${e2eExclusionAddress} を除外解除`,
+    });
+    await expect(detailUnexclude).toBeEnabled();
+    const deleteRequest = page.waitForRequest(
+      (request) =>
+        request.method() === "DELETE" &&
+        request.url().endsWith(`/api/discovery/candidates/${e2eExclusionAddress}/exclude`),
+    );
+    await detailUnexclude.click();
+    await expect(deleteRequest).resolves.toBeDefined();
 
     await expect(page.getByText("候補の除外を解除し、再評価を登録しました。")).toBeVisible();
     await expect(page.getByRole("button", { name: `${e2eExclusionAddress} を除外` })).toBeEnabled();
@@ -115,6 +133,10 @@ test("shows Phase 4 completion without enabling Phase 5 features", async ({ page
 });
 
 function e2eDatabase(): PrismaClient {
+  return new PrismaClient({ datasources: { db: { url: e2eDatabaseUrl() } } });
+}
+
+function e2eDatabaseUrl(): string {
   const url = new URL(
     process.env.DATABASE_URL ??
       "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public",
@@ -123,7 +145,7 @@ function e2eDatabase(): PrismaClient {
     url.hostname = "127.0.0.1";
   }
   url.searchParams.set("schema", "chaincopy_e2e");
-  return new PrismaClient({ datasources: { db: { url: url.toString() } } });
+  return url.toString();
 }
 
 async function seedExclusionCandidate(): Promise<string> {
@@ -181,6 +203,36 @@ async function cleanupExclusionCandidate(candidateId: string): Promise<void> {
     {
       cwd: resolve(process.cwd(), "apps/api"),
       env: { ...process.env, E2E_CANDIDATE_ID: candidateId },
+      stdio: "pipe",
+    },
+  );
+}
+
+function runLateLightweightFilter(candidateId: string): void {
+  execFileSync(
+    process.execPath,
+    [
+      "--import",
+      "tsx",
+      "--input-type=module",
+      "--eval",
+      [
+        'import { PrismaClient } from "@chaincopy/database";',
+        'import { HyperliquidDiscoveryRepository } from "./src/hyperliquid/discovery/repository.ts";',
+        "const database = new PrismaClient({ datasources: { db: { url: process.env.DATABASE_URL } } });",
+        "const candidate = await database.addressCandidate.findUniqueOrThrow({ where: { id: process.env.E2E_CANDIDATE_ID } });",
+        "const repository = new HyperliquidDiscoveryRepository(database, candidate.sourceId);",
+        'await repository.updateLightFilter(candidate.id, "LIGHT_ELIGIBLE", []);',
+        "await database.$disconnect();",
+      ].join(" "),
+    ],
+    {
+      cwd: resolve(process.cwd(), "apps/worker"),
+      env: {
+        ...process.env,
+        DATABASE_URL: e2eDatabaseUrl(),
+        E2E_CANDIDATE_ID: candidateId,
+      },
       stdio: "pipe",
     },
   );

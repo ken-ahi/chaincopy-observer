@@ -26,8 +26,11 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     ]);
     expect(fixture.candidate().filterStatus).toBe("EXCLUDED");
     expect(result).toMatchObject({
-      exclusionReasons: ["INSUFFICIENT_HISTORY", "MANUALLY_EXCLUDED"],
-      filterStatus: "EXCLUDED",
+      candidate: {
+        exclusionReasons: ["INSUFFICIENT_HISTORY", "MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      },
+      status: "EXCLUDED",
     });
   });
 
@@ -37,10 +40,17 @@ describe("PrismaDiscoveryService manual exclusion", () => {
       filterStatus: "EXCLUDED",
     });
 
-    await fixture.service.excludeCandidate(address);
+    const result = await fixture.service.excludeCandidate(address);
 
     expect(fixture.updateMany).not.toHaveBeenCalled();
     expect(fixture.candidate().exclusionReasons).toEqual(["MANUALLY_EXCLUDED"]);
+    expect(result).toMatchObject({
+      candidate: {
+        exclusionReasons: ["MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      },
+      status: "EXCLUDED",
+    });
   });
 
   it("removes only MANUALLY_EXCLUDED, marks PENDING, and enqueues the existing filter job", async () => {
@@ -147,6 +157,18 @@ describe("PrismaDiscoveryService manual exclusion", () => {
     await expect(fixture.service.unexcludeCandidate(address)).rejects.toBeInstanceOf(
       CandidateNotFoundError,
     );
+  });
+
+  it("returns a stable conflict code when unexclude is requested without manual exclusion", async () => {
+    const fixture = createFixture({
+      exclusionReasons: ["AUTOMATIC_REASON"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await expect(fixture.service.unexcludeCandidate(address)).rejects.toMatchObject({
+      code: "CANDIDATE_NOT_MANUALLY_EXCLUDED",
+      name: "CandidateActionConflictError",
+    });
   });
 });
 

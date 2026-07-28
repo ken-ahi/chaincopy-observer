@@ -120,6 +120,14 @@ describe("Discovery exclusion BFF", () => {
       expect(body).not.toContain("redis://");
       expect(body).not.toContain("stack:");
       expect(body).not.toContain("internal-secret-value");
+      if (status === 409) {
+        expect(JSON.parse(body)).toEqual({
+          error: {
+            code: "conflict",
+            message: "候補の状態が変更されたため操作できません。再読み込みしてください。",
+          },
+        });
+      }
     },
   );
 
@@ -149,7 +157,7 @@ async function unexcludeRequest(search = "") {
     ["discovery", "candidates", address, "exclude"],
     {
       allowedQueryKeys: ["cursor", "enrichmentStatus", "filterStatus", "limit", "search"],
-      conflictMessage: "The candidate cannot be changed in its current state.",
+      conflictMessage: "候補の状態が変更されたため操作できません。再読み込みしてください。",
       safeJsonResponse: true,
     },
   );

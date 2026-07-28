@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { exclusionAction, isManuallyExcluded } from "./discovery-candidate-actions";
+import {
+  applyCandidateExclusionState,
+  exclusionAction,
+  isManuallyExcluded,
+} from "./discovery-candidate-actions";
 
 describe("discovery candidate exclusion actions", () => {
   it("shows the exclude action for an ordinary candidate", () => {
@@ -51,4 +55,51 @@ describe("discovery candidate exclusion actions", () => {
     expect(list).toContain('return "処理に失敗しました。"');
     expect(detail).toContain('return "処理に失敗しました。"');
   });
+
+  it("switches to unexclude immediately from the successful POST candidate", () => {
+    const updated = applyCandidateExclusionState(
+      candidateState([]),
+      candidateState(["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"], "EXCLUDED"),
+    );
+
+    expect(updated.exclusionReasons).toEqual(["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"]);
+    expect(updated.filterStatus).toBe("EXCLUDED");
+    expect(exclusionAction(updated).method).toBe("DELETE");
+    expect(exclusionAction(updated).label).toBe("除外解除");
+  });
+
+  it("switches back to exclude immediately from the successful DELETE candidate", () => {
+    const updated = applyCandidateExclusionState(
+      candidateState(["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"], "EXCLUDED"),
+      candidateState(["AUTOMATIC_REASON"], "PENDING"),
+    );
+
+    expect(updated.exclusionReasons).toEqual(["AUTOMATIC_REASON"]);
+    expect(updated.filterStatus).toBe("PENDING");
+    expect(exclusionAction(updated).method).toBe("POST");
+    expect(exclusionAction(updated).label).toBe("除外");
+  });
+
+  it("updates local state before reloading in both list and detail", () => {
+    const list = readFileSync(new URL("./discovery-client.tsx", import.meta.url), "utf8");
+    const detail = readFileSync(new URL("./discovery-detail-client.tsx", import.meta.url), "utf8");
+
+    expect(list.indexOf("setCandidates((current)")).toBeLessThan(
+      list.indexOf("await load();", list.indexOf("setCandidates((current)")),
+    );
+    expect(detail.indexOf("setCandidate((current)")).toBeLessThan(
+      detail.indexOf("await load();", detail.indexOf("setCandidate((current)")),
+    );
+  });
 });
+
+function candidateState(
+  exclusionReasons: ReadonlyArray<string>,
+  filterStatus: "EXCLUDED" | "LIGHT_ELIGIBLE" | "PENDING" = "LIGHT_ELIGIBLE",
+) {
+  return {
+    address: "0x1111111111111111111111111111111111111111",
+    exclusionReasons,
+    filterStatus,
+  };
+}

@@ -17,7 +17,14 @@ export class CandidateNotFoundError extends Error {
 }
 
 export class CandidateActionConflictError extends Error {
-  public constructor(message: string) {
+  public constructor(
+    message: string,
+    public readonly code:
+      | "CANDIDATE_ENRICHMENT_IN_PROGRESS"
+      | "CANDIDATE_MONITORED"
+      | "CANDIDATE_NOT_MANUALLY_EXCLUDED"
+      | "CANDIDATE_STATE_CHANGED" = "CANDIDATE_STATE_CHANGED",
+  ) {
     super(message);
     this.name = "CandidateActionConflictError";
   }
@@ -295,20 +302,32 @@ export class PrismaDiscoveryService implements DiscoveryService {
       );
     }
     if (candidate.promotedAt) {
-      throw new CandidateActionConflictError("A promoted candidate uses monitored-address sync.");
+      throw new CandidateActionConflictError(
+        "A promoted candidate uses monitored-address sync.",
+        "CANDIDATE_MONITORED",
+      );
     }
     if (candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
-      throw new CandidateActionConflictError("A manually excluded candidate cannot be enriched.");
+      throw new CandidateActionConflictError(
+        "A manually excluded candidate cannot be enriched.",
+        "CANDIDATE_STATE_CHANGED",
+      );
     }
     const reserved = await this.database.addressCandidate.updateMany({
       data: { enrichmentStatus: "QUEUED" },
       where: {
         id: candidate.id,
+        NOT: { exclusionReasons: { has: "MANUALLY_EXCLUDED" } },
         enrichmentStatus: { notIn: ["QUEUED", "RUNNING"] },
+        promotedAt: null,
+        updatedAt: candidate.updatedAt,
       },
     });
     if (reserved.count !== 1) {
-      throw new CandidateActionConflictError("Candidate enrichment is already queued or running.");
+      throw new CandidateActionConflictError(
+        "Candidate enrichment is already queued, running, or its state changed.",
+        "CANDIDATE_ENRICHMENT_IN_PROGRESS",
+      );
     }
     const requestedFrom = new Date(now);
     requestedFrom.setUTCFullYear(requestedFrom.getUTCFullYear() - 5);
@@ -341,7 +360,10 @@ export class PrismaDiscoveryService implements DiscoveryService {
     const candidate = await this.findCandidate(addressInput);
     await this.assertCandidateCanBeManuallyChanged(candidate);
     if (candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
-      return toCandidateSummary(candidate);
+      return {
+        candidate: toCandidateSummary(candidate),
+        status: "EXCLUDED",
+      };
     }
     const exclusionReasons = [...new Set([...candidate.exclusionReasons, "MANUALLY_EXCLUDED"])];
     const reserved = await this.database.addressCandidate.updateMany({
@@ -363,7 +385,10 @@ export class PrismaDiscoveryService implements DiscoveryService {
     const updated = await this.database.addressCandidate.findUniqueOrThrow({
       where: { id: candidate.id },
     });
-    return toCandidateSummary(updated);
+    return {
+      candidate: toCandidateSummary(updated),
+      status: "EXCLUDED",
+    };
   }
 
   public async unexcludeCandidate(
@@ -372,7 +397,10 @@ export class PrismaDiscoveryService implements DiscoveryService {
     const candidate = await this.findCandidate(addressInput);
     await this.assertCandidateCanBeManuallyChanged(candidate);
     if (!candidate.exclusionReasons.includes("MANUALLY_EXCLUDED")) {
-      throw new CandidateActionConflictError("The candidate is not manually excluded.");
+      throw new CandidateActionConflictError(
+        "The candidate is not manually excluded.",
+        "CANDIDATE_NOT_MANUALLY_EXCLUDED",
+      );
     }
 
     const exclusionReasons = candidate.exclusionReasons.filter(
@@ -503,11 +531,15 @@ export class PrismaDiscoveryService implements DiscoveryService {
     readonly sourceId: string;
   }): Promise<void> {
     if (candidate.promotedAt || candidate.promotedWalletId) {
-      throw new CandidateActionConflictError("A promoted candidate cannot be excluded.");
+      throw new CandidateActionConflictError(
+        "A promoted candidate cannot be excluded.",
+        "CANDIDATE_MONITORED",
+      );
     }
     if (candidate.enrichmentStatus === "QUEUED" || candidate.enrichmentStatus === "RUNNING") {
       throw new CandidateActionConflictError(
         "A candidate being enriched cannot have its exclusion changed.",
+        "CANDIDATE_ENRICHMENT_IN_PROGRESS",
       );
     }
     const watched = await this.database.walletAddress.findFirst({
@@ -519,7 +551,10 @@ export class PrismaDiscoveryService implements DiscoveryService {
       },
     });
     if (watched) {
-      throw new CandidateActionConflictError("A monitored address cannot be excluded.");
+      throw new CandidateActionConflictError(
+        "A monitored address cannot be excluded.",
+        "CANDIDATE_MONITORED",
+      );
     }
   }
 }

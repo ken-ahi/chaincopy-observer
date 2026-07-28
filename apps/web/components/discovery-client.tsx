@@ -24,7 +24,12 @@ import {
   type EnrichmentStatus,
 } from "@/lib/discovery-api";
 
-import { exclusionAction, isManuallyExcluded } from "./discovery-candidate-actions";
+import {
+  applyCandidateExclusionState,
+  type CandidateExclusionResponse,
+  exclusionAction,
+  isManuallyExcluded,
+} from "./discovery-candidate-actions";
 
 export function DiscoveryClient() {
   const [candidates, setCandidates] = useState<ReadonlyArray<DiscoveryCandidate>>([]);
@@ -103,15 +108,26 @@ export function DiscoveryClient() {
     try {
       await runAction(async () => {
         const exclusion = exclusionAction(candidate);
+        if (action === "exclude") {
+          const result = await apiRequest<CandidateExclusionResponse>(
+            `/api/discovery/candidates/${candidate.address}/exclude`,
+            { method: exclusion.method },
+          );
+          setCandidates((current) =>
+            current.map((item) => applyCandidateExclusionState(item, result.candidate)),
+          );
+          await load();
+          return exclusion.successMessage;
+        }
         const result = await apiRequest<{ readonly jobId?: string }>(
           `/api/discovery/candidates/${candidate.address}/${action}`,
-          { method: action === "exclude" ? exclusion.method : "POST" },
+          { method: "POST" },
         );
         await load();
         if (action === "enrich") return `詳細分析を登録しました: ${result.jobId ?? "queued"}`;
         if (action === "promote")
           return `監視対象への追加を登録しました: ${result.jobId ?? "queued"}`;
-        return exclusion.successMessage;
+        return "処理を登録しました。";
       });
     } finally {
       candidateActionInFlight.current = null;

@@ -147,7 +147,11 @@ function sendDiscoveryError(error: unknown, reply: FastifyReply) {
     return reply.code(404).send({ error: "not_found", message: error.message });
   }
   if (error instanceof CandidateActionConflictError) {
-    return reply.code(409).send({ error: "conflict", message: error.message });
+    return reply.code(409).send({
+      code: error.code,
+      error: "conflict",
+      message: error.message,
+    });
   }
   throw error;
 }

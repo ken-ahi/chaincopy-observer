@@ -10,7 +10,7 @@ async function handle(request: NextRequest, context: RouteContext) {
   const params = await context.params;
   return proxyInternalApi(request, ["discovery", ...(params.path ?? [])], {
     allowedQueryKeys: ["cursor", "enrichmentStatus", "filterStatus", "limit", "search"],
-    conflictMessage: "The candidate cannot be changed in its current state.",
+    conflictMessage: "候補の状態が変更されたため操作できません。再読み込みしてください。",
     safeJsonResponse: true,
   });
 }

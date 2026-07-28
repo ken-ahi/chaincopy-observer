@@ -229,6 +229,157 @@ describe.sequential("Phase 3 candidate persistence integration", () => {
     ).toBe(true);
   });
 
+  it("preserves a manual exclusion when a lightweight filter runs later", async () => {
+    const candidate = await createCandidate("00000001", {
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await expect(repository.updateLightFilter(candidate.id, "LIGHT_ELIGIBLE", [])).resolves.toBe(
+      false,
+    );
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+  });
+
+  it("preserves manual and automatic reasons when a full filter runs later", async () => {
+    const candidate = await createCandidate("00000002", {
+      enrichmentStatus: "SUCCEEDED",
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await expect(
+      repository.updateFullFilter(
+        candidate.id,
+        fullFilterResult(["FULL_FILTER_REASON"], "ELIGIBLE"),
+        0,
+        100,
+        false,
+      ),
+    ).resolves.toBe(false);
+
+    const updated = await database.addressCandidate.findUniqueOrThrow({
+      where: { id: candidate.id },
+    });
+    expect(updated.filterStatus).toBe("EXCLUDED");
+    expect(updated.exclusionReasons).toEqual([
+      "AUTOMATIC_REASON",
+      "MANUALLY_EXCLUDED",
+      "FULL_FILTER_REASON",
+    ]);
+  });
+
+  it("does not overwrite a manual exclusion added after filter context was read", async () => {
+    const candidate = await createCandidate("00000003");
+    const context = await repository.getCandidateFilterContext(candidate.id);
+    expect(context.candidate.exclusionReasons).not.toContain("MANUALLY_EXCLUDED");
+    await database.addressCandidate.update({
+      data: {
+        exclusionReasons: ["MANUALLY_EXCLUDED"],
+        filterStatus: "EXCLUDED",
+      },
+      where: { id: candidate.id },
+    });
+
+    await expect(repository.updateLightFilter(candidate.id, "LIGHT_ELIGIBLE", [])).resolves.toBe(
+      false,
+    );
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      exclusionReasons: ["MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+  });
+
+  it("does not queue enrichment for a manually excluded candidate", async () => {
+    const candidate = await createCandidate("00000004", {
+      exclusionReasons: ["MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await expect(repository.markEnrichmentQueued(candidate.id)).resolves.toBe(false);
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      enrichmentStatus: "PENDING",
+      exclusionReasons: ["MANUALLY_EXCLUDED"],
+    });
+  });
+
+  it("does not queue enrichment for an address already being monitored", async () => {
+    const candidate = await createCandidate("00000005");
+    await database.walletAddress.create({
+      data: {
+        address: candidate.address,
+        isWatched: true,
+        sourceId,
+      },
+    });
+
+    await expect(repository.markEnrichmentQueued(candidate.id)).resolves.toBe(false);
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({ enrichmentStatus: "PENDING" });
+  });
+
+  it("suppresses beginEnrichment without clearing manual exclusion reasons", async () => {
+    const candidate = await createCandidate("00000006", {
+      enrichmentStatus: "QUEUED",
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+
+    await expect(
+      repository.beginEnrichment(
+        candidate.id,
+        new Date("2021-07-26T00:00:00.000Z"),
+        new Date("2026-07-26T00:00:00.000Z"),
+      ),
+    ).resolves.toBeNull();
+
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      enrichmentStatus: "QUEUED",
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+    });
+    await expect(
+      database.candidateEnrichmentAttempt.count({ where: { candidateId: candidate.id } }),
+    ).resolves.toBe(0);
+  });
+
+  it("allows filtering again after the manual exclusion is explicitly removed", async () => {
+    const candidate = await createCandidate("00000007", {
+      exclusionReasons: ["AUTOMATIC_REASON", "MANUALLY_EXCLUDED"],
+      filterStatus: "EXCLUDED",
+    });
+    await database.addressCandidate.update({
+      data: {
+        exclusionReasons: ["AUTOMATIC_REASON"],
+        filterStatus: "PENDING",
+      },
+      where: { id: candidate.id },
+    });
+
+    await expect(repository.updateLightFilter(candidate.id, "LIGHT_ELIGIBLE", [])).resolves.toBe(
+      true,
+    );
+    await expect(
+      database.addressCandidate.findUniqueOrThrow({ where: { id: candidate.id } }),
+    ).resolves.toMatchObject({
+      exclusionReasons: [],
+      filterStatus: "LIGHT_ELIGIBLE",
+    });
+  });
+
   it("recovers an interrupted enrichment exactly once", async () => {
     const candidate = await database.addressCandidate.findUniqueOrThrow({
       where: { sourceId_address: { address: seller, sourceId } },
@@ -363,6 +514,43 @@ describe.sequential("Phase 3 candidate persistence integration", () => {
     ).resolves.toBe(1);
   });
 });
+
+async function createCandidate(
+  suffix: string,
+  data: Partial<{
+    enrichmentStatus: "PENDING" | "QUEUED" | "RUNNING" | "SUCCEEDED" | "FAILED" | "RATE_LIMITED";
+    exclusionReasons: Array<string>;
+    filterStatus:
+      "PENDING" | "LIGHT_ELIGIBLE" | "INSUFFICIENT_HISTORY" | "ELIGIBLE" | "EXCLUDED" | "PROMOTED";
+  }> = {},
+) {
+  return database.addressCandidate.create({
+    data: {
+      address: `0x${runId.replaceAll("-", "").slice(0, 32)}${suffix}`,
+      firstSeenAt: new Date("2026-07-25T00:00:00.000Z"),
+      lastSeenAt: new Date("2026-07-26T00:00:00.000Z"),
+      sourceId,
+      ...data,
+    },
+  });
+}
+
+function fullFilterResult(
+  reasons: ReadonlyArray<string>,
+  status: "ELIGIBLE" | "EXCLUDED" | "INSUFFICIENT_HISTORY",
+) {
+  return {
+    activeDays: 30,
+    activeMonths: 2,
+    availableFrom: new Date("2026-06-01T00:00:00.000Z"),
+    availableTo: new Date("2026-07-26T00:00:00.000Z"),
+    completeness: "COMPLETE" as const,
+    cumulativeNotionalUsd: "100000",
+    dataQualityScore: 90,
+    reasons,
+    status,
+  };
+}
 
 function marketTrade(input: {
   readonly buyerAddress: string;

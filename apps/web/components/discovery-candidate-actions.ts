@@ -2,6 +2,12 @@ import { type DiscoveryCandidate } from "../lib/discovery-api";
 
 export const manuallyExcludedReason = "MANUALLY_EXCLUDED";
 
+export interface CandidateExclusionResponse {
+  readonly candidate: Pick<DiscoveryCandidate, "address" | "exclusionReasons" | "filterStatus">;
+  readonly jobId?: string;
+  readonly status: "EXCLUDED" | "QUEUED";
+}
+
 export function isManuallyExcluded(
   candidate: Pick<DiscoveryCandidate, "exclusionReasons">,
 ): boolean {
@@ -24,5 +30,18 @@ export function exclusionAction(candidate: Pick<DiscoveryCandidate, "exclusionRe
     label: "除外",
     method: "POST",
     successMessage: "候補を除外しました。",
+  };
+}
+
+export function applyCandidateExclusionState<
+  Candidate extends Pick<DiscoveryCandidate, "address" | "exclusionReasons" | "filterStatus">,
+>(current: Candidate, updated: CandidateExclusionResponse["candidate"]): Candidate {
+  if (current.address !== updated.address) {
+    return current;
+  }
+  return {
+    ...current,
+    exclusionReasons: [...updated.exclusionReasons],
+    filterStatus: updated.filterStatus,
   };
 }

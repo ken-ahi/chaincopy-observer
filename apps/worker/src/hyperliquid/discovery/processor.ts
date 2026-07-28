@@ -189,13 +189,17 @@ export class HyperliquidDiscoveryJobProcessor {
     }
     if (context.candidate.enrichmentStatus === "SUCCEEDED") {
       const stored = await this.repository.getStoredFullFilterResult(data.candidateId);
-      await this.repository.updateFullFilter(
-        data.candidateId,
-        stored.result,
-        stored.endpointFailures,
-        stored.retrievedFillCount,
-        stored.historyTruncated,
-      );
+      if (
+        !(await this.repository.updateFullFilter(
+          data.candidateId,
+          stored.result,
+          stored.endpointFailures,
+          stored.retrievedFillCount,
+          stored.historyTruncated,
+        ))
+      ) {
+        return { manuallyExcluded: true };
+      }
       return {
         reasons: stored.result.reasons,
         status: stored.result.status,
@@ -207,7 +211,11 @@ export class HyperliquidDiscoveryJobProcessor {
       knownSystemAddresses: this.knownSystemAddresses,
       now: new Date(data.requestedAt),
     });
-    await this.repository.updateLightFilter(data.candidateId, result.status, result.reasons);
+    if (
+      !(await this.repository.updateLightFilter(data.candidateId, result.status, result.reasons))
+    ) {
+      return { manuallyExcluded: true };
+    }
     if (!result.eligible) {
       return { reasons: result.reasons, status: result.status };
     }

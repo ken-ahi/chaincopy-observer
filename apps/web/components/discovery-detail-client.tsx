@@ -8,7 +8,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiRequestError, apiRequest } from "@/lib/address-api";
 import { type DiscoveryCandidateDetail } from "@/lib/discovery-api";
 
-import { exclusionAction, isManuallyExcluded } from "./discovery-candidate-actions";
+import {
+  applyCandidateExclusionState,
+  type CandidateExclusionResponse,
+  exclusionAction,
+  isManuallyExcluded,
+} from "./discovery-candidate-actions";
 
 export function DiscoveryDetailClient({ address }: { readonly address: string }) {
   const [candidate, setCandidate] = useState<DiscoveryCandidateDetail | null>(null);
@@ -44,14 +49,24 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
     setMessage(null);
     try {
       const exclusion = exclusionAction(candidate);
+      if (kind === "exclude") {
+        const result = await apiRequest<CandidateExclusionResponse>(
+          `/api/discovery/candidates/${address}/exclude`,
+          { method: exclusion.method },
+        );
+        setCandidate((current) =>
+          current ? applyCandidateExclusionState(current, result.candidate) : current,
+        );
+        setMessage(exclusion.successMessage);
+        await load();
+        return;
+      }
       const result = await apiRequest<{ readonly jobId?: string }>(
         `/api/discovery/candidates/${address}/${kind}`,
-        { method: kind === "exclude" ? exclusion.method : "POST" },
+        { method: "POST" },
       );
       setMessage(
-        kind === "exclude"
-          ? exclusion.successMessage
-          : `${kind === "enrich" ? "詳細分析" : "監視対象への追加"}ジョブ: ${result.jobId ?? "queued"}`,
+        `${kind === "enrich" ? "詳細分析" : "監視対象への追加"}ジョブ: ${result.jobId ?? "queued"}`,
       );
       await load();
     } catch (cause) {
