@@ -177,6 +177,10 @@ function validateCoverage(
   return null;
 }
 
-export function warning(code: string, message: string): CalculationWarning {
-  return { code, message };
+export function warning(
+  code: string,
+  message: string,
+  details?: CalculationWarning["details"],
+): CalculationWarning {
+  return { code, ...(details ? { details } : {}), message };
 }

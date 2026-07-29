@@ -242,7 +242,87 @@ describe("Performance overview", () => {
     const html = renderPerformance(performance({ historyCompleteness: "PARTIAL" }));
 
     expect(html).toContain("PARTIAL · 一部不足");
-    expect(html).toContain("履歴が完全ではありません");
+    expect(html).toContain("履歴全体ではなく、信頼できる期間・完了取引のみを対象にしています。");
+  });
+
+  it("renders available Trade metrics while unavailable Return metrics remain placeholders", () => {
+    const winRate: PerformanceMetricDto = {
+      ...twrMetric,
+      metricKey: "winRate",
+      metricValue: "0.5",
+    };
+    const data = performance({ historyCompleteness: "PARTIAL" }, { winRate });
+    const html = renderPerformance({
+      ...data,
+      availability: {
+        exposure: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+        return: {
+          from: null,
+          reasons: ["UNKNOWN_CASH_FLOW"],
+          status: "UNAVAILABLE",
+          to: null,
+        },
+        trade: {
+          from: baseRun.calculationFrom,
+          reasons: ["TRADE_HISTORY_PREFIX_SKIPPED"],
+          status: "PARTIAL",
+          to: baseRun.calculationTo,
+        },
+      },
+    });
+
+    expect(html).toContain(">50%<");
+    expect(html).toContain("一部計算済み");
+    expect(html).toContain("計算不可");
+    expect(html).toContain("分類不能な入出金履歴");
+    expect(html).toContain('data-metric-key="twr"');
+    expect(html).toContain("—");
+  });
+
+  it("renders safe Japanese explanations for skipped prefixes and unknown cash flows", () => {
+    const html = renderPerformance(
+      performance({
+        historyCompleteness: "PARTIAL",
+        warningCodes: ["TRADE_HISTORY_PREFIX_SKIPPED", "UNKNOWN_CASH_FLOW"],
+        warningCount: 2,
+      }),
+    );
+
+    expect(html).toContain(
+      "履歴開始時点で保有中だったポジションを除外し、最初にポジションが0へ戻った後の取引から計算しています。",
+    );
+    expect(html).toContain(
+      "分類できない入出金履歴があるため、収益率・リスク指標は計算できません。",
+    );
+  });
+
+  it("renders lane periods and derived calculation detail counts", () => {
+    const data = performance();
+    const html = renderPerformance({
+      ...data,
+      calculationDetails: {
+        excludedFillCount: 2,
+        excludedFundingCount: 3,
+        navGapCount: 1,
+        tradePrefixes: [
+          {
+            coin: "BTC",
+            skippedFillCount: 2,
+            skippedFrom: "2026-07-01T00:00:00.000Z",
+            trustedFrom: "2026-07-02T00:00:00.000Z",
+          },
+        ],
+        trustedClosedCycleCount: 4,
+        unknownCashFlowCount: 5,
+      },
+    });
+
+    expect(html).toContain("Trade Metrics対象期間");
+    expect(html).toContain("除外Fill件数");
+    expect(html).toContain(">2<");
+    expect(html).toContain("UNKNOWN_CASH_FLOW件数");
+    expect(html).toContain(">5<");
+    expect(html).toContain("BTC: 2件除外");
   });
 
   it("renders Warning Codes in the overview and Calculation Details", () => {
@@ -323,6 +403,24 @@ function performance(
 ): AddressPerformanceDto {
   const run: CalculationRunDto = { ...baseRun, ...runOverrides };
   return {
+    availability: {
+      exposure: { from: null, reasons: [], status: "AVAILABLE", to: null },
+      return: {
+        from: run.calculationFrom,
+        reasons: [],
+        status: "AVAILABLE",
+        to: run.calculationTo,
+      },
+      trade: { from: null, reasons: [], status: "AVAILABLE", to: null },
+    },
+    calculationDetails: {
+      excludedFillCount: 0,
+      excludedFundingCount: 0,
+      navGapCount: 0,
+      tradePrefixes: [],
+      trustedClosedCycleCount: 0,
+      unknownCashFlowCount: 0,
+    },
     walletAddress: "0x1111111111111111111111111111111111111111",
     latestRun: run,
     latestSuccessfulRun: run.status === "SUCCEEDED" ? run : null,

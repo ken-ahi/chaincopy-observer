@@ -39,6 +39,19 @@ import {
 
 const address = "0x1111111111111111111111111111111111111111";
 const emptyOverview: AddressPerformanceDto = {
+  availability: {
+    exposure: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+    return: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+    trade: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+  },
+  calculationDetails: {
+    excludedFillCount: 0,
+    excludedFundingCount: 0,
+    navGapCount: 0,
+    tradePrefixes: [],
+    trustedClosedCycleCount: 0,
+    unknownCashFlowCount: 0,
+  },
   walletAddress: address,
   latestRun: null,
   latestSuccessfulRun: null,

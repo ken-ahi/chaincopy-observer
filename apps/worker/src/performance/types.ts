@@ -84,6 +84,8 @@ export interface PersistedPositionCycle {
 }
 
 export interface PersistedMetric {
+  readonly calculationFrom?: Date;
+  readonly calculationTo?: Date;
   readonly metricKey: string;
   readonly metricValue: string;
   readonly status: "AVAILABLE" | "REFERENCE_ONLY";

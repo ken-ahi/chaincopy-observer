@@ -15,20 +15,23 @@ export interface PerformanceFingerprintInput {
 
 export function createPerformanceInputFingerprint(value: PerformanceFingerprintInput): string {
   const canonical = {
+    accountSnapshots: sortedObjects(value.input.accountSnapshots),
     calculationFrom: value.calculationFrom,
     calculationTo: value.calculationTo,
     calculationVersion: value.calculationVersion,
-    cashFlowIds: sorted(value.input.cashFlows.map((item) => item.externalId)),
-    fillIds: sorted(value.input.fills.map((item) => item.externalId)),
-    fundingIds: sorted(value.input.funding.map((item) => item.externalId)),
+    cashFlows: sortedObjects(value.input.cashFlows),
+    fills: sortedObjects(value.input.fills),
+    funding: sortedObjects(value.input.funding),
     historyCompleteness: value.historyCompleteness,
-    navSnapshotIds: sorted(value.input.navSnapshots.map((item) => item.externalId)),
-    positionSnapshotIds: sorted(value.input.positionSnapshots.map((item) => item.externalId)),
+    navSnapshots: sortedObjects(value.input.navSnapshots),
+    positionSnapshots: sortedObjects(value.input.positionSnapshots),
     walletAddress: value.input.walletAddress.toLowerCase(),
   };
   return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
 }
 
-function sorted(values: readonly string[]): readonly string[] {
-  return [...values].sort();
+function sortedObjects<T extends { readonly externalId: string }>(
+  values: readonly T[],
+): readonly T[] {
+  return [...values].sort((left, right) => left.externalId.localeCompare(right.externalId));
 }

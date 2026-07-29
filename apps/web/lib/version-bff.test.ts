@@ -15,7 +15,7 @@ import { fetchApiVersion } from "./version-bff";
 
 const apiBuildInfo = {
   service: "api",
-  version: "0.2.0",
+  version: "0.3.0",
   commit: "dc37ffc",
   builtAt: "2026-07-28T13:30:00.000Z",
 };

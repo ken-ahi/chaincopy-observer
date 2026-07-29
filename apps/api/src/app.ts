@@ -37,7 +37,7 @@ export async function createApi(options: CreateApiOptions) {
   });
   await app.register(rateLimit, {
     global: true,
-    max: 120,
+    max: options.env.NODE_ENV === "test" ? 10_000 : 120,
     timeWindow: "1 minute",
   });
 

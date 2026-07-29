@@ -22,6 +22,7 @@ import type {
   FillInput,
   FundingInput,
   PositionCycle,
+  TrustedTradeHistory,
 } from "./types.js";
 
 interface InternalCycle {
@@ -66,8 +67,13 @@ export function buildPositionCycles(
     const states = new Map<string, CoinState>();
     const cycles: InternalCycle[] = [];
     const warnings: CalculationWarning[] = [];
+    const trustedFills = selectTrustedFills(parsedFills, warnings);
+    const discontinuedCoins = new Set<string>();
 
-    for (const fill of parsedFills) {
+    for (const fill of trustedFills) {
+      if (discontinuedCoins.has(fill.input.coin)) {
+        continue;
+      }
       const state = states.get(fill.input.coin) ?? {
         averageEntryPrice: null,
         cycle: null,
@@ -75,10 +81,26 @@ export function buildPositionCycles(
         sequence: 0,
       };
       if (!fill.startPosition.eq(state.position)) {
-        throw new CalculationException(
-          state.cycle === null ? "MISSING_INITIAL_STATE" : "POSITION_DISCONTINUITY",
-          `Fill ${fill.input.externalId} startPosition does not match the reconstructed position.`,
+        if (state.cycle !== null) {
+          const untrustedCycleIndex = cycles.indexOf(state.cycle);
+          if (untrustedCycleIndex !== -1) {
+            cycles.splice(untrustedCycleIndex, 1);
+          }
+        }
+        warnings.push(
+          warning(
+            "POSITION_DISCONTINUITY",
+            `Fill ${fill.input.externalId} startPosition does not match the reconstructed position; later fills for ${fill.input.coin} were excluded.`,
+            {
+              actualStartPosition: canonical(fill.startPosition),
+              coin: fill.input.coin,
+              expectedStartPosition: canonical(state.position),
+              externalId: fill.input.externalId,
+            },
+          ),
         );
+        discontinuedCoins.add(fill.input.coin);
+        continue;
       }
 
       const delta = fill.input.side === "BUY" ? fill.size : fill.size.neg();
@@ -162,6 +184,34 @@ export function buildPositionCycles(
   });
 }
 
+export function analyzeTrustedTradeHistory(
+  fills: readonly FillInput[],
+): CalculationResult<TrustedTradeHistory> {
+  const coverage = coverageFromTimes(fills.map((fill) => fill.occurredAt));
+  return execute(coverage, "DERIVED", () => {
+    if (fills.length === 0) {
+      throw new CalculationException("INSUFFICIENT_HISTORY", "At least one fill is required.");
+    }
+    const warnings: CalculationWarning[] = [];
+    const trusted = selectTrustedFills(stableFills(fills), warnings);
+    return {
+      value: {
+        fills: trusted.map((fill) => fill.input),
+        prefixes: warnings
+          .filter((item) => item.code === "TRADE_HISTORY_PREFIX_SKIPPED" && item.details)
+          .map((item) => ({
+            coin: String(item.details?.coin ?? ""),
+            skippedFillCount: Number(item.details?.skippedFillCount ?? 0),
+            skippedFrom: String(item.details?.skippedFrom ?? ""),
+            trustedFrom:
+              typeof item.details?.trustedFrom === "string" ? item.details.trustedFrom : null,
+          })),
+      },
+      warnings,
+    };
+  });
+}
+
 export function calculateCyclePnl(cycle: PositionCycle): CalculationResult<CyclePnl> {
   const coverage = coverageFromTimes(
     [cycle.openedAt, ...(cycle.closedAt ? [cycle.closedAt] : [])],
@@ -240,6 +290,59 @@ function stableFills(fills: readonly FillInput[]): readonly ParsedFill[] {
       (left, right) =>
         left.time - right.time || compareText(left.input.externalId, right.input.externalId),
     );
+}
+
+function selectTrustedFills(
+  fills: readonly ParsedFill[],
+  warnings: CalculationWarning[],
+): readonly ParsedFill[] {
+  const byCoin = new Map<string, ParsedFill[]>();
+  for (const fill of fills) {
+    const coinFills = byCoin.get(fill.input.coin) ?? [];
+    coinFills.push(fill);
+    byCoin.set(fill.input.coin, coinFills);
+  }
+
+  const trusted: ParsedFill[] = [];
+  for (const [coin, coinFills] of [...byCoin.entries()].sort(([left], [right]) =>
+    compareText(left, right),
+  )) {
+    const first = coinFills[0];
+    if (!first) {
+      continue;
+    }
+    if (first.startPosition.isZero()) {
+      trusted.push(...coinFills);
+      continue;
+    }
+
+    const trustedIndex = coinFills.findIndex(
+      (fill, index) => index > 0 && fill.startPosition.isZero(),
+    );
+    const skippedFillCount = trustedIndex === -1 ? coinFills.length : trustedIndex;
+    const trustedFrom =
+      trustedIndex === -1 ? null : (coinFills[trustedIndex]?.input.occurredAt ?? null);
+    warnings.push(
+      warning(
+        "TRADE_HISTORY_PREFIX_SKIPPED",
+        `Coin ${coin} started with an unknown open position; ${skippedFillCount} prefix fills were excluded.`,
+        {
+          coin,
+          skippedFillCount,
+          skippedFrom: first.input.occurredAt,
+          trustedFrom,
+        },
+      ),
+    );
+    if (trustedIndex !== -1) {
+      trusted.push(...coinFills.slice(trustedIndex));
+    }
+  }
+
+  return trusted.sort(
+    (left, right) =>
+      left.time - right.time || compareText(left.input.externalId, right.input.externalId),
+  );
 }
 
 function createCycle(
@@ -322,15 +425,24 @@ function allocateFunding(
 
   for (const item of sorted) {
     const coinCycles = cycles.filter((cycle) => cycle.coin === item.input.coin);
+    let boundaryAmbiguous = false;
     for (const cycle of coinCycles) {
       const openedAt = parseTime(cycle.openedAt, "cycle.openedAt");
       const closedAt = cycle.closedAt ? parseTime(cycle.closedAt, "cycle.closedAt") : null;
       if (item.time === openedAt || item.time === closedAt) {
-        throw new CalculationException(
-          "DATA_ORDER_AMBIGUOUS",
-          `Funding ${item.input.externalId} is simultaneous with a cycle boundary.`,
+        warnings.push(
+          warning(
+            "UNALLOCATED_FUNDING",
+            `Funding ${item.input.externalId} is simultaneous with a cycle boundary and was excluded.`,
+            { externalId: item.input.externalId, reason: "CYCLE_BOUNDARY_AMBIGUOUS" },
+          ),
         );
+        boundaryAmbiguous = true;
+        break;
       }
+    }
+    if (boundaryAmbiguous) {
+      continue;
     }
     const active = coinCycles.filter((cycle) => {
       const openedAt = parseTime(cycle.openedAt, "cycle.openedAt");
@@ -342,6 +454,10 @@ function allocateFunding(
         warning(
           "UNALLOCATED_FUNDING",
           `Funding ${item.input.externalId} could not be allocated to one cycle.`,
+          {
+            externalId: item.input.externalId,
+            reason: active.length === 0 ? "NO_TRUSTED_CYCLE" : "MULTIPLE_CYCLE_CANDIDATES",
+          },
         ),
       );
       continue;

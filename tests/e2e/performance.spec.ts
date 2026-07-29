@@ -4,6 +4,7 @@ import { PrismaClient } from "@prisma/client";
 import {
   e2eInsufficientPerformanceAddress,
   e2eManualPerformanceAddress,
+  e2ePartialPerformanceAddress,
   e2ePerformanceAddress,
   e2eSessionToken,
 } from "./fixtures";
@@ -76,7 +77,7 @@ test.describe("Performance browser E2E", () => {
 
       await expect(page.getByRole("heading", { exact: true, name: "Performance" })).toBeVisible();
       await expect(page.getByText("SUCCEEDED · 計算済み").first()).toBeVisible();
-      await expect(page.getByText("performance-v1").first()).toBeVisible();
+      await expect(page.getByText("performance-v2").first()).toBeVisible();
       await expect(page.getByText("EXACT · 正確").first()).toBeVisible();
       await expect(page.getByText("COMPLETE · 完全").first()).toBeVisible();
       await expect(page.getByText("12.3456%")).toBeVisible();
@@ -104,6 +105,28 @@ test.describe("Performance browser E2E", () => {
       await expect(page.getByRole("heading", { name: /Data Quality Issue/ })).toBeVisible();
 
       await assertNoSensitiveData(page, performanceResponses);
+    });
+
+    test("PARTIALかつUNKNOWN_CASH_FLOWでも信頼済み取引指標を保持する", async ({ page }) => {
+      await openAddressDetail(page, e2ePartialPerformanceAddress);
+
+      await expect(page.getByText("SUCCEEDED · 計算済み").first()).toBeVisible();
+      await expect(page.getByText("PARTIAL · 一部不足").first()).toBeVisible();
+      await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
+      await expect(page.locator('[data-metric-key="twr"]')).toContainText("—");
+      await expect(page.getByText("分類不能な入出金履歴").first()).toBeVisible();
+      await expect(
+        page.getByText(
+          /履歴開始時点で保有中だったポジションを除外し、最初にポジションが0へ戻った後/,
+        ),
+      ).toBeVisible();
+      await expect(page.getByText("除外Fill件数")).toBeVisible();
+      await expect(page.getByText("BTC: 1件除外")).toBeVisible();
+
+      await page.reload();
+      await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
+      await expect(page.locator('[data-metric-key="twr"]')).toContainText("—");
+      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
     test("日次NAV一覧・概要・SVGチャートを表示する", async ({ page }) => {
@@ -231,7 +254,7 @@ async function completeManualPerformanceFixture(): Promise<void> {
       data: {
         calculationFrom: wallet.createdAt,
         calculationTo: wallet.createdAt,
-        calculationVersion: "performance-v1",
+        calculationVersion: "performance-v2",
         completedAt: new Date(),
         deduplicationKey: `phase4-completion-e2e-${Date.now()}`,
         errorCode: "INSUFFICIENT_DATA",

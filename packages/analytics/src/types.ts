@@ -29,6 +29,7 @@ export interface CalculationError {
 
 export interface CalculationWarning {
   readonly code: string;
+  readonly details?: Readonly<Record<string, number | string | null>>;
   readonly message: string;
 }
 
@@ -153,10 +154,38 @@ export type CashFlowCategory =
 
 export interface CashFlowInput {
   readonly amount: string | null;
+  readonly asset?: string | null;
   readonly boundary?: "EXTERNAL" | "INTERNAL" | "UNKNOWN";
+  readonly counterparty?: string | null;
   readonly externalId: string;
+  readonly fee?: string | null;
   readonly occurredAt: string;
+  readonly rawPayload?: string | null;
   readonly type: string;
+}
+
+export interface StoredCashFlowInput {
+  readonly amount: string | null;
+  readonly rawPayload: string | null;
+  readonly type: string;
+  readonly walletAddress: string;
+}
+
+export interface StoredCashFlowClassification {
+  readonly amount: string | null;
+  readonly boundary: "EXTERNAL" | "INTERNAL" | "UNKNOWN";
+}
+
+export interface TradeHistoryPrefix {
+  readonly coin: string;
+  readonly skippedFillCount: number;
+  readonly skippedFrom: string;
+  readonly trustedFrom: string | null;
+}
+
+export interface TrustedTradeHistory {
+  readonly fills: readonly FillInput[];
+  readonly prefixes: readonly TradeHistoryPrefix[];
 }
 
 export interface NormalizedCashFlow {

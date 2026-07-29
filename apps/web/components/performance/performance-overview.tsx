@@ -12,12 +12,14 @@ import {
 import {
   type AddressPerformanceDto,
   type CalculationRunDto,
+  type MetricGroupAvailabilityDto,
   type PerformanceMetricDto,
 } from "../../lib/performance-api";
 import { isPerformanceActionDisabled } from "./performance-polling";
 
 const metricGroups = [
   {
+    lane: "return",
     title: "収益指標",
     metrics: [
       ["cumulativeReturn", "累積収益率"],
@@ -28,6 +30,7 @@ const metricGroups = [
     ],
   },
   {
+    lane: "return",
     title: "リスク調整指標",
     metrics: [
       ["sharpeRatio", "Sharpe Ratio"],
@@ -36,6 +39,7 @@ const metricGroups = [
     ],
   },
   {
+    lane: "trade",
     title: "取引指標",
     metrics: [
       ["profitFactor", "Profit Factor"],
@@ -47,6 +51,7 @@ const metricGroups = [
     ],
   },
   {
+    lane: "exposure",
     title: "レバレッジ・集中度",
     metrics: [
       ["medianLeverage", "中央レバレッジ"],
@@ -178,6 +183,7 @@ function PerformanceResult({
       {showMetrics
         ? metricGroups.map((group) => (
             <MetricGroup
+              availability={data.availability[group.lane]}
               key={group.title}
               metrics={data.metrics}
               title={group.title}
@@ -186,23 +192,35 @@ function PerformanceResult({
           ))
         : null}
 
-      <CalculationDetails run={run} />
+      <CalculationDetails data={data} run={run} />
     </div>
   );
 }
 
 function MetricGroup({
+  availability,
   metrics,
   title,
   values,
 }: {
+  readonly availability: MetricGroupAvailabilityDto;
   readonly metrics: Readonly<Record<string, PerformanceMetricDto>>;
   readonly title: string;
   readonly values: ReadonlyArray<readonly [string, string]>;
 }) {
   return (
     <div>
-      <h3 className="mb-2 text-xs font-semibold text-slate-300">{title}</h3>
+      <div className="mb-2 flex flex-wrap items-center gap-2">
+        <h3 className="text-xs font-semibold text-slate-300">{title}</h3>
+        <span className={availabilityClassName(availability.status)}>
+          {availabilityLabel(availability.status)}
+        </span>
+      </div>
+      {availability.reasons.length > 0 ? (
+        <p className="mb-2 text-xs leading-relaxed text-amber-200">
+          {availability.reasons.map(availabilityReasonLabel).join(" / ")}
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         {values.map(([metricKey, label]) => (
           <PerformanceMetricCard
@@ -245,11 +263,53 @@ function RunNotice({ run }: { readonly run: CalculationRunDto }) {
     cautions.push("精度に注意が必要です。");
   }
   if (run.historyCompleteness !== "COMPLETE") {
-    cautions.push("履歴が完全ではありません。");
+    cautions.push("履歴全体ではなく、信頼できる期間・完了取引のみを対象にしています。");
+  }
+  if (run.warningCodes.includes("TRADE_HISTORY_PREFIX_SKIPPED")) {
+    cautions.push(
+      "履歴開始時点で保有中だったポジションを除外し、最初にポジションが0へ戻った後の取引から計算しています。",
+    );
+  }
+  if (run.warningCodes.includes("UNKNOWN_CASH_FLOW")) {
+    cautions.push(
+      "分類できない入出金履歴があるため、収益率・リスク指標は計算できません。取引指標は信頼できる完了取引のみで計算しています。",
+    );
   }
   return cautions.length > 0 ? (
     <Notice>{`${cautions.join(" ")}正式な評価には利用できない可能性があります。`}</Notice>
   ) : null;
+}
+
+function availabilityLabel(status: MetricGroupAvailabilityDto["status"]): string {
+  if (status === "AVAILABLE") return "計算済み";
+  if (status === "PARTIAL") return "一部計算済み";
+  return "計算不可";
+}
+
+function availabilityClassName(status: MetricGroupAvailabilityDto["status"]): string {
+  const color =
+    status === "AVAILABLE"
+      ? "border-emerald-300/20 bg-emerald-300/10 text-emerald-100"
+      : status === "PARTIAL"
+        ? "border-amber-300/20 bg-amber-300/10 text-amber-100"
+        : "border-rose-300/20 bg-rose-300/10 text-rose-100";
+  return `rounded-full border px-2 py-0.5 text-[10px] ${color}`;
+}
+
+function availabilityReasonLabel(reason: string): string {
+  const labels: Readonly<Record<string, string>> = {
+    CALCULATION_WINDOW_ADJUSTED: "初期NAV不足のため計算開始日を調整",
+    DATA_GAP: "NAV日付Gap",
+    INSUFFICIENT_HISTORY: "評価期間不足",
+    MISSING_CASH_FLOW_BOUNDARY_NAV: "Cash Flow境界NAV不足",
+    NON_POSITIVE_NAV: "有効な初期NAV不足",
+    POSITION_DISCONTINUITY: "取引履歴の連続性不足",
+    RETURN_PERIOD_TRUNCATED_AT_GAP: "NAV日付Gapで評価期間を短縮",
+    TRADE_HISTORY_PREFIX_SKIPPED: "開始時保有ポジションを除外",
+    UNALLOCATED_FUNDING: "割当不能Fundingを除外",
+    UNKNOWN_CASH_FLOW: "分類不能な入出金履歴",
+  };
+  return labels[reason] ?? reason;
 }
 
 function Notice({

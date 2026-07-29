@@ -29,7 +29,7 @@ class FakePerformanceRepository implements PerformanceRepositoryPort {
   public readonly runs: PerformanceRunRecord[] = [];
   public failSave = false;
 
-  public constructor(private readonly input: PerformanceCalculationInput) {}
+  public constructor(public input: PerformanceCalculationInput) {}
 
   public async loadInput(): Promise<PerformanceCalculationInput> {
     return this.input;
@@ -280,26 +280,143 @@ describe("PerformanceCalculationService", () => {
     expect(repository.saved).toHaveLength(2);
   });
 
-  it.each([
-    {
-      name: "a detected gap",
-      overrides: { openIssueTypes: ["TRADE_HISTORY_GAP"] },
-    },
-    {
-      name: "an unknown cash flow",
-      overrides: {
-        cashFlows: [
-          {
-            amount: "1",
-            externalId: "cash-unknown",
-            occurredAt: "2024-01-10T12:00:00.000Z",
-            type: "mystery",
-          },
-        ],
-      },
-    },
-  ])("records INSUFFICIENT_DATA without formal metrics for $name", async ({ overrides }) => {
-    const input = createInput(fixtureAddresses[1], overrides);
+  it("creates a new performance-v2 run after a result-affecting input is added", async () => {
+    const input = createInput(fixtureAddresses[0]);
+    const repository = new FakePerformanceRepository(input);
+    const service = new PerformanceCalculationService(repository);
+    const job = createJob(input);
+
+    await service.process(job);
+    repository.input = {
+      ...input,
+      funding: [
+        ...input.funding,
+        {
+          amount: "1",
+          coin: "BTC",
+          externalId: "new-funding",
+          occurredAt: "2024-01-01T18:00:00.000Z",
+        },
+      ],
+    };
+    const recalculated = await service.process({
+      ...job,
+      requestedAt: "2026-07-26T12:10:00.000Z",
+    });
+
+    expect(PERFORMANCE_CALCULATION_VERSION).toBe("performance-v2");
+    expect(recalculated.reused).toBe(false);
+    expect(repository.runs).toHaveLength(2);
+    expect(repository.runs[0]?.inputFingerprint).not.toBe(repository.runs[1]?.inputFingerprint);
+  });
+
+  it("keeps Trade and Exposure metrics when an unknown cash flow disables Return metrics", async () => {
+    const input = createInput(fixtureAddresses[1], {
+      cashFlows: [
+        {
+          amount: "1",
+          externalId: "cash-unknown",
+          occurredAt: "2024-01-10T12:00:00.000Z",
+          type: "mystery",
+        },
+      ],
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(repository.runs[0]?.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).toEqual(
+      expect.arrayContaining(["winRate", "medianLeverage", "concentrationIndex"]),
+    );
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).not.toContain(
+      "twr",
+    );
+    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
+      "UNKNOWN_CASH_FLOW",
+    );
+  });
+
+  it("recovers trusted completed cycles after a PARTIAL opening prefix", async () => {
+    const input = createInput(fixtureAddresses[1], {
+      fills: [
+        {
+          closedPnl: "1",
+          coin: "BTC",
+          externalId: "prefix-close",
+          fee: "0.1",
+          occurredAt: "2024-01-01T08:00:00.000Z",
+          price: "100",
+          side: "SELL",
+          size: "1",
+          startPosition: "1",
+        },
+        {
+          closedPnl: "0",
+          coin: "BTC",
+          externalId: "trusted-open",
+          fee: "0.1",
+          occurredAt: "2024-01-02T08:00:00.000Z",
+          price: "100",
+          side: "BUY",
+          size: "1",
+          startPosition: "0",
+        },
+        {
+          closedPnl: "10",
+          coin: "BTC",
+          externalId: "trusted-close",
+          fee: "0.1",
+          occurredAt: "2024-01-03T08:00:00.000Z",
+          price: "110",
+          side: "SELL",
+          size: "1",
+          startPosition: "1",
+        },
+      ],
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.completeness).toBe("PARTIAL");
+    expect(repository.saved[0]?.result.cycles).toHaveLength(1);
+    expect(repository.saved[0]?.result.metrics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ metricKey: "winRate", metricValue: "1" })]),
+    );
+    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
+      "TRADE_HISTORY_PREFIX_SKIPPED",
+    );
+  });
+
+  it("keeps Exposure metrics when Trade and Return inputs are unavailable", async () => {
+    const input = createInput(fixtureAddresses[1], {
+      cashFlows: [],
+      fills: [],
+      funding: [],
+      navSnapshots: [],
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).toEqual(
+      expect.arrayContaining(["medianLeverage", "concentrationIndex"]),
+    );
+  });
+
+  it("uses INSUFFICIENT_DATA only when every metric group is unavailable", async () => {
+    const input = createInput(fixtureAddresses[1], {
+      accountSnapshots: [],
+      cashFlows: [],
+      fills: [],
+      funding: [],
+      navSnapshots: [],
+      positionSnapshots: [],
+    });
     const repository = new FakePerformanceRepository(input);
 
     const result = await new PerformanceCalculationService(repository).process(createJob(input));
@@ -307,6 +424,92 @@ describe("PerformanceCalculationService", () => {
     expect(result.status).toBe("INSUFFICIENT_DATA");
     expect(repository.runs[0]?.status).toBe("INSUFFICIENT_DATA");
     expect(repository.saved).toHaveLength(0);
+  });
+
+  it("records an adjusted Return window when the first NAV is later on the requested UTC day", async () => {
+    const input = createInput(fixtureAddresses[1]);
+    const repository = new FakePerformanceRepository(input);
+
+    await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(
+      repository.saved[0]?.result.warnings.find(
+        (warning) => warning.code === "CALCULATION_WINDOW_ADJUSTED",
+      )?.details,
+    ).toMatchObject({
+      effectiveFrom: "2024-01-01T23:59:59.000Z",
+      requestedFrom: "2024-01-01T00:00:00.000Z",
+    });
+  });
+
+  it("adjusts a late NAV start without blocking other lanes", async () => {
+    const original = createInput(fixtureAddresses[1]);
+    const input = createInput(fixtureAddresses[1], {
+      navSnapshots: original.navSnapshots.slice(1),
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).toContain("twr");
+    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
+      "CALCULATION_WINDOW_ADJUSTED",
+    );
+    expect(
+      repository.saved[0]?.result.metrics.find((metric) => metric.metricKey === "twr")
+        ?.calculationFrom,
+    ).toEqual(new Date("2024-01-02T23:59:59.000Z"));
+  });
+
+  it("stops Return at an initial NAV gap while preserving Trade and Exposure", async () => {
+    const original = createInput(fixtureAddresses[1]);
+    const input = createInput(fixtureAddresses[1], {
+      navSnapshots: original.navSnapshots.filter(
+        (snapshot) =>
+          snapshot.occurredAt.startsWith("2024-01-01") ||
+          snapshot.occurredAt.startsWith("2024-01-03"),
+      ),
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).toContain(
+      "winRate",
+    );
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).not.toContain(
+      "twr",
+    );
+    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
+      "RETURN_PERIOD_TRUNCATED_AT_GAP",
+    );
+  });
+
+  it("keeps Trade and Exposure when external cash flow boundary NAV is missing", async () => {
+    const input = createInput(fixtureAddresses[1], {
+      cashFlows: [
+        {
+          amount: "10",
+          boundary: "EXTERNAL",
+          externalId: "deposit",
+          occurredAt: "2024-01-10T12:00:00.000Z",
+          type: "deposit",
+        },
+      ],
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(result.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).not.toContain(
+      "twr",
+    );
+    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
+      "MISSING_CASH_FLOW_BOUNDARY_NAV",
+    );
   });
 
   it("records FAILED and does not report success when transactional persistence fails", async () => {

@@ -7,6 +7,7 @@ export {
   calculateLeverageMetrics,
 } from "./leverage.js";
 export {
+  analyzeTrustedTradeHistory,
   buildPositionCycles,
   calculateAggregatePnl,
   calculateCyclePnl,
@@ -24,6 +25,8 @@ export {
   calculateCumulativeReturn,
   calculateDailyNav,
   calculateTwr,
+  classifyCashFlowInput,
+  classifyStoredCashFlowInput,
   normalizeCashFlows,
   splitReturnPeriodsAtCashFlows,
 } from "./returns.js";

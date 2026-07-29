@@ -11,11 +11,17 @@ import {
   PerformanceStatusBadge,
   PrecisionBadge,
 } from "./performance-status-badge";
-import { type CalculationRunDto } from "../../lib/performance-api";
+import {
+  type AddressPerformanceDto,
+  type CalculationRunDto,
+  type MetricGroupAvailabilityDto,
+} from "../../lib/performance-api";
 
 export function CalculationDetails({
+  data,
   run,
 }: {
+  readonly data: AddressPerformanceDto;
   readonly run: CalculationRunDto;
 }): React.JSX.Element {
   return (
@@ -55,10 +61,59 @@ export function CalculationDetails({
           <Detail label="History Completeness">
             <HistoryCompletenessBadge completeness={run.historyCompleteness} />
           </Detail>
+          <Detail label="利用可能なMetricグループ">{availabilityGroupNames(data, false)}</Detail>
+          <Detail label="利用不能なMetricグループ">{availabilityGroupNames(data, true)}</Detail>
+          <Detail label="Trade Metrics対象期間">
+            {availabilityPeriod(data.availability.trade)}
+          </Detail>
+          <Detail label="Return Metrics対象期間">
+            {availabilityPeriod(data.availability.return)}
+          </Detail>
+          <Detail label="Exposure Metrics対象期間">
+            {availabilityPeriod(data.availability.exposure)}
+          </Detail>
+          <Detail label="除外Fill件数">{String(data.calculationDetails.excludedFillCount)}</Detail>
+          <Detail label="除外Funding件数">
+            {String(data.calculationDetails.excludedFundingCount)}
+          </Detail>
+          <Detail label="信頼済み完了Cycle件数">
+            {String(data.calculationDetails.trustedClosedCycleCount)}
+          </Detail>
+          <Detail label="UNKNOWN_CASH_FLOW件数">
+            {String(data.calculationDetails.unknownCashFlowCount)}
+          </Detail>
+          <Detail label="NAV Gap件数">{String(data.calculationDetails.navGapCount)}</Detail>
+          <Detail label="取引履歴Prefix">
+            {data.calculationDetails.tradePrefixes.length > 0
+              ? data.calculationDetails.tradePrefixes
+                  .map(
+                    (prefix) =>
+                      `${prefix.coin}: ${prefix.skippedFillCount}件除外 (${formatPerformanceDate(prefix.skippedFrom)} → ${formatPerformanceDate(prefix.trustedFrom)})`,
+                  )
+                  .join(" / ")
+              : "—"}
+          </Detail>
         </dl>
       </CardContent>
     </Card>
   );
+}
+
+function availabilityPeriod(availability: MetricGroupAvailabilityDto): string {
+  if (!availability.from || !availability.to) return "—";
+  return `${formatPerformanceDate(availability.from)} – ${formatPerformanceDate(availability.to)}`;
+}
+
+function availabilityGroupNames(data: AddressPerformanceDto, unavailable: boolean): string {
+  const groups = [
+    ["取引指標", data.availability.trade.status],
+    ["収益・リスク指標", data.availability.return.status],
+    ["レバレッジ・集中度", data.availability.exposure.status],
+  ] as const;
+  const names = groups
+    .filter(([, status]) => (status === "UNAVAILABLE") === unavailable)
+    .map(([name]) => name);
+  return names.length > 0 ? names.join(", ") : "—";
 }
 
 function Detail({

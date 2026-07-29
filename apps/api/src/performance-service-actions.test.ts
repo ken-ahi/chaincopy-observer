@@ -75,7 +75,7 @@ describe("PrismaPerformanceService calculation actions", () => {
     const [name, data, options] = queue.add.mock.calls[0] ?? [];
 
     expect(result).toMatchObject({
-      calculationVersion: "performance-v1",
+      calculationVersion: "performance-v2",
       force: false,
       status: "QUEUED",
       walletAddress: address,
@@ -132,7 +132,7 @@ describe("PrismaPerformanceService calculation actions", () => {
       data: {
         calculationFrom: "2024-01-01T00:00:00.000Z",
         calculationTo: "2026-07-25T12:00:00.000Z",
-        calculationVersion: "performance-v1",
+        calculationVersion: "performance-v2",
         force: false,
         requestedAt: "2026-07-27T00:00:00.000Z",
         requestedBy: "admin-api",

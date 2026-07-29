@@ -10,6 +10,36 @@ export type PerformanceCalculationStatus =
 
 export type PerformanceMetricStatus = "AVAILABLE" | "REFERENCE_ONLY";
 export type PositionCycleStatus = "OPEN" | "CLOSED";
+export type MetricAvailabilityStatus = "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+
+export interface MetricGroupAvailabilityDto {
+  readonly from: string | null;
+  readonly reasons: ReadonlyArray<string>;
+  readonly status: MetricAvailabilityStatus;
+  readonly to: string | null;
+}
+
+export interface PerformanceAvailabilityDto {
+  readonly exposure: MetricGroupAvailabilityDto;
+  readonly return: MetricGroupAvailabilityDto;
+  readonly trade: MetricGroupAvailabilityDto;
+}
+
+export interface TradePrefixDto {
+  readonly coin: string;
+  readonly skippedFillCount: number;
+  readonly skippedFrom: string;
+  readonly trustedFrom: string | null;
+}
+
+export interface PerformanceCalculationDetailsDto {
+  readonly excludedFillCount: number;
+  readonly excludedFundingCount: number;
+  readonly navGapCount: number;
+  readonly tradePrefixes: ReadonlyArray<TradePrefixDto>;
+  readonly trustedClosedCycleCount: number;
+  readonly unknownCashFlowCount: number;
+}
 
 export interface CalculationRunDto {
   readonly runId: string;
@@ -42,6 +72,8 @@ export interface PerformanceMetricDto {
 }
 
 export interface AddressPerformanceDto {
+  readonly availability: PerformanceAvailabilityDto;
+  readonly calculationDetails: PerformanceCalculationDetailsDto;
   readonly walletAddress: string;
   readonly latestRun: CalculationRunDto | null;
   readonly latestSuccessfulRun: CalculationRunDto | null;
