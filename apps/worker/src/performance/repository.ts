@@ -1,3 +1,4 @@
+import { classifyStoredCashFlowInput } from "@chaincopy/analytics";
 import {
   type MetricCalculationStatus,
   type PerformanceHistoryCompleteness,
@@ -83,9 +84,14 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
         this.database.cashFlow.findMany({
           orderBy: [{ occurredAt: "asc" }, { externalFlowId: "asc" }],
           select: {
+            amount: true,
+            asset: true,
+            counterparty: true,
             externalFlowId: true,
+            fee: true,
             flowType: true,
             occurredAt: true,
+            rawPayload: true,
             usdValue: true,
           },
           where: { occurredAt: range, walletAddressId },
@@ -144,13 +150,27 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
           grossNotional: snapshot.totalNotionalPosition.toString(),
           occurredAt: snapshot.capturedAt.toISOString(),
         })),
-      cashFlows: cashFlows.map((cashFlow) => ({
-        amount: cashFlow.usdValue?.toString() ?? null,
-        externalId: cashFlow.externalFlowId,
-        occurredAt: cashFlow.occurredAt.toISOString(),
-        type: cashFlow.flowType,
-        ...(isBoundaryDependentFlow(cashFlow.flowType) ? { boundary: "UNKNOWN" as const } : {}),
-      })),
+      cashFlows: cashFlows.map((cashFlow) => {
+        const classification = classifyStoredCashFlowInput({
+          amount: cashFlow.usdValue?.toString() ?? cashFlow.amount?.toString() ?? null,
+          rawPayload: cashFlow.rawPayload,
+          type: cashFlow.flowType,
+          walletAddress: wallet.address,
+        });
+        return {
+          amount: classification.amount,
+          asset: cashFlow.asset,
+          boundary: classification.boundary,
+          counterparty: cashFlow.counterparty,
+          externalId: cashFlow.externalFlowId,
+          // Ledger fees are intentionally not included in Performance cash flow math because
+          // authoritative Fill fees already feed trade PnL and counting both would double charge.
+          fee: cashFlow.fee?.toString() ?? null,
+          occurredAt: cashFlow.occurredAt.toISOString(),
+          rawPayload: cashFlow.rawPayload,
+          type: cashFlow.flowType,
+        };
+      }),
       fills: fills.map((fill) => ({
         closedPnl: fill.closedPnl.toString(),
         coin: fill.coin,
@@ -313,9 +333,9 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
       if (result.metrics.length > 0) {
         await transaction.addressPerformanceMetric.createMany({
           data: result.metrics.map((metric) => ({
-            calculationFrom,
+            calculationFrom: metric.calculationFrom ?? calculationFrom,
             calculationRunId: run.id,
-            calculationTo,
+            calculationTo: metric.calculationTo ?? calculationTo,
             metricKey: metric.metricKey,
             metricValue: metric.metricValue,
             metricVersion: run.calculationVersion,
@@ -374,11 +394,6 @@ const runSelection = {
   status: true,
   walletAddressId: true,
 } as const;
-
-function isBoundaryDependentFlow(flowType: string): boolean {
-  const normalized = flowType.toLowerCase().replaceAll(/[\s_-]/g, "");
-  return normalized === "bridge" || normalized === "transfer";
-}
 
 function unique(values: readonly string[]): string[] {
   return [...new Set(values)].sort();

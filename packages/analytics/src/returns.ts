@@ -25,6 +25,8 @@ import type {
   NormalizedCashFlow,
   ReturnNavPoint,
   ReturnPeriod,
+  StoredCashFlowClassification,
+  StoredCashFlowInput,
 } from "./types.js";
 
 export function calculateDailyNav(
@@ -150,7 +152,7 @@ export function normalizeCashFlows(
           cashFlow.amount === null
             ? null
             : decimal(cashFlow.amount, `${cashFlow.externalId}.amount`);
-        const classification = classifyCashFlow(cashFlow, category, amount);
+        const classification = classifyCashFlowInput(cashFlow, category, amount);
         if (classification.category === "unknown") {
           warnings.push(
             warning(
@@ -342,16 +344,20 @@ function normalizeCategory(type: string): CashFlowCategory {
   if (normalized === "deposit") return "deposit";
   if (normalized === "withdraw" || normalized === "withdrawal") return "withdrawal";
   if (normalized === "bridge") return "bridge";
-  if (normalized === "transfer") return "transfer";
+  if (normalized === "transfer" || normalized === "send" || normalized === "accountclasstransfer") {
+    return "transfer";
+  }
   if (normalized === "reward" || normalized === "referralreward") return "reward";
   if (normalized === "liquidation") return "liquidation";
   return "unknown";
 }
 
-function classifyCashFlow(
+export function classifyCashFlowInput(
   input: CashFlowInput,
-  category: CashFlowCategory,
-  amount: Decimal | null,
+  category: CashFlowCategory = normalizeCategory(input.type),
+  amount: Decimal | null = input.amount === null
+    ? null
+    : decimal(input.amount, `${input.externalId}.amount`),
 ): { readonly category: CashFlowCategory; readonly isExternal: boolean | null } {
   if (category === "deposit") {
     return amount?.gt(0)
@@ -359,7 +365,7 @@ function classifyCashFlow(
       : { category: "unknown", isExternal: null };
   }
   if (category === "withdrawal") {
-    return amount?.lt(0)
+    return amount !== null && !amount.isZero()
       ? { category, isExternal: true }
       : { category: "unknown", isExternal: null };
   }
@@ -376,6 +382,66 @@ function classifyCashFlow(
     return { category, isExternal: false };
   }
   return { category: "unknown", isExternal: null };
+}
+
+export function classifyStoredCashFlowInput(
+  input: StoredCashFlowInput,
+): StoredCashFlowClassification {
+  const normalized = input.type.toLowerCase().replaceAll(/[\s_-]/g, "");
+  if (normalized === "deposit") {
+    return { amount: input.amount, boundary: "EXTERNAL" };
+  }
+  if (normalized === "withdraw" || normalized === "withdrawal") {
+    return {
+      amount:
+        input.amount === null || input.amount.startsWith("-") ? input.amount : `-${input.amount}`,
+      boundary: "EXTERNAL",
+    };
+  }
+
+  const delta = readLedgerDelta(input.rawPayload);
+  if (normalized === "accountclasstransfer" && typeof delta?.toPerp === "boolean") {
+    return { amount: input.amount, boundary: "INTERNAL" };
+  }
+  if (normalized === "send" || normalized === "transfer" || normalized === "bridge") {
+    const user = typeof delta?.user === "string" ? delta.user.toLowerCase() : null;
+    const destination =
+      typeof delta?.destination === "string" ? delta.destination.toLowerCase() : null;
+    const wallet = input.walletAddress.toLowerCase();
+    if (user === wallet && destination && destination !== wallet) {
+      return {
+        amount:
+          input.amount === null || input.amount.startsWith("-") ? input.amount : `-${input.amount}`,
+        boundary: "EXTERNAL",
+      };
+    }
+    if (destination === wallet && user && user !== wallet) {
+      return { amount: input.amount, boundary: "EXTERNAL" };
+    }
+    if (user === wallet && destination === wallet) {
+      return { amount: input.amount, boundary: "INTERNAL" };
+    }
+  }
+  return { amount: input.amount, boundary: "UNKNOWN" };
+}
+
+function readLedgerDelta(rawPayload: string | null): Readonly<Record<string, unknown>> | null {
+  if (rawPayload === null) return null;
+  try {
+    const parsed: unknown = JSON.parse(rawPayload);
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "delta" in parsed &&
+      typeof parsed.delta === "object" &&
+      parsed.delta !== null
+    ) {
+      return parsed.delta as Readonly<Record<string, unknown>>;
+    }
+  } catch {
+    return null;
+  }
+  return null;
 }
 
 interface ParsedNavPoint {

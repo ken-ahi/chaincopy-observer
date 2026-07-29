@@ -8,7 +8,7 @@ export const hyperliquidQueueName = "hyperliquid-sync";
 export const hyperliquidDiscoveryQueueName = "hyperliquid-discovery";
 export const hyperliquidCandidateQueueName = "hyperliquid-candidate-enrichment";
 export const performanceQueueName = "address-performance";
-export const performanceCalculationVersion = "performance-v1";
+export const performanceCalculationVersion = "performance-v2";
 
 export const hyperliquidJobNames = {
   walletBackfill: "hyperliquid-wallet-backfill",

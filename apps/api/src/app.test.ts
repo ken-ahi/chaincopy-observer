@@ -94,6 +94,19 @@ const discoveryService: DiscoveryService = {
 };
 
 const emptyPerformanceOverview: PerformanceOverviewDto = {
+  availability: {
+    exposure: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+    return: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+    trade: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+  },
+  calculationDetails: {
+    excludedFillCount: 0,
+    excludedFundingCount: 0,
+    navGapCount: 0,
+    tradePrefixes: [],
+    trustedClosedCycleCount: 0,
+    unknownCashFlowCount: 0,
+  },
   walletAddress: "0x1111111111111111111111111111111111111111",
   latestRun: null,
   latestSuccessfulRun: null,
@@ -119,14 +132,14 @@ const emptyPerformanceOverview: PerformanceOverviewDto = {
 
 const performanceService: PerformanceService = {
   calculate: async () => ({
-    calculationVersion: "performance-v1",
+    calculationVersion: "performance-v2",
     force: false,
     jobId: "calculate-address-performance-test",
     status: "QUEUED",
     walletAddress: emptyPerformanceOverview.walletAddress,
   }),
   recalculate: async () => ({
-    calculationVersion: "performance-v1",
+    calculationVersion: "performance-v2",
     force: true,
     jobId: "recalculate-address-performance-test",
     status: "QUEUED",
@@ -499,10 +512,25 @@ describe("performance routes", () => {
     warningCodes: [],
     calculationFrom: "2026-07-01T00:00:00.000Z",
     calculationTo: "2026-07-25T00:00:00.000Z",
-    metricVersion: "performance-v1",
+    metricVersion: "performance-v2",
   };
   const overview: PerformanceOverviewDto = {
     ...emptyPerformanceOverview,
+    availability: {
+      exposure: { from: null, reasons: [], status: "UNAVAILABLE", to: null },
+      return: {
+        from: twrMetric.calculationFrom,
+        reasons: [],
+        status: "AVAILABLE",
+        to: twrMetric.calculationTo,
+      },
+      trade: {
+        from: null,
+        reasons: ["INSUFFICIENT_HISTORY"],
+        status: "UNAVAILABLE",
+        to: null,
+      },
+    },
     latestRun: failedRun,
     latestSuccessfulRun: successfulRun,
     latestFailedRun: failedRun,
@@ -592,7 +620,7 @@ describe("performance routes", () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({
-      calculationVersion: "performance-v1",
+      calculationVersion: "performance-v2",
       force: false,
       jobId: "calculate-address-performance-test",
       status: "QUEUED",
@@ -692,6 +720,28 @@ describe("performance routes", () => {
     });
   });
 
+  it("returns backward-compatible metric group availability", async () => {
+    const app = await createTestApi(
+      addressService,
+      withPerformanceService({ getOverview: async () => overview }),
+    );
+
+    const response = await authorizedGet(app, `/api/addresses/${address}/performance`);
+
+    expect(response.json()).toMatchObject({
+      availability: {
+        exposure: { status: "UNAVAILABLE" },
+        return: {
+          from: twrMetric.calculationFrom,
+          status: "AVAILABLE",
+          to: twrMetric.calculationTo,
+        },
+        trade: { reasons: ["INSUFFICIENT_HISTORY"], status: "UNAVAILABLE" },
+      },
+      metrics: { twr: { metricValue: twrMetric.metricValue } },
+    });
+  });
+
   it("returns the latest failed run independently", async () => {
     const app = await createTestApi(
       addressService,
@@ -785,6 +835,35 @@ describe("performance routes", () => {
       items: [successfulRun],
       nextCursor: "run-success",
     });
+  });
+
+  it("keeps v1 and v2 runs visible with the latest v2 run first", async () => {
+    const v1 = calculationRun({
+      calculationVersion: "performance-v1",
+      runId: "run-v1",
+      requestedAt: "2026-07-25T00:00:00.000Z",
+    });
+    const v2 = calculationRun({
+      calculationVersion: "performance-v2",
+      runId: "run-v2",
+      requestedAt: "2026-07-26T00:00:00.000Z",
+    });
+    const app = await createTestApi(
+      addressService,
+      withPerformanceService({
+        listRuns: async () => ({ items: [v2, v1], nextCursor: null }),
+      }),
+    );
+
+    const response = await authorizedGet(
+      app,
+      `/api/addresses/${address}/performance/runs?limit=20`,
+    );
+
+    expect(response.json().items).toEqual([
+      expect.objectContaining({ calculationVersion: "performance-v2", runId: "run-v2" }),
+      expect.objectContaining({ calculationVersion: "performance-v1", runId: "run-v1" }),
+    ]);
   });
 
   it("uses NAV run and cursor pagination parameters", async () => {
@@ -926,7 +1005,7 @@ function calculationRun(overrides: Partial<CalculationRunDto> = {}): Calculation
   return {
     runId: "run-1",
     status: "SUCCEEDED",
-    calculationVersion: "performance-v1",
+    calculationVersion: "performance-v2",
     calculationFrom: "2026-07-01T00:00:00.000Z",
     calculationTo: "2026-07-25T00:00:00.000Z",
     requestedAt: "2026-07-25T00:00:00.000Z",

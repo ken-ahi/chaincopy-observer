@@ -1,5 +1,15 @@
 import { normalizeHyperliquidAddress } from "@chaincopy/blockchain-adapters";
 import {
+  analyzeTrustedTradeHistory,
+  buildPositionCycles,
+  classifyCashFlowInput,
+  classifyStoredCashFlowInput,
+  type CalculationCoverage,
+  type CashFlowInput,
+  type FillInput,
+  type FundingInput,
+} from "@chaincopy/analytics";
+import {
   type MetricCalculationStatus,
   type PerformanceHistoryCompleteness,
   type PerformanceMetricStatus,
@@ -85,6 +95,8 @@ export interface PositionCycleDto {
 }
 
 export interface PerformanceOverviewDto {
+  readonly availability: PerformanceAvailabilityDto;
+  readonly calculationDetails: PerformanceCalculationDetailsDto;
   readonly walletAddress: string;
   readonly latestRun: CalculationRunDto | null;
   readonly latestSuccessfulRun: CalculationRunDto | null;
@@ -106,6 +118,37 @@ export interface PerformanceOverviewDto {
     readonly profitable: number;
     readonly losing: number;
   };
+}
+
+export type MetricAvailabilityStatus = "AVAILABLE" | "PARTIAL" | "UNAVAILABLE";
+
+export interface MetricGroupAvailabilityDto {
+  readonly from: string | null;
+  readonly reasons: ReadonlyArray<string>;
+  readonly status: MetricAvailabilityStatus;
+  readonly to: string | null;
+}
+
+export interface PerformanceAvailabilityDto {
+  readonly exposure: MetricGroupAvailabilityDto;
+  readonly return: MetricGroupAvailabilityDto;
+  readonly trade: MetricGroupAvailabilityDto;
+}
+
+export interface TradePrefixDto {
+  readonly coin: string;
+  readonly skippedFillCount: number;
+  readonly skippedFrom: string;
+  readonly trustedFrom: string | null;
+}
+
+export interface PerformanceCalculationDetailsDto {
+  readonly excludedFillCount: number;
+  readonly excludedFundingCount: number;
+  readonly navGapCount: number;
+  readonly tradePrefixes: ReadonlyArray<TradePrefixDto>;
+  readonly trustedClosedCycleCount: number;
+  readonly unknownCashFlowCount: number;
 }
 
 export interface PerformancePage<T> {
@@ -187,6 +230,13 @@ const runSelect = {
 
 type RunRow = Prisma.MetricCalculationRunGetPayload<{ select: typeof runSelect }>;
 
+interface CalculationDetailsInput {
+  readonly cashFlows: readonly CashFlowInput[];
+  readonly fills: readonly FillInput[];
+  readonly funding: readonly FundingInput[];
+  readonly navDates: readonly string[];
+}
+
 export class PrismaPerformanceService implements PerformanceService {
   public constructor(
     private readonly database: PrismaClient,
@@ -213,6 +263,8 @@ export class PrismaPerformanceService implements PerformanceService {
 
     if (!latestSuccessfulRun) {
       return {
+        availability: emptyAvailability(latestRun?.warningCodes ?? []),
+        calculationDetails: emptyCalculationDetails(),
         walletAddress: address,
         latestRun: latestRun ? toCalculationRunDto(latestRun) : null,
         latestSuccessfulRun: null,
@@ -235,6 +287,7 @@ export class PrismaPerformanceService implements PerformanceService {
       closedCycles,
       profitableCycles,
       losingCycles,
+      calculationInputs,
     ] = await Promise.all([
       this.database.addressPerformanceMetric.findMany({
         orderBy: { metricKey: "asc" },
@@ -304,14 +357,25 @@ export class PrismaPerformanceService implements PerformanceService {
           walletAddressId: wallet.id,
         },
       }),
+      this.loadCalculationDetailsInput(wallet.id, address, latestSuccessfulRun),
     ]);
 
+    const metricDtos = metrics.map(toMetricDto);
+    const availability = deriveAvailability(metricDtos, latestSuccessfulRun);
+    const calculationDetails = deriveCalculationDetails(
+      calculationInputs,
+      latestSuccessfulRun,
+      closedCycles,
+    );
+
     return {
+      availability,
+      calculationDetails,
       walletAddress: address,
       latestRun: latestRun ? toCalculationRunDto(latestRun) : null,
       latestSuccessfulRun: toCalculationRunDto(latestSuccessfulRun),
       latestFailedRun: latestFailedRun ? toCalculationRunDto(latestFailedRun) : null,
-      metrics: Object.fromEntries(metrics.map((metric) => [metric.metricKey, toMetricDto(metric)])),
+      metrics: Object.fromEntries(metricDtos.map((metric) => [metric.metricKey, metric])),
       navSummary: {
         count: navAggregate._count,
         firstDate: firstNav?.date.toISOString() ?? null,
@@ -432,6 +496,93 @@ export class PrismaPerformanceService implements PerformanceService {
     return toPage(rows, query.limit, toPositionCycleDto);
   }
 
+  private async loadCalculationDetailsInput(
+    walletAddressId: string,
+    walletAddress: string,
+    run: RunRow,
+  ): Promise<CalculationDetailsInput> {
+    const range = { gte: run.calculationFrom, lte: run.calculationTo };
+    const [fills, funding, cashFlows, navSnapshots] = await Promise.all([
+      this.database.normalizedTrade.findMany({
+        orderBy: [{ occurredAt: "asc" }, { externalTradeId: "asc" }],
+        select: {
+          closedPnl: true,
+          coin: true,
+          externalTradeId: true,
+          fee: true,
+          occurredAt: true,
+          price: true,
+          side: true,
+          size: true,
+          startPosition: true,
+        },
+        where: { occurredAt: range, walletAddressId },
+      }),
+      this.database.fundingPayment.findMany({
+        orderBy: [{ occurredAt: "asc" }, { externalPaymentId: "asc" }],
+        select: {
+          amount: true,
+          coin: true,
+          externalPaymentId: true,
+          occurredAt: true,
+        },
+        where: { occurredAt: range, walletAddressId },
+      }),
+      this.database.cashFlow.findMany({
+        orderBy: [{ occurredAt: "asc" }, { externalFlowId: "asc" }],
+        select: {
+          amount: true,
+          externalFlowId: true,
+          flowType: true,
+          occurredAt: true,
+          rawPayload: true,
+          usdValue: true,
+        },
+        where: { occurredAt: range, walletAddressId },
+      }),
+      this.database.portfolioSnapshot.findMany({
+        orderBy: [{ capturedAt: "asc" }, { fingerprint: "asc" }],
+        select: { accountValue: true, capturedAt: true },
+        where: { accountValue: { not: null }, capturedAt: range, walletAddressId },
+      }),
+    ]);
+    return {
+      cashFlows: cashFlows.map((flow) => {
+        const classified = classifyStoredCashFlowInput({
+          amount: flow.usdValue?.toString() ?? flow.amount?.toString() ?? null,
+          rawPayload: flow.rawPayload,
+          type: flow.flowType,
+          walletAddress,
+        });
+        return {
+          amount: classified.amount,
+          boundary: classified.boundary,
+          externalId: flow.externalFlowId,
+          occurredAt: flow.occurredAt.toISOString(),
+          type: flow.flowType,
+        };
+      }),
+      fills: fills.map((fill) => ({
+        closedPnl: fill.closedPnl.toString(),
+        coin: fill.coin,
+        externalId: fill.externalTradeId,
+        fee: fill.fee.toString(),
+        occurredAt: fill.occurredAt.toISOString(),
+        price: fill.price.toString(),
+        side: fill.side,
+        size: fill.size.toString(),
+        startPosition: fill.startPosition.toString(),
+      })),
+      funding: funding.map((item) => ({
+        amount: item.amount.toString(),
+        coin: item.coin,
+        externalId: item.externalPaymentId,
+        occurredAt: item.occurredAt.toISOString(),
+      })),
+      navDates: navSnapshots.map((snapshot) => snapshot.capturedAt.toISOString().slice(0, 10)),
+    };
+  }
+
   private async enqueueCalculation(
     addressInput: string,
     force: boolean,
@@ -538,14 +689,26 @@ export class PrismaPerformanceService implements PerformanceService {
     walletAddressId: string,
     status?: MetricCalculationStatus,
   ): Promise<RunRow | null> {
-    return this.database.metricCalculationRun.findFirst({
+    const current = await this.database.metricCalculationRun.findFirst({
       orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
       select: runSelect,
       where: {
+        calculationVersion: performanceCalculationVersion,
         walletAddressId,
         ...(status ? { status } : {}),
       },
     });
+    return (
+      current ??
+      this.database.metricCalculationRun.findFirst({
+        orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+        select: runSelect,
+        where: {
+          walletAddressId,
+          ...(status ? { status } : {}),
+        },
+      })
+    );
   }
 
   private async resolveRun(
@@ -555,6 +718,7 @@ export class PrismaPerformanceService implements PerformanceService {
     const run = await this.database.metricCalculationRun.findFirst({
       select: { id: true },
       where: {
+        ...(!runId ? { calculationVersion: performanceCalculationVersion } : {}),
         walletAddressId,
         ...(runId ? { id: runId } : { status: "SUCCEEDED" }),
       },
@@ -563,7 +727,12 @@ export class PrismaPerformanceService implements PerformanceService {
     if (runId && !run) {
       throw new PerformanceRunNotFoundError(runId);
     }
-    return run;
+    if (run || runId) return run;
+    return this.database.metricCalculationRun.findFirst({
+      orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+      select: { id: true },
+      where: { status: "SUCCEEDED", walletAddressId },
+    });
   }
 
   private async assertRunCursor(walletAddressId: string, cursor: string): Promise<void> {
@@ -799,6 +968,214 @@ function emptyCycleSummary(): PerformanceOverviewDto["cycleSummary"] {
     closed: 0,
     profitable: 0,
     losing: 0,
+  };
+}
+
+const tradeMetricKeys = new Set([
+  "averageLoss",
+  "averageWin",
+  "maxLosingStreak",
+  "profitFactor",
+  "topTradeContribution",
+  "winRate",
+]);
+const returnMetricKeys = new Set([
+  "annualizedReturn",
+  "calmarRatio",
+  "cumulativeReturn",
+  "maxDrawdown",
+  "sharpeRatio",
+  "sortinoRatio",
+  "twr",
+  "volatility",
+]);
+const exposureMetricKeys = new Set([
+  "averageLeverage",
+  "concentrationIndex",
+  "largestCoinShare",
+  "maxLeverage",
+  "medianLeverage",
+  "percentile95Leverage",
+]);
+
+function deriveAvailability(
+  metrics: readonly MetricDto[],
+  run: RunRow,
+): PerformanceAvailabilityDto {
+  const trade = metrics.filter((metric) => tradeMetricKeys.has(metric.metricKey));
+  const returns = metrics.filter((metric) => returnMetricKeys.has(metric.metricKey));
+  const exposure = metrics.filter((metric) => exposureMetricKeys.has(metric.metricKey));
+  return {
+    exposure: groupAvailability(
+      exposure,
+      exposure.length > 0 && exposure.length < exposureMetricKeys.size ? "PARTIAL" : "AVAILABLE",
+      exposure.length === 0 ? relevantReasons(run.warningCodes, exposureReasonCodes) : [],
+    ),
+    return: groupAvailability(
+      returns,
+      run.warningCodes.some((code) => returnPartialReasonCodes.has(code)) ? "PARTIAL" : "AVAILABLE",
+      relevantReasons(run.warningCodes, returnReasonCodes),
+    ),
+    trade: groupAvailability(
+      trade,
+      run.warningCodes.includes("TRADE_HISTORY_PREFIX_SKIPPED") ? "PARTIAL" : "AVAILABLE",
+      relevantReasons(
+        run.warningCodes,
+        trade.length > 0 ? tradeAvailableReasonCodes : tradeReasonCodes,
+      ),
+    ),
+  };
+}
+
+function groupAvailability(
+  metrics: readonly MetricDto[],
+  availableStatus: Extract<MetricAvailabilityStatus, "AVAILABLE" | "PARTIAL">,
+  reasons: readonly string[],
+): MetricGroupAvailabilityDto {
+  if (metrics.length === 0) {
+    return { from: null, reasons, status: "UNAVAILABLE", to: null };
+  }
+  const from = metrics
+    .map((metric) => metric.calculationFrom)
+    .sort()
+    .at(0);
+  const to = metrics
+    .map((metric) => metric.calculationTo)
+    .sort()
+    .at(-1);
+  return {
+    from: from ?? null,
+    reasons,
+    status: availableStatus,
+    to: to ?? null,
+  };
+}
+
+const tradeReasonCodes = new Set([
+  "INSUFFICIENT_HISTORY",
+  "POSITION_DISCONTINUITY",
+  "TRADE_HISTORY_PREFIX_SKIPPED",
+  "UNALLOCATED_FUNDING",
+]);
+const tradeAvailableReasonCodes = new Set(["TRADE_HISTORY_PREFIX_SKIPPED", "UNALLOCATED_FUNDING"]);
+const returnReasonCodes = new Set([
+  "CALCULATION_WINDOW_ADJUSTED",
+  "DATA_GAP",
+  "INSUFFICIENT_HISTORY",
+  "MISSING_CASH_FLOW_BOUNDARY_NAV",
+  "NON_POSITIVE_NAV",
+  "RETURN_PERIOD_TRUNCATED_AT_GAP",
+  "UNKNOWN_CASH_FLOW",
+]);
+const returnPartialReasonCodes = new Set([
+  "CALCULATION_WINDOW_ADJUSTED",
+  "RETURN_PERIOD_TRUNCATED_AT_GAP",
+]);
+const exposureReasonCodes = new Set(["INSUFFICIENT_HISTORY", "INVALID_INPUT"]);
+
+function relevantReasons(
+  warningCodes: readonly string[],
+  accepted: ReadonlySet<string>,
+): readonly string[] {
+  return [...new Set(warningCodes.filter((code) => accepted.has(code)))].sort();
+}
+
+function emptyAvailability(warningCodes: readonly string[]): PerformanceAvailabilityDto {
+  return {
+    exposure: {
+      from: null,
+      reasons: relevantReasons(warningCodes, exposureReasonCodes),
+      status: "UNAVAILABLE",
+      to: null,
+    },
+    return: {
+      from: null,
+      reasons: relevantReasons(warningCodes, returnReasonCodes),
+      status: "UNAVAILABLE",
+      to: null,
+    },
+    trade: {
+      from: null,
+      reasons: relevantReasons(warningCodes, tradeReasonCodes),
+      status: "UNAVAILABLE",
+      to: null,
+    },
+  };
+}
+
+function deriveCalculationDetails(
+  input: CalculationDetailsInput,
+  run: RunRow,
+  trustedClosedCycleCount: number,
+): PerformanceCalculationDetailsDto {
+  const trusted = analyzeTrustedTradeHistory(input.fills);
+  const tradePrefixes = trusted.ok ? trusted.value.prefixes : [];
+  const allocatedFills = new Set<string>();
+  const allocatedFunding = new Set<string>();
+  const coverage: CalculationCoverage = {
+    calculationFrom: run.calculationFrom.toISOString(),
+    calculationTo: run.calculationTo.toISOString(),
+    completeness: run.historyCompleteness === "COMPLETE" ? "COMPLETE" : "PARTIAL",
+    initialStateKnown: true,
+  };
+  for (const coin of [...new Set(input.fills.map((fill) => fill.coin))].sort()) {
+    const cycles = buildPositionCycles(
+      input.fills.filter((fill) => fill.coin === coin),
+      input.funding.filter((item) => item.coin === coin),
+      coverage,
+    );
+    if (!cycles.ok) continue;
+    for (const cycle of cycles.value) {
+      for (const fill of cycle.fills) {
+        allocatedFills.add(fill.externalId);
+      }
+      for (const funding of cycle.fundingEvents) {
+        allocatedFunding.add(funding.externalId);
+      }
+    }
+  }
+  const unknownCashFlowCount = input.cashFlows.reduce((count, cashFlow) => {
+    try {
+      return classifyCashFlowInput(cashFlow).isExternal === null ? count + 1 : count;
+    } catch {
+      return count + 1;
+    }
+  }, 0);
+  return {
+    excludedFillCount: input.fills.filter((fill) => !allocatedFills.has(fill.externalId)).length,
+    excludedFundingCount: input.funding.filter(
+      (funding) => !allocatedFunding.has(funding.externalId),
+    ).length,
+    navGapCount: countNavGaps(input.navDates),
+    tradePrefixes,
+    trustedClosedCycleCount,
+    unknownCashFlowCount,
+  };
+}
+
+function countNavGaps(navDates: readonly string[]): number {
+  const dates = [...new Set(navDates)].sort();
+  let count = 0;
+  for (let index = 1; index < dates.length; index += 1) {
+    const previous = dates[index - 1];
+    const current = dates[index];
+    if (!previous || !current) continue;
+    const difference =
+      (Date.parse(`${current}T00:00:00.000Z`) - Date.parse(`${previous}T00:00:00.000Z`)) /
+      86_400_000;
+    if (difference > 1) count += 1;
+  }
+  return count;
+}
+
+function emptyCalculationDetails(): PerformanceCalculationDetailsDto {
+  return {
+    excludedFillCount: 0,
+    excludedFundingCount: 0,
+    navGapCount: 0,
+    tradePrefixes: [],
+    trustedClosedCycleCount: 0,
+    unknownCashFlowCount: 0,
   };
 }
 

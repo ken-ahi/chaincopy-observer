@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  analyzeTrustedTradeHistory,
   buildPositionCycles,
   calculateAggregatePnl,
   calculateAnnualizedReturn,
@@ -23,6 +24,7 @@ import {
   calculateTwr,
   calculateVolatility,
   calculateWinRate,
+  classifyStoredCashFlowInput,
   normalizeCashFlows,
   splitReturnPeriodsAtCashFlows,
   type CalculationCoverage,
@@ -363,9 +365,179 @@ describe("position cycles and PnL", () => {
       expect(aggregate.ok && aggregate.value.netRealizedPnl).toBe("10");
     }
   });
+
+  it("skips an unknown opening prefix and builds only cycles after the first trusted flat", () => {
+    const fills = [
+      fill({ externalId: "1-prefix", side: "SELL", startPosition: "2" }),
+      fill({
+        externalId: "2-flat",
+        occurredAt: "2024-01-02T00:00:00.000Z",
+        side: "SELL",
+        startPosition: "1",
+      }),
+      fill({
+        externalId: "3-trusted-open",
+        occurredAt: "2024-01-03T00:00:00.000Z",
+        startPosition: "0",
+      }),
+      fill({
+        closedPnl: "10",
+        externalId: "4-trusted-close",
+        occurredAt: "2024-01-04T00:00:00.000Z",
+        price: "110",
+        side: "SELL",
+        startPosition: "1",
+      }),
+    ];
+    const analyzed = analyzeTrustedTradeHistory(fills);
+    const result = build(fills);
+
+    expect(analyzed.ok && analyzed.value.prefixes).toEqual([
+      {
+        coin: "BTC",
+        skippedFillCount: 2,
+        skippedFrom: "2024-01-01T00:00:00.000Z",
+        trustedFrom: "2024-01-03T00:00:00.000Z",
+      },
+    ]);
+    expect(result.ok && result.value).toHaveLength(1);
+    expect(result.ok && result.value[0]?.fills.map((item) => item.externalId)).toEqual([
+      "3-trusted-open",
+      "4-trusted-close",
+    ]);
+    expect(
+      result.ok && result.warnings.some((item) => item.code === "TRADE_HISTORY_PREFIX_SKIPPED"),
+    ).toBe(true);
+  });
+
+  it("does not invent a cycle when an unknown prefix never reaches a trusted flat", () => {
+    const result = build([
+      fill({ externalId: "1-prefix", side: "SELL", startPosition: "2" }),
+      fill({
+        externalId: "2-prefix",
+        occurredAt: "2024-01-02T00:00:00.000Z",
+        side: "SELL",
+        startPosition: "1",
+      }),
+    ]);
+
+    expect(result.ok && result.value).toEqual([]);
+    expect(
+      result.ok &&
+        result.warnings.find((item) => item.code === "TRADE_HISTORY_PREFIX_SKIPPED")?.details,
+    ).toMatchObject({ skippedFillCount: 2, trustedFrom: null });
+  });
+
+  it("preserves completed trusted cycles when a later position discontinuity is detected", () => {
+    const result = build([
+      fill({ externalId: "1-trusted-open" }),
+      fill({
+        closedPnl: "10",
+        externalId: "2-trusted-close",
+        occurredAt: "2024-01-02T00:00:00.000Z",
+        price: "110",
+        side: "SELL",
+        startPosition: "1",
+      }),
+      fill({
+        externalId: "3-unclosed-open",
+        occurredAt: "2024-01-03T00:00:00.000Z",
+        startPosition: "0",
+      }),
+      fill({
+        externalId: "4-discontinuity",
+        occurredAt: "2024-01-04T00:00:00.000Z",
+        startPosition: "0",
+      }),
+      fill({
+        externalId: "5-ignored",
+        occurredAt: "2024-01-05T00:00:00.000Z",
+        startPosition: "1",
+      }),
+    ]);
+
+    expect(result.ok && result.value).toHaveLength(1);
+    expect(result.ok && result.value[0]?.status).toBe("CLOSED");
+    expect(
+      result.ok && result.warnings.find((item) => item.code === "POSITION_DISCONTINUITY")?.details,
+    ).toMatchObject({
+      actualStartPosition: "0",
+      coin: "BTC",
+      expectedStartPosition: "1",
+      externalId: "4-discontinuity",
+    });
+  });
+
+  it("warns and excludes funding before trusted history or on a cycle boundary", () => {
+    const fills = [
+      fill({ externalId: "1-prefix", side: "SELL", startPosition: "1" }),
+      fill({
+        externalId: "2-open",
+        occurredAt: "2024-01-03T00:00:00.000Z",
+        startPosition: "0",
+      }),
+      fill({
+        externalId: "3-close",
+        occurredAt: "2024-01-04T00:00:00.000Z",
+        side: "SELL",
+        startPosition: "1",
+      }),
+    ];
+    const result = buildPositionCycles(
+      fills,
+      [
+        {
+          amount: "1",
+          coin: "BTC",
+          externalId: "before",
+          occurredAt: "2024-01-02T00:00:00.000Z",
+        },
+        {
+          amount: "1",
+          coin: "BTC",
+          externalId: "boundary",
+          occurredAt: "2024-01-03T00:00:00.000Z",
+        },
+      ],
+      completeCoverage,
+    );
+
+    expect(result.ok).toBe(true);
+    expect(result.ok && result.value[0]?.pnl.funding).toBe("0");
+    expect(
+      result.ok && result.warnings.filter((item) => item.code === "UNALLOCATED_FUNDING"),
+    ).toHaveLength(2);
+  });
 });
 
 describe("NAV, cash flow, and returns", () => {
+  it("classifies only explicit stored ledger directions", () => {
+    expect(
+      classifyStoredCashFlowInput({
+        amount: "10",
+        rawPayload: '{"delta":{"type":"accountClassTransfer","toPerp":true}}',
+        type: "accountClassTransfer",
+        walletAddress: "0x1111111111111111111111111111111111111111",
+      }),
+    ).toEqual({ amount: "10", boundary: "INTERNAL" });
+    expect(
+      classifyStoredCashFlowInput({
+        amount: "10",
+        rawPayload:
+          '{"delta":{"type":"send","user":"0x1111111111111111111111111111111111111111","destination":"0x2222222222222222222222222222222222222222"}}',
+        type: "send",
+        walletAddress: "0x1111111111111111111111111111111111111111",
+      }),
+    ).toEqual({ amount: "-10", boundary: "EXTERNAL" });
+    expect(
+      classifyStoredCashFlowInput({
+        amount: "10",
+        rawPayload: '{"delta":{"type":"bridge"}}',
+        type: "bridge",
+        walletAddress: "0x1111111111111111111111111111111111111111",
+      }),
+    ).toEqual({ amount: "10", boundary: "UNKNOWN" });
+  });
   it("selects the latest same-day snapshot and marks Perp-only precision", () => {
     const result = calculateDailyNav(
       [
@@ -543,6 +715,22 @@ describe("drawdown and risk", () => {
 });
 
 describe("trade statistics, leverage, and concentration", () => {
+  it("keeps the performance-v1 closed-cycle trade formulas unchanged", () => {
+    const result = calculateTradeStatistics([
+      closedCycle("win", "10"),
+      closedCycle("loss", "-5", dateAfter(2), dateAfter(3)),
+    ]);
+
+    expect(result.ok && result.value).toMatchObject({
+      averageLoss: "-5",
+      averageWin: "10",
+      maxLosingStreak: 1,
+      profitFactor: "2",
+      singleTradeProfitDependency: "1",
+      winRate: "0.5",
+    });
+  });
+
   it("handles all-winning cycles without returning infinite Profit Factor", () => {
     const cycles = [closedCycle("a", "10"), closedCycle("b", "5", dateAfter(2), dateAfter(3))];
     const factor = calculateProfitFactor(cycles);

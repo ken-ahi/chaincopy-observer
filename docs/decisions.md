@@ -218,3 +218,14 @@
 - 対象: `public`スキーマのPrisma管理対象アプリケーションテーブルと物理カラムを対象とし、`_prisma_migrations`、Prismaのリレーション専用仮想フィールド、存在しないViewは対象外とする。
 - 方式: `@map`、`@@map`と既存Migrationで物理名を確定し、Prismaの`///`を開発時の参照、`COMMENT ON TABLE`と`COMMENT ON COLUMN`をPostgreSQL上の正本、`docs/database.md`を一覧定義として同じ日本語論理名へ揃える。
 - 影響: コメント専用Migrationはテーブル、カラム、型、NULL、Default、Index、Unique、外部キー、リレーションを変更しない。今後の物理テーブル・カラム追加時は、同じMigrationで日本語コメントも追加する。
+
+## ADR-028: Phase 4.1はPerformanceを指標Lane単位でfail closedにする
+
+- 状態: 採用
+- 背景: ADR-026のRun全体を単一成功単位とする方式では、未知Cash Flowや履歴開始前ポジションがあると、独立して検証可能な取引・Exposure指標まで破棄されていた。
+- 方式: Trade、Return/Risk、Exposureを独立Laneとして計算する。各Laneは不明入力を推測せず停止する一方、他Laneの信頼済みMetricは同一transactionで保存する。Metricが1件以上あればRunを`SUCCEEDED`、全LaneでMetricが0件なら`INSUFFICIENT_DATA`とする。
+- Trade: coinごとに最初の`startPosition=0`より前の不明prefixを除外し、以後の0→非0→0の完了Cycleだけを統計へ使う。割当不能Fundingは除外して警告し、取引Lane全体は停止しない。
+- Return: 最初の正のNAVから最初のUTC日付gap直前までを決定論的なeffective期間とする。未知Cash FlowまたはCash Flow境界NAV不足はReturn/Riskだけを停止する。
+- Cash Flow: `deposit`、`withdraw`、raw payloadで当事者と方向を確定できる`send`、`toPerp`を持つ`accountClassTransfer`だけを明示分類する。曖昧なTransfer/BridgeはUNKNOWNのままとする。Ledger feeはFill feeとの二重計上を避けるためPerformanceでは使わない。
+- version: 計算versionを`performance-v2`、アプリversionを`0.3.0`とする。v1 Runは削除せず共存させ、現行Overviewはv2を優先する。
+- 永続化: 既存のRun、Daily NAV、Position Cycle、Metric列で表現できるためPrisma Migrationは追加しない。Lane可用性と診断件数は保存済みMetric・子行・対象期間の生データからAPIで導出する。
