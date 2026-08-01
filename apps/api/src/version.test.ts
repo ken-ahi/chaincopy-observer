@@ -39,7 +39,7 @@ describe("GET /version", () => {
     expect(response.headers["cache-control"]).toBe("no-store");
     expect(response.json()).toEqual({
       service: "api",
-      version: "0.3.0",
+      version: "0.3.1",
       commit: "unknown",
       builtAt: "unknown",
     });

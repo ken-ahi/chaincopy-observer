@@ -132,14 +132,14 @@ const emptyPerformanceOverview: PerformanceOverviewDto = {
 
 const performanceService: PerformanceService = {
   calculate: async () => ({
-    calculationVersion: "performance-v2",
+    calculationVersion: "performance-v3",
     force: false,
     jobId: "calculate-address-performance-test",
     status: "QUEUED",
     walletAddress: emptyPerformanceOverview.walletAddress,
   }),
   recalculate: async () => ({
-    calculationVersion: "performance-v2",
+    calculationVersion: "performance-v3",
     force: true,
     jobId: "recalculate-address-performance-test",
     status: "QUEUED",
@@ -491,6 +491,8 @@ describe("performance routes", () => {
     runId: "run-success",
     status: "SUCCEEDED",
     requestedAt: "2026-07-25T00:00:00.000Z",
+    warningCount: 1,
+    warningCodes: ["PARTIAL_HISTORY"],
   });
   const failedRun = calculationRun({
     runId: "run-failed",
@@ -498,6 +500,8 @@ describe("performance routes", () => {
     requestedAt: "2026-07-26T00:00:00.000Z",
     errorCode: "UPSTREAM_DATA_INVALID",
     errorMessage: "Stored input could not be processed.",
+    warningCount: 1,
+    warningCodes: ["LATEST_RUN_FAILED"],
   });
   const insufficientRun = calculationRun({
     runId: "run-insufficient",
@@ -512,7 +516,12 @@ describe("performance routes", () => {
     warningCodes: [],
     calculationFrom: "2026-07-01T00:00:00.000Z",
     calculationTo: "2026-07-25T00:00:00.000Z",
-    metricVersion: "performance-v2",
+    metricVersion: "performance-v3",
+  };
+  const maxDrawdownMetric: MetricDto = {
+    ...twrMetric,
+    metricKey: "maxDrawdown",
+    metricValue: "-0.335653778998399217",
   };
   const overview: PerformanceOverviewDto = {
     ...emptyPerformanceOverview,
@@ -534,7 +543,7 @@ describe("performance routes", () => {
     latestRun: failedRun,
     latestSuccessfulRun: successfulRun,
     latestFailedRun: failedRun,
-    metrics: { twr: twrMetric },
+    metrics: { maxDrawdown: maxDrawdownMetric, twr: twrMetric },
     navSummary: {
       count: 2,
       firstDate: "2026-07-24T00:00:00.000Z",
@@ -620,7 +629,7 @@ describe("performance routes", () => {
 
     expect(response.statusCode).toBe(202);
     expect(response.json()).toEqual({
-      calculationVersion: "performance-v2",
+      calculationVersion: "performance-v3",
       force: false,
       jobId: "calculate-address-performance-test",
       status: "QUEUED",
@@ -715,8 +724,23 @@ describe("performance routes", () => {
     const response = await authorizedGet(app, `/api/addresses/${address}/performance`);
 
     expect(response.json()).toMatchObject({
-      latestRun: { runId: "run-failed", status: "FAILED" },
-      latestSuccessfulRun: { runId: "run-success", status: "SUCCEEDED" },
+      latestRun: {
+        runId: "run-failed",
+        status: "FAILED",
+        warningCodes: ["LATEST_RUN_FAILED"],
+      },
+      latestSuccessfulRun: {
+        calculationVersion: "performance-v3",
+        runId: "run-success",
+        status: "SUCCEEDED",
+        warningCodes: ["PARTIAL_HISTORY"],
+      },
+      metrics: {
+        maxDrawdown: {
+          metricValue: "-0.335653778998399217",
+          metricVersion: "performance-v3",
+        },
+      },
     });
   });
 
@@ -809,7 +833,7 @@ describe("performance routes", () => {
 
     const response = await authorizedGet(app, `/api/addresses/${address}/performance`);
 
-    expect(response.json().metrics).toEqual({ twr: twrMetric });
+    expect(response.json().metrics).toEqual({ maxDrawdown: maxDrawdownMetric, twr: twrMetric });
     expect(response.json().metrics).not.toHaveProperty("winRate");
   });
 
@@ -837,21 +861,21 @@ describe("performance routes", () => {
     });
   });
 
-  it("keeps v1 and v2 runs visible with the latest v2 run first", async () => {
-    const v1 = calculationRun({
-      calculationVersion: "performance-v1",
-      runId: "run-v1",
-      requestedAt: "2026-07-25T00:00:00.000Z",
-    });
+  it("keeps v2 and v3 runs visible with the latest v3 run first", async () => {
     const v2 = calculationRun({
       calculationVersion: "performance-v2",
       runId: "run-v2",
+      requestedAt: "2026-07-25T00:00:00.000Z",
+    });
+    const v3 = calculationRun({
+      calculationVersion: "performance-v3",
+      runId: "run-v3",
       requestedAt: "2026-07-26T00:00:00.000Z",
     });
     const app = await createTestApi(
       addressService,
       withPerformanceService({
-        listRuns: async () => ({ items: [v2, v1], nextCursor: null }),
+        listRuns: async () => ({ items: [v3, v2], nextCursor: null }),
       }),
     );
 
@@ -861,8 +885,8 @@ describe("performance routes", () => {
     );
 
     expect(response.json().items).toEqual([
+      expect.objectContaining({ calculationVersion: "performance-v3", runId: "run-v3" }),
       expect.objectContaining({ calculationVersion: "performance-v2", runId: "run-v2" }),
-      expect.objectContaining({ calculationVersion: "performance-v1", runId: "run-v1" }),
     ]);
   });
 
@@ -1005,7 +1029,7 @@ function calculationRun(overrides: Partial<CalculationRunDto> = {}): Calculation
   return {
     runId: "run-1",
     status: "SUCCEEDED",
-    calculationVersion: "performance-v2",
+    calculationVersion: "performance-v3",
     calculationFrom: "2026-07-01T00:00:00.000Z",
     calculationTo: "2026-07-25T00:00:00.000Z",
     requestedAt: "2026-07-25T00:00:00.000Z",

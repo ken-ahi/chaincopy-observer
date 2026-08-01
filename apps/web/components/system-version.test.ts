@@ -8,14 +8,14 @@ import { SystemVersionView } from "./system-version";
 
 const web: ServiceBuildInfo = {
   service: "web",
-  version: "0.3.0",
+  version: "0.3.1",
   commit: "dc37ffc",
   builtAt: "2026-07-28T13:30:00.000Z",
 };
 
 const api: ServiceBuildInfo = {
   service: "api",
-  version: "0.3.0",
+  version: "0.3.1",
   commit: "dc37ffc",
   builtAt: "2026-07-28T13:30:00.000Z",
 };
@@ -24,8 +24,8 @@ describe("SystemVersion", () => {
   it("shows Web and API version, commit, build time, and connected state", () => {
     const html = renderVersion(api, "connected");
 
-    expect(html).toContain("Web v0.3.0");
-    expect(html).toContain("API v0.3.0");
+    expect(html).toContain("Web v0.3.1");
+    expect(html).toContain("API v0.3.1");
     expect(html).toContain("dc37ffc");
     expect(html).toContain("接続済み");
     expect(html).toContain("Web builtAt: 2026-07-28T13:30:00.000Z");
@@ -62,7 +62,7 @@ describe("SystemVersion", () => {
     );
 
     expect(html).toContain("Observation deck");
-    expect(html).toContain("Web v0.3.0");
+    expect(html).toContain("Web v0.3.1");
     expect(html).toContain("APIバージョン取得失敗");
   });
 

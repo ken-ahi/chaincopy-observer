@@ -38,12 +38,14 @@ export function calculateMaxDrawdown(
     const parsed = parseWealthPoints(wealthPoints);
     const series = buildDrawdownSeriesFromParsed(parsed);
     let trough = series[0];
-    for (const point of series) {
+    let troughIndex = 0;
+    for (const [index, point] of series.entries()) {
       if (
         trough === undefined ||
         decimal(point.drawdown, "drawdown").lt(decimal(trough.drawdown, "drawdown"))
       ) {
         trough = point;
+        troughIndex = index;
       }
     }
     if (!trough) {
@@ -51,9 +53,9 @@ export function calculateMaxDrawdown(
     }
     const peakTime = parseTime(trough.peakAt, "peakAt");
     const troughTime = parseTime(trough.occurredAt, "troughAt");
-    const recovered = parsed.find(
-      (point) => point.time > troughTime && point.nav.gte(decimal(trough.peakNav, "peakNav")),
-    );
+    const recovered = parsed
+      .slice(troughIndex + 1)
+      .find((point) => point.nav.gte(decimal(trough.peakNav, "peakNav")));
     return {
       value: {
         drawdown: trough.drawdown,
@@ -192,32 +194,49 @@ function parseWealthPoints(wealthPoints: readonly WealthPoint[]): readonly Parse
     throw new CalculationException("INSUFFICIENT_HISTORY", "Wealth points are required.");
   }
   const ids = new Set<string>();
-  return wealthPoints
-    .map((input) => {
-      if (ids.has(input.externalId)) {
-        throw new CalculationException(
-          "DUPLICATE_EVENT",
-          `Duplicate wealth externalId ${input.externalId}.`,
-        );
-      }
-      ids.add(input.externalId);
-      const nav = decimal(input.nav, `${input.externalId}.nav`);
-      if (nav.lte(0)) {
-        throw new CalculationException(
-          "NON_POSITIVE_NAV",
-          `Wealth NAV ${input.externalId} must be positive.`,
-        );
-      }
-      return {
-        input,
-        nav,
-        time: parseTime(input.occurredAt, `${input.externalId}.occurredAt`),
-      };
-    })
-    .sort(
-      (left, right) =>
-        left.time - right.time || compareText(left.input.externalId, right.input.externalId),
+  const hasSequence = wealthPoints.map((point) => point.sequence !== undefined);
+  if (hasSequence.some(Boolean) && !hasSequence.every(Boolean)) {
+    throw new CalculationException(
+      "INVALID_INPUT",
+      "Wealth point sequence must be provided for every point or omitted for every point.",
     );
+  }
+  const parsed = wealthPoints.map((input, index) => {
+    if (ids.has(input.externalId)) {
+      throw new CalculationException(
+        "DUPLICATE_EVENT",
+        `Duplicate wealth externalId ${input.externalId}.`,
+      );
+    }
+    ids.add(input.externalId);
+    if (
+      input.sequence !== undefined &&
+      (!Number.isSafeInteger(input.sequence) || input.sequence !== index)
+    ) {
+      throw new CalculationException(
+        "DATA_ORDER_AMBIGUOUS",
+        "Sequenced wealth points must follow contiguous input-array order starting at zero.",
+      );
+    }
+    const nav = decimal(input.nav, `${input.externalId}.nav`);
+    if (nav.lte(0)) {
+      throw new CalculationException(
+        "NON_POSITIVE_NAV",
+        `Wealth NAV ${input.externalId} must be positive.`,
+      );
+    }
+    return {
+      input,
+      nav,
+      time: parseTime(input.occurredAt, `${input.externalId}.occurredAt`),
+    };
+  });
+  return hasSequence.every(Boolean)
+    ? parsed
+    : parsed.toSorted(
+        (left, right) =>
+          left.time - right.time || compareText(left.input.externalId, right.input.externalId),
+      );
 }
 
 function buildDrawdownSeries(wealthPoints: readonly WealthPoint[]): readonly DrawdownPoint[] {
