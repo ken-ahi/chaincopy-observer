@@ -229,3 +229,16 @@
 - Cash Flow: `deposit`、`withdraw`、raw payloadで当事者と方向を確定できる`send`、`toPerp`を持つ`accountClassTransfer`だけを明示分類する。曖昧なTransfer/BridgeはUNKNOWNのままとする。Ledger feeはFill feeとの二重計上を避けるためPerformanceでは使わない。
 - version: 計算versionを`performance-v2`、アプリversionを`0.3.0`とする。v1 Runは削除せず共存させ、現行Overviewはv2を優先する。
 - 永続化: 既存のRun、Daily NAV、Position Cycle、Metric列で表現できるためPrisma Migrationは追加しない。Lane可用性と診断件数は保存済みMetric・子行・対象期間の生データからAPIで導出する。
+
+## ADR-030: Max Drawdown uses TWR wealth index
+
+- 状態: 採用
+- 背景: `performance-v2`ではTWRと累積収益率を外部Cash Flow境界で分割したReturn Periodから計算する一方、Max Drawdownはraw Daily NAVを直接使用していた。このため、入出金が運用損益ではないにもかかわらず、raw NAVのPeak/Troughへ混入する計算契約の不整合があった。
+- 採用案A: `splitReturnPeriodsAtCashFlows()`が返す順序確定済みReturn Periodを再ソートせず、`W_0 = 1`、`W_i = W_(i-1) × (1 + r_i)`でTWR Wealth Indexを構築する。Max Drawdownは`P_i = max(P_(i-1), W_i)`、`D_i = W_i / P_i - 1`、`min(D_i)`とする。同一timestampは配列sequenceを正本とし、同率Peak/Troughは最初の地点を保持する。終端wealthは`1 + TWR`と一致させる。
+- Cash Flow、Fee、Funding: 外部Cash FlowはReturn Period生成時に一度だけ除外し、Max Drawdown側では金額を再調整しない。FeeとFundingはNAVに反映済みの運用損益としてReturn Periodのreturnだけから伝播させ、別途控除・加算しない。境界NAV不足、未知Cash Flow、非正NAVは推測や近似をせずReturn Laneを停止する。
+- 不採用案B: raw Daily NAV方式の継続は、Cash FlowをDrawdownとして誤認し、TWRとMax Drawdownが異なる収益系列を見るため不採用とした。
+- 不採用案C: Max Drawdown側でCash Flow額を直接加減算する方式、日初・日末への丸め込み、Modified Dietzなどの近似は、二重調整または推測を生み、保存済みの正確な境界NAVがない履歴を正式値に見せるため不採用とした。
+- versionと互換性: 計算versionを`performance-v3`、アプリversionを`0.3.1`とする。v1/v2/v3 RunのDB共存を許可し、v1/v2 RunおよびMetricは更新・削除せず、v3は別Runとして作成する。同じv3入力fingerprintは通常計算で再利用し、`force=true`または結果に影響する入力追加では新規v3 Runを作る。Cash Flowがない履歴はv2と同値になる。
+- API Version選択: `performance-v3`を優先し、v3が存在しない場合に限り`performance-v2`へ明示的にfallbackする。`performance-v1`、未知Version、将来Versionは暗黙fallback対象にしない。fallback選択は暗黙の最新Run取得契約、履歴保持はDB共存契約であり、別の概念とする。明示`runId`取得はWallet所属などの既存安全条件を維持したうえで指定Runを尊重する。現行Versionを更新するときはfallback Versionも明示的に変更する。
+- 永続化/API: Wealth Index中間値はDBへ保存せず、既存`address_performance_metrics`へMax Drawdownを保存する。Prisma schema、Migration、API DTOおよびURLは変更しない。`calculationVersion`と`metricVersion`で診断可能な既存契約を維持する。
+- 残存制約: `accountClassTransfer`など現行分類で内部振替とされたイベントをMax Drawdownだけで再分類しない。Perpetuals評価範囲をまたぐ内部振替を全履歴で確定できない問題は残るため、分類契約を拡張する別フェーズで扱う。

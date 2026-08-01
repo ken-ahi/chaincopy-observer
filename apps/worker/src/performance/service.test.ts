@@ -1,6 +1,7 @@
 import type { PerformanceHistoryCompleteness } from "@chaincopy/database";
 import type { PerformanceJobData } from "@chaincopy/domain";
-import { describe, expect, it } from "vitest";
+import * as analytics from "@chaincopy/analytics";
+import { describe, expect, it, vi } from "vitest";
 
 import { PERFORMANCE_CALCULATION_VERSION } from "./constants.js";
 import type { PerformanceRepositoryPort } from "./repository.js";
@@ -212,9 +213,12 @@ describe("PerformanceCalculationService", () => {
 
     expect(result.status).toBe("SUCCEEDED");
     expect(repository.runs[0]?.status).toBe("SUCCEEDED");
+    expect(repository.runs[0]?.calculationVersion).toBe("performance-v3");
     expect(repository.saved).toHaveLength(1);
     expect(repository.saved[0]?.completeness).toBe("COMPLETE");
     expect(repository.saved[0]?.result.dailyNavs).toHaveLength(31);
+    expect(repository.saved[0]?.result.dailyNavs[0]?.nav).toBe("100");
+    expect(repository.saved[0]?.result.dailyNavs.at(-1)?.nav).toBe("130");
     expect(repository.saved[0]?.result.cycles).toHaveLength(1);
     expect(repository.saved[0]?.result.precision).toBe("DERIVED");
     expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
@@ -239,6 +243,38 @@ describe("PerformanceCalculationService", () => {
         /^-?(?:\d+|\d+\.\d+)$/.test(metric.metricValue),
       ),
     ).toBe(true);
+    const twr = repository.saved[0]?.result.metrics.find((metric) => metric.metricKey === "twr");
+    const cumulativeReturn = repository.saved[0]?.result.metrics.find(
+      (metric) => metric.metricKey === "cumulativeReturn",
+    );
+    const maxDrawdown = repository.saved[0]?.result.metrics.find(
+      (metric) => metric.metricKey === "maxDrawdown",
+    );
+    expect(maxDrawdown).toMatchObject({
+      calculationFrom: new Date("2024-01-01T23:59:59.000Z"),
+      calculationTo: new Date("2024-01-31T23:59:59.000Z"),
+      metricValue: "0",
+    });
+    expect(maxDrawdown?.warningCodes).toEqual(twr?.warningCodes);
+    expect(maxDrawdown?.warningCodes).toEqual(cumulativeReturn?.warningCodes);
+  });
+
+  it("passes a TWR wealth index, not raw Daily NAV, into Max Drawdown", async () => {
+    const input = createInput(fixtureAddresses[0]);
+    const repository = new FakePerformanceRepository(input);
+    const drawdownSpy = vi.spyOn(analytics, "calculateMaxDrawdown");
+
+    await new PerformanceCalculationService(repository).process(createJob(input));
+
+    const wealthPoints = drawdownSpy.mock.calls[0]?.[0];
+    expect(wealthPoints?.[0]).toEqual({
+      externalId: "twr-wealth:0",
+      nav: "1",
+      occurredAt: "2024-01-01T23:59:59.000Z",
+      sequence: 0,
+    });
+    expect(wealthPoints?.at(-1)).toMatchObject({ nav: "1.3", sequence: 30 });
+    drawdownSpy.mockRestore();
   });
 
   it("reuses a successful run for the same fingerprint", async () => {
@@ -280,7 +316,29 @@ describe("PerformanceCalculationService", () => {
     expect(repository.saved).toHaveLength(2);
   });
 
-  it("creates a new performance-v2 run after a result-affecting input is added", async () => {
+  it("keeps a successful v2 run and creates a separate v3 run", async () => {
+    const input = createInput(fixtureAddresses[0]);
+    const repository = new FakePerformanceRepository(input);
+    repository.runs.push({
+      calculationVersion: "performance-v2",
+      deduplicationKey: "v2-deduplication-key",
+      id: "run-v2",
+      inputFingerprint: "v2-input-fingerprint",
+      status: "SUCCEEDED",
+      walletAddressId: input.walletAddressId,
+    });
+
+    await new PerformanceCalculationService(repository).process(createJob(input));
+
+    expect(repository.runs).toEqual([
+      expect.objectContaining({ calculationVersion: "performance-v2", id: "run-v2" }),
+      expect.objectContaining({ calculationVersion: "performance-v3", id: "run-2" }),
+    ]);
+    expect(repository.saved).toHaveLength(1);
+    expect(repository.saved[0]?.run.calculationVersion).toBe("performance-v3");
+  });
+
+  it("creates a new performance-v3 run after a result-affecting input is added", async () => {
     const input = createInput(fixtureAddresses[0]);
     const repository = new FakePerformanceRepository(input);
     const service = new PerformanceCalculationService(repository);
@@ -304,7 +362,7 @@ describe("PerformanceCalculationService", () => {
       requestedAt: "2026-07-26T12:10:00.000Z",
     });
 
-    expect(PERFORMANCE_CALCULATION_VERSION).toBe("performance-v2");
+    expect(PERFORMANCE_CALCULATION_VERSION).toBe("performance-v3");
     expect(recalculated.reused).toBe(false);
     expect(repository.runs).toHaveLength(2);
     expect(repository.runs[0]?.inputFingerprint).not.toBe(repository.runs[1]?.inputFingerprint);
@@ -333,6 +391,18 @@ describe("PerformanceCalculationService", () => {
     expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).not.toContain(
       "twr",
     );
+    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).not.toContain(
+      "maxDrawdown",
+    );
+    expect(repository.saved[0]?.result.cycles).toHaveLength(1);
+    expect(
+      repository.saved[0]?.result.metrics.find((metric) => metric.metricKey === "winRate")
+        ?.metricValue,
+    ).toBe("1");
+    expect(
+      repository.saved[0]?.result.metrics.find((metric) => metric.metricKey === "medianLeverage")
+        ?.metricValue,
+    ).toBe("1.8695652173913043478260869565217391304347826086956521739130434782608695652173913");
     expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
       "UNKNOWN_CASH_FLOW",
     );
@@ -504,11 +574,35 @@ describe("PerformanceCalculationService", () => {
     const result = await new PerformanceCalculationService(repository).process(createJob(input));
 
     expect(result.status).toBe("SUCCEEDED");
-    expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).not.toContain(
+    expect(repository.runs[0]?.status).toBe("SUCCEEDED");
+    expect(repository.saved).toHaveLength(1);
+    const metricKeys = repository.saved[0]?.result.metrics.map((metric) => metric.metricKey) ?? [];
+    const returnMetricKeys: readonly string[] = [
       "twr",
+      "cumulativeReturn",
+      "maxDrawdown",
+      "annualizedReturn",
+      "volatility",
+      "sharpeRatio",
+      "sortinoRatio",
+      "calmarRatio",
+    ];
+    expect(metricKeys.filter((metricKey) => returnMetricKeys.includes(metricKey))).toEqual([]);
+    expect(metricKeys).not.toContain("maxDrawdown");
+    expect(metricKeys).toEqual(
+      expect.arrayContaining(["winRate", "medianLeverage", "concentrationIndex"]),
     );
-    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).toContain(
-      "MISSING_CASH_FLOW_BOUNDARY_NAV",
+    expect(repository.saved[0]?.result.cycles).toHaveLength(1);
+    expect(
+      repository.saved[0]?.result.warnings.find(
+        (warning) => warning.code === "MISSING_CASH_FLOW_BOUNDARY_NAV",
+      ),
+    ).toMatchObject({
+      code: "MISSING_CASH_FLOW_BOUNDARY_NAV",
+      message: "Cash flow deposit requires before/after NAV and an amount.",
+    });
+    expect(repository.saved[0]?.result.warnings.map((warning) => warning.code)).not.toContain(
+      "UNKNOWN_CASH_FLOW",
     );
   });
 

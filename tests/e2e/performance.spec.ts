@@ -77,7 +77,7 @@ test.describe("Performance browser E2E", () => {
 
       await expect(page.getByRole("heading", { exact: true, name: "Performance" })).toBeVisible();
       await expect(page.getByText("SUCCEEDED · 計算済み").first()).toBeVisible();
-      await expect(page.getByText("performance-v2").first()).toBeVisible();
+      await expect(page.getByText("performance-v3").first()).toBeVisible();
       await expect(page.getByText("EXACT · 正確").first()).toBeVisible();
       await expect(page.getByText("COMPLETE · 完全").first()).toBeVisible();
       await expect(page.getByText("12.3456%")).toBeVisible();
@@ -254,7 +254,7 @@ async function completeManualPerformanceFixture(): Promise<void> {
       data: {
         calculationFrom: wallet.createdAt,
         calculationTo: wallet.createdAt,
-        calculationVersion: "performance-v2",
+        calculationVersion: "performance-v3",
         completedAt: new Date(),
         deduplicationKey: `phase4-completion-e2e-${Date.now()}`,
         errorCode: "INSUFFICIENT_DATA",

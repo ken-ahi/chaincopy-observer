@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   buildPositionCycles,
+  buildTwrWealthIndex,
   calculateAnnualizedReturn,
   calculateCalmar,
   calculateCoinConcentration,
@@ -338,26 +339,37 @@ function calculateReturnLane(
   }
   warnings.push(...returnPeriods.warnings);
 
+  const wealthIndex = buildTwrWealthIndex(returnPeriods.value, window.coverage);
   const twr = calculateTwr(returnPeriods.value, window.coverage);
-  const maxDrawdown = calculateMaxDrawdown(
-    dailyNav.value.map((point) => ({
-      externalId: `daily-nav:${point.date}`,
-      nav: point.nav,
-      occurredAt: point.occurredAt,
-    })),
-    window.coverage,
-  );
-  if (!twr.ok || !maxDrawdown.ok) {
+  if (!wealthIndex.ok || !twr.ok) {
+    if (!wealthIndex.ok) warnings.push(asWarning(wealthIndex));
     if (!twr.ok) warnings.push(asWarning(twr));
-    if (!maxDrawdown.ok) warnings.push(asWarning(maxDrawdown));
+    return { dailyNav: dailyNav.value, metrics, warnings };
+  }
+  const maxDrawdown = calculateMaxDrawdown(wealthIndex.value, window.coverage);
+  if (!maxDrawdown.ok) {
+    warnings.push(asWarning(maxDrawdown));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
   warnings.push(...twr.warnings, ...maxDrawdown.warnings);
   const returnWarnings = uniqueWarnings(warnings);
+  const firstReturnPeriod = returnPeriods.value[0];
+  const lastReturnPeriod = returnPeriods.value.at(-1);
+  if (!firstReturnPeriod || !lastReturnPeriod) {
+    warnings.push({
+      code: "INSUFFICIENT_HISTORY",
+      message: "Return periods do not contain an evaluable range.",
+    });
+    return { dailyNav: dailyNav.value, metrics, warnings };
+  }
+  const maxDrawdownPeriod = {
+    from: new Date(firstReturnPeriod.from),
+    to: new Date(lastReturnPeriod.to),
+  };
   metrics.push(
     metric("twr", twr.value.value, returnWarnings, period),
     metric("cumulativeReturn", twr.value.value, returnWarnings, period),
-    metric("maxDrawdown", maxDrawdown.value.drawdown, returnWarnings, period),
+    metric("maxDrawdown", maxDrawdown.value.drawdown, returnWarnings, maxDrawdownPeriod),
   );
 
   const actualFrom = dailyNav.value[0]?.occurredAt;

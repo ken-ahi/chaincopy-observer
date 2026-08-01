@@ -228,6 +228,12 @@ const runSelect = {
   warningCount: true,
 } satisfies Prisma.MetricCalculationRunSelect;
 
+const PERFORMANCE_FALLBACK_VERSION = "performance-v2";
+const PERFORMANCE_READ_VERSION_PRIORITY = [
+  performanceCalculationVersion,
+  PERFORMANCE_FALLBACK_VERSION,
+] as const;
+
 type RunRow = Prisma.MetricCalculationRunGetPayload<{ select: typeof runSelect }>;
 
 interface CalculationDetailsInput {
@@ -689,50 +695,47 @@ export class PrismaPerformanceService implements PerformanceService {
     walletAddressId: string,
     status?: MetricCalculationStatus,
   ): Promise<RunRow | null> {
-    const current = await this.database.metricCalculationRun.findFirst({
-      orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
-      select: runSelect,
-      where: {
-        calculationVersion: performanceCalculationVersion,
-        walletAddressId,
-        ...(status ? { status } : {}),
-      },
-    });
-    return (
-      current ??
-      this.database.metricCalculationRun.findFirst({
+    for (const calculationVersion of PERFORMANCE_READ_VERSION_PRIORITY) {
+      const run = await this.database.metricCalculationRun.findFirst({
         orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
         select: runSelect,
         where: {
+          calculationVersion,
           walletAddressId,
           ...(status ? { status } : {}),
         },
-      })
-    );
+      });
+      if (run) return run;
+    }
+    return null;
   }
 
   private async resolveRun(
     walletAddressId: string,
     runId: string | undefined,
   ): Promise<{ readonly id: string } | null> {
-    const run = await this.database.metricCalculationRun.findFirst({
-      select: { id: true },
-      where: {
-        ...(!runId ? { calculationVersion: performanceCalculationVersion } : {}),
-        walletAddressId,
-        ...(runId ? { id: runId } : { status: "SUCCEEDED" }),
-      },
-      ...(!runId ? { orderBy: [{ requestedAt: "desc" as const }, { id: "desc" as const }] } : {}),
-    });
-    if (runId && !run) {
-      throw new PerformanceRunNotFoundError(runId);
+    if (runId) {
+      const run = await this.database.metricCalculationRun.findFirst({
+        select: { id: true },
+        where: { id: runId, walletAddressId },
+      });
+      if (!run) throw new PerformanceRunNotFoundError(runId);
+      return run;
     }
-    if (run || runId) return run;
-    return this.database.metricCalculationRun.findFirst({
-      orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
-      select: { id: true },
-      where: { status: "SUCCEEDED", walletAddressId },
-    });
+
+    for (const calculationVersion of PERFORMANCE_READ_VERSION_PRIORITY) {
+      const run = await this.database.metricCalculationRun.findFirst({
+        orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+        select: { id: true },
+        where: {
+          calculationVersion,
+          status: "SUCCEEDED",
+          walletAddressId,
+        },
+      });
+      if (run) return run;
+    }
+    return null;
   }
 
   private async assertRunCursor(walletAddressId: string, cursor: string): Promise<void> {

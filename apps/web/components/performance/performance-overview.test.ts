@@ -31,7 +31,7 @@ import {
 const baseRun: CalculationRunDto = {
   runId: "run-20260727",
   status: "SUCCEEDED",
-  calculationVersion: "performance-v1",
+  calculationVersion: "performance-v3",
   calculationFrom: "2026-07-01T00:00:00.000Z",
   calculationTo: "2026-07-27T00:00:00.000Z",
   requestedAt: "2026-07-27T00:01:00.000Z",
@@ -55,7 +55,13 @@ const twrMetric: PerformanceMetricDto = {
   warningCodes: [],
   calculationFrom: baseRun.calculationFrom,
   calculationTo: baseRun.calculationTo,
-  metricVersion: "performance-v1",
+  metricVersion: "performance-v3",
+};
+
+const maxDrawdownMetric: PerformanceMetricDto = {
+  ...twrMetric,
+  metricKey: "maxDrawdown",
+  metricValue: "-0.335653778998399217",
 };
 
 describe("Performance overview", () => {
@@ -94,6 +100,33 @@ describe("Performance overview", () => {
     expect(html).toContain("SUCCEEDED · 計算済み");
     expect(html).toContain("TWR");
     expect(html).toContain("12.3456%");
+  });
+
+  it("renders v3 Max Drawdown as a percentage with diagnostic versions", () => {
+    const html = renderPerformance(
+      performance({}, { maxDrawdown: maxDrawdownMetric, twr: twrMetric }),
+    );
+
+    expect(html).toContain("-33.5653%");
+    expect(html).toContain("performance-v3");
+  });
+
+  it("continues to render a v2 fallback result", () => {
+    const v2Metric = { ...maxDrawdownMetric, metricVersion: "performance-v2" };
+    const html = renderPerformance(
+      performance({ calculationVersion: "performance-v2" }, { maxDrawdown: v2Metric }),
+    );
+
+    expect(html).toContain("-33.5653%");
+    expect(html).toContain("performance-v2");
+  });
+
+  it("does not convert a missing Max Drawdown to zero", () => {
+    const html = renderPerformance(performance());
+    const card = /data-metric-key="maxDrawdown"[\s\S]*?<\/section>/u.exec(html)?.[0];
+
+    expect(card).toBeDefined();
+    expect(card).not.toContain(">0<");
   });
 
   it("renders INSUFFICIENT_DATA without showing metrics as results", () => {
@@ -220,6 +253,7 @@ describe("Performance overview", () => {
 
   it("formats percentage metrics by shifting the Decimal string", () => {
     expect(formatMetricValue("twr", "0.123456789012345678")).toBe("12.3456%");
+    expect(formatMetricValue("maxDrawdown", "-0.335653778998399217")).toBe("-33.5653%");
     expect(formatMetricValue("volatility", "0.000000001")).toBe("<0.0001%");
   });
 

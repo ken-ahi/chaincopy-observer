@@ -111,8 +111,8 @@ test("shows matching Web and API build information", async ({ page }) => {
   await page.goto("/dashboard");
 
   const version = page.getByLabel("稼働バージョン");
-  await expect(version).toContainText("Web v0.3.0");
-  await expect(version).toContainText("API v0.3.0");
+  await expect(version).toContainText("Web v0.3.1");
+  await expect(version).toContainText("API v0.3.1");
   await expect(version).toContainText("unknown");
   await expect(version).toContainText("接続済み");
 });
@@ -124,7 +124,7 @@ test("shows a Web/API mismatch warning", async ({ page }) => {
         builtAt: "2026-07-28T14:26:12.528Z",
         commit: "1234567",
         service: "api",
-        version: "0.3.0",
+        version: "0.3.1",
       }),
       contentType: "application/json",
       status: 200,

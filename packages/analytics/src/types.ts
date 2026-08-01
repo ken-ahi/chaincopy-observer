@@ -221,6 +221,7 @@ export interface WealthPoint {
   readonly externalId: string;
   readonly nav: string;
   readonly occurredAt: string;
+  readonly sequence?: number;
 }
 
 export interface DrawdownPoint {

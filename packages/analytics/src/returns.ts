@@ -27,6 +27,7 @@ import type {
   ReturnPeriod,
   StoredCashFlowClassification,
   StoredCashFlowInput,
+  WealthPoint,
 } from "./types.js";
 
 export function calculateDailyNav(
@@ -294,6 +295,66 @@ export function calculateCumulativeReturn(
   coverage: CalculationCoverage,
 ): CalculationResult<MetricValue> {
   return multiplyReturns(periods, coverage);
+}
+
+export function buildTwrWealthIndex(
+  periods: readonly ReturnPeriod[],
+  coverage: CalculationCoverage,
+): CalculationResult<readonly WealthPoint[]> {
+  return execute(coverage, "DERIVED", () => {
+    const first = periods[0];
+    if (!first) {
+      throw new CalculationException("INSUFFICIENT_HISTORY", "Return periods are required.");
+    }
+
+    let wealth = new AnalysisDecimal(1);
+    let previousTo: number | null = null;
+    const points: WealthPoint[] = [
+      {
+        externalId: "twr-wealth:0",
+        nav: "1",
+        occurredAt: first.from,
+        sequence: 0,
+      },
+    ];
+
+    for (const [index, period] of periods.entries()) {
+      const fromTime = parseTime(period.from, `returnPeriods[${index}].from`);
+      const toTime = parseTime(period.to, `returnPeriods[${index}].to`);
+      if (toTime < fromTime || (previousTo !== null && fromTime < previousTo)) {
+        throw new CalculationException(
+          "DATA_ORDER_AMBIGUOUS",
+          "Return periods must be provided in non-overlapping sequence order.",
+        );
+      }
+      if (
+        decimal(period.beginningNav, `returnPeriods[${index}].beginningNav`).lte(0) ||
+        decimal(period.endingNav, `returnPeriods[${index}].endingNav`).lte(0)
+      ) {
+        throw new CalculationException(
+          "NON_POSITIVE_NAV",
+          "Return period NAV values must be positive.",
+        );
+      }
+      const factor = decimal(period.return, `returnPeriods[${index}].return`).plus(1);
+      if (factor.lte(0)) {
+        throw new CalculationException(
+          "NON_POSITIVE_NAV",
+          "A return period must have a positive wealth factor.",
+        );
+      }
+      wealth = wealth.mul(factor);
+      points.push({
+        externalId: `twr-wealth:${index + 1}`,
+        nav: canonical(wealth),
+        occurredAt: period.to,
+        sequence: index + 1,
+      });
+      previousTo = toTime;
+    }
+
+    return { value: points };
+  });
 }
 
 export function calculateAnnualizedReturn(

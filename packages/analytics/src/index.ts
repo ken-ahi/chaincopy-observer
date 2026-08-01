@@ -21,6 +21,7 @@ export {
   calculateVolatility,
 } from "./risk.js";
 export {
+  buildTwrWealthIndex,
   calculateAnnualizedReturn,
   calculateCumulativeReturn,
   calculateDailyNav,

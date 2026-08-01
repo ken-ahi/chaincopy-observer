@@ -1,6 +1,6 @@
 # 計算設計
 
-最終更新: 2026-07-26
+最終更新: 2026-08-01
 
 本書はPhase 4Aの監査結果と、Phase 4Bで実装する決定論的計算の仕様を定義する。Phase 4Aではコード、Prisma schema、Migrationを変更しない。
 
@@ -98,6 +98,8 @@
 
 不明な入出金は推測しない。`UNKNOWN_CASH_FLOW`が評価期間に1件でもあれば、NAV差分、TWR、return系列とその派生指標を停止する。
 
+`accountClassTransfer`など現行分類で内部振替と確定したイベントは、Max Drawdown処理だけで外部Cash Flowへ再分類しない。ただし、Perpetuals口座だけを評価する場合、同一所有者の口座間移動であっても評価範囲を出入りする価値移動になり得る。全口座とPerpetuals口座の境界を履歴から常に確定できない点は既知の残存制約であり、今回のv3では新しい分類規則を導入しない。
+
 ## 5. NAVと収益率
 
 全口座NAVの定義は次とする。
@@ -112,7 +114,7 @@ totalAccountNav =
 
 現在の `PortfolioSnapshot.accountValue` はPerpetuals clearinghouseの公式snapshot値として正本にできるが、spot時価、cash/liability内訳と同期していないため `totalAccountNav` とは呼ばない。Phase 4Bの初期対象は明示的に `PERP_ACCOUNT_NAV` とする。過去日次NAVの再構築には各日境界のNAVまたは履歴開始時の完全なbalance/position/price状態が必要であり、現在のsnapshotだけから任意の過去日を逆算しない。
 
-日次NAVはUTC日境界の公式account value history pointを優先する。最寄りsnapshotの流用や線形補間はしない。snapshot間の不規則系列は日次系列と区別する。
+日次NAVはraw `PortfolioSnapshot`由来であり、UTC日ごとに最後の正のPerpetuals account valueを選ぶ。表示・監査・永続化用のraw系列として維持し、Cash Flow調整済み系列へ書き換えない。最寄りsnapshotの流用や線形補間はしない。snapshot間の不規則系列は日次系列と区別する。
 
 ### 5.1 TWR
 
@@ -125,6 +127,8 @@ TWR = Π(1 + subperiodReturn_i) - 1
 ```
 
 最終cash flow後は `endingNav / lastNavAfterFlow - 1` を加える。cash flowがない期間はsnapshot間returnを使う。`navAfterFlow - navBeforeFlow`とsigned cash flowの不一致もData Quality Issueにする。
+
+TWRと累積収益率は、`splitReturnPeriodsAtCashFlows()`が返した順序確定済み`ReturnPeriod`配列だけから計算する。外部Cash Flowは期間分割時に除外済みであるため、後段でCash Flow額を再度加減算しない。FeeとFundingは実際のNAV変化に含まれる運用損益であり、Return Periodのreturnへ別途加減算しない。
 
 - 優先単位はcash flow発生時、次にUTC日次境界、最後に明示したsnapshot間である。
 - 日中cash flowの直前・直後NAVがなければ、日次TWRへ丸め込まず `MISSING_CASH_FLOW_BOUNDARY_NAV` とする。
@@ -145,15 +149,20 @@ annualizedReturn = (1 + cumulativeReturn)^(365 / elapsedDays) - 1
 
 ## 6. リスク・取引指標
 
-最大ドローダウンはcash flow調整済みwealth curveに対して次で求める。
+`performance-v3`以降の最大ドローダウンは、raw Daily NAVではなく、TWRと同じ順序確定済み`ReturnPeriod`から構築したCash Flow調整済みWealth Indexに対して求める。Return Period配列は再ソートせず、同一timestampでは配列sequenceを正本とする。
 
 ```text
-peak_t = max(wealth_0 ... wealth_t)
-drawdown_t = wealth_t / peak_t - 1
-maxDrawdown = min(drawdown_t)
+W_0 = 1
+W_i = W_(i-1) × (1 + periodReturn_i)
+P_0 = 1
+P_i = max(P_(i-1), W_i)
+D_i = W_i / P_i - 1
+maxDrawdown = min(D_0 ... D_n)
 ```
 
-ボラティリティ、Sharpe、SortinoにはUTC日次収益率を使う。v1の年率risk-free rateと日次downside thresholdはともに0、年率換算係数は365、標準偏差は標本標準偏差 `n - 1` とする。
+同率Peakと同率Troughは最初の地点を保持する。終端`W_n`は厳密に`1 + TWR`と一致する。Cash Flowがない履歴ではraw NAV系列を定数倍した曲線になるためv2と同値である。`UNKNOWN_CASH_FLOW`、`MISSING_CASH_FLOW_BOUNDARY_NAV`、非正NAV、`1 + periodReturn <= 0`、またはReturn Periodを構築できない履歴では、推測、補間、Modified Dietzなどの近似を行わずReturn Laneを計算不能にする。
+
+ボラティリティ、Sharpe、Sortinoの現行実装は、厳密にはUTC日ごとに再集約した系列ではなく、Cash Flow境界で分割された`ReturnPeriod`系列を使用する。同一日複数期間はsequenceで区別する。risk-free rateとdownside thresholdはともに0、年率換算係数は365、標準偏差は標本標準偏差 `n - 1` とする。
 
 ```text
 annualizedVolatility = sampleStdDev(dailyReturns) × sqrt(365)
@@ -213,6 +222,7 @@ leverage 95パーセンタイルは有効snapshotを昇順にし、`PERCENTILE_C
 | `splitReturnPeriodsAtCashFlows` | `NavPoint[]`, `ClassifiedCashFlow[]`                | `ReturnPeriod[]`        |
 | `calculateTwr`                  | `ReturnPeriod[]`                                    | `MetricValue`           |
 | `calculateCumulativeReturn`     | `ReturnPeriod[]`                                    | `MetricValue`           |
+| `buildTwrWealthIndex`           | `ReturnPeriod[]`, `Coverage`                        | `WealthPoint[]`         |
 | `calculateAnnualizedReturn`     | `MetricValue`, `from`, `to`                         | `MetricValue`と評価区分 |
 | `calculateMaxDrawdown`          | `WealthPoint[]`                                     | `DrawdownResult`        |
 | `calculateVolatility`           | `DailyReturn[]`                                     | `MetricValue`           |
