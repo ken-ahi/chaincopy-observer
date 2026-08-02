@@ -1,34 +1,49 @@
+"use client";
+
 import { Badge, Card, CardContent } from "@chaincopy/ui";
 import * as React from "react";
 
-import { formatMetricValue } from "./performance-formatters";
-import { type PerformanceMetricDto } from "../../lib/performance-api";
+import { type DisplayMetric } from "./performance-display";
 
 export function PerformanceMetricCard({
-  label,
   metric,
-  metricKey,
-  placeholder,
 }: {
-  readonly label: string;
-  readonly metric: PerformanceMetricDto | undefined;
-  readonly metricKey: string;
-  readonly placeholder: string;
+  readonly metric: DisplayMetric;
 }): React.JSX.Element {
+  const [descriptionOpen, setDescriptionOpen] = React.useState(false);
+  const descriptionId = `${React.useId()}-description`;
+
   return (
-    <Card className="min-w-0" data-metric-key={metricKey}>
+    <Card className="min-w-0" data-metric-key={metric.key}>
       <CardContent className="p-4">
-        <div className="flex min-w-0 flex-wrap items-start justify-between gap-2">
-          <p className="text-[11px] leading-relaxed text-slate-500">{label}</p>
-          {metric?.status === "REFERENCE_ONLY" ? <Badge variant="warning">参考値</Badge> : null}
+        <div className="flex min-w-0 items-start justify-between gap-2">
+          <p className="min-w-0 text-[11px] leading-relaxed text-slate-400">{metric.label}</p>
+          <div className="flex shrink-0 items-center gap-1">
+            {metric.referenceOnly ? <Badge variant="warning">参考値</Badge> : null}
+            {metric.description ? (
+              <button
+                aria-controls={descriptionId}
+                aria-expanded={descriptionOpen}
+                aria-label={`${metric.label}の説明`}
+                className="flex min-h-11 min-w-11 items-center justify-center rounded-full border border-white/[0.12] text-base text-cyan-100 transition-colors hover:border-cyan-300/40 hover:bg-cyan-300/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200"
+                onClick={() => setDescriptionOpen((open) => !open)}
+                type="button"
+              >
+                <span aria-hidden="true">i</span>
+              </button>
+            ) : null}
+          </div>
         </div>
-        <p className="mt-2 break-all text-lg font-semibold text-white">
-          {metric ? formatMetricValue(metricKey, metric.metricValue) : placeholder}
+        <p className="mt-2 break-words text-lg font-semibold tabular-nums text-white">
+          {metric.value}
         </p>
-        {metric ? (
-          <p className="mt-2 text-[10px] text-slate-600">
-            {metric.precision}
-            {metric.warningCodes.length > 0 ? ` · ${metric.warningCodes.join(", ")}` : ""}
+        {metric.description ? (
+          <p
+            className="mt-3 border-t border-white/[0.08] pt-3 text-xs leading-relaxed text-slate-300"
+            hidden={!descriptionOpen}
+            id={descriptionId}
+          >
+            {metric.description}
           </p>
         ) : null}
       </CardContent>

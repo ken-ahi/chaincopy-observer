@@ -229,21 +229,21 @@ export function PositionCycleSectionView({
     <section aria-labelledby="position-cycles-title" className="mt-8">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-white" id="position-cycles-title">
-          Position Cycles
+          取引サイクル
         </h2>
         <p className="mt-1 text-xs text-slate-500">
-          保存済みのPosition Cycleを開始日時の新しい順に表示します。
+          保存済みの完了取引・保有中取引を開始日時の新しい順に表示します。明細表は横方向へスクロールできます。
         </p>
       </div>
 
-      {loading ? <StateMessage role="status">Position Cycleを読み込んでいます</StateMessage> : null}
+      {loading ? <StateMessage role="status">取引サイクルを読み込んでいます</StateMessage> : null}
       {!loading && state.initialError ? (
         <StateMessage role="alert">
-          Position Cycleを取得できませんでした。時間をおいて再読み込みしてください。
+          取引サイクルを取得できませんでした。時間をおいて再読み込みしてください。
         </StateMessage>
       ) : null}
       {!loading && !state.initialError && state.items.length === 0 ? (
-        <StateMessage role="status">表示できるPosition Cycleがありません</StateMessage>
+        <StateMessage role="status">表示できる取引サイクルがありません</StateMessage>
       ) : null}
       {!loading && !state.initialError && state.items.length > 0 ? (
         <div className="grid gap-5">
@@ -255,14 +255,14 @@ export function PositionCycleSectionView({
           {filteredItems.length > 0 ? (
             <PositionCycleTable items={filteredItems} />
           ) : (
-            <StateMessage role="status">条件に一致するPosition Cycleがありません</StateMessage>
+            <StateMessage role="status">条件に一致する取引サイクルがありません</StateMessage>
           )}
           {state.moreError ? (
             <p
               className="rounded-lg border border-rose-300/20 bg-rose-300/[0.05] px-3 py-2 text-xs text-rose-100"
               role="alert"
             >
-              追加のPosition Cycleを取得できませんでした。既に表示したデータは保持されています。
+              追加の取引サイクルを取得できませんでした。既に表示したデータは保持されています。
             </p>
           ) : null}
           {state.nextCursor !== null ? (
@@ -273,7 +273,7 @@ export function PositionCycleSectionView({
                 onClick={onLoadMore}
                 type="button"
               >
-                {state.loadingMore ? "追加のPosition Cycleを読み込んでいます" : "さらに表示"}
+                {state.loadingMore ? "追加の取引サイクルを読み込んでいます" : "さらに表示"}
               </button>
             </div>
           ) : null}

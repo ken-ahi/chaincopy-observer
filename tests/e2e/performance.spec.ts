@@ -38,63 +38,79 @@ test.describe("Performance browser E2E", () => {
       ]);
     });
 
-    test("履歴不足Runと空のNAV・Cycleを表示する", async ({ page }) => {
+    test("履歴不足Runを簡素化表示し診断Codeを計算の詳細へ分離する", async ({ page }) => {
       await openAddressDetail(page, e2eInsufficientPerformanceAddress);
 
-      await expect(page.getByRole("heading", { exact: true, name: "Performance" })).toBeVisible();
-      await expect(page.getByText("INSUFFICIENT_DATA · データ不足").first()).toBeVisible();
+      await expect(page.getByRole("heading", { exact: true, name: "運用実績" })).toBeVisible();
+      await expect(page.getByText("データ不足").first()).toBeVisible();
+      await expect(page.getByText("現在表示できる主要指標はありません")).toBeVisible();
+      await expect(page.getByText("MINIMUM_HISTORY_NOT_MET")).toHaveCount(0);
+      await expect(page.getByText("INSUFFICIENT_HISTORY · 履歴不足")).toHaveCount(0);
+      await expect(page.getByText("累積収益率")).toHaveCount(0);
+
+      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
       await expect(page.getByText("MINIMUM_HISTORY_NOT_MET").first()).toBeVisible();
       await expect(page.getByText("INSUFFICIENT_HISTORY · 履歴不足").first()).toBeVisible();
       await expect(page.getByText("UNAVAILABLE · 算出不可").first()).toBeVisible();
-      await expect(page.getByText("表示できる日次NAVデータがありません")).toBeVisible();
-      await expect(page.getByText("表示できるPosition Cycleがありません")).toBeVisible();
-      await expect(page.getByText("累積収益率")).toHaveCount(0);
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
     test("未計算の監視アドレスを手動計算し、完了状態まで更新する", async ({ page }) => {
       await openAddressDetail(page, e2eManualPerformanceAddress);
 
-      await expect(page.getByText(/パフォーマンス計算はまだ実行されていません/)).toBeVisible();
-      const calculateButton = page.getByRole("button", { name: "Performanceを計算" });
+      await expect(page.getByText(/まだ計算されていません/)).toBeVisible();
+      const calculateButton = page.getByRole("button", { name: "実績を計算" });
       await expect(calculateButton).toBeEnabled();
       await calculateButton.click();
-      await expect(page.getByText("PENDING · 計算待ち")).toBeVisible();
+      await expect(page.getByText("計算待ち").first()).toBeVisible();
       await expect(page.getByRole("button", { name: "計算待ち" })).toBeDisabled();
 
       await completeManualPerformanceFixture();
 
-      await expect(page.getByText("INSUFFICIENT_DATA · データ不足").first()).toBeVisible({
+      await expect(page.getByText("データ不足").first()).toBeVisible({
         timeout: 10_000,
       });
-      await expect(page.getByRole("button", { name: "Performanceを再計算" })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "実績を再計算" })).toBeEnabled();
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
-    test("成功Performance概要とCalculation Detailsを表示する", async ({ page }) => {
+    test("成功Runの主要指標、説明button、2つの詳細領域を表示する", async ({ page }) => {
       const performanceResponses = trackPerformanceResponses(page);
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await expect(page.getByRole("heading", { exact: true, name: "Performance" })).toBeVisible();
-      await expect(page.getByText("SUCCEEDED · 計算済み").first()).toBeVisible();
-      await expect(page.getByText("performance-v3").first()).toBeVisible();
-      await expect(page.getByText("EXACT · 正確").first()).toBeVisible();
-      await expect(page.getByText("COMPLETE · 完全").first()).toBeVisible();
+      await expect(page.getByRole("heading", { exact: true, name: "運用実績" })).toBeVisible();
+      await expect(page.getByText("計算完了").first()).toBeVisible();
+      await expect(page.getByText("performance-v3")).toHaveCount(0);
       await expect(page.getByText("12.3456%")).toBeVisible();
       await expect(page.getByText("-4.5%")).toBeVisible();
-      await expect(page.getByText("1.234567")).toBeVisible();
       await expect(page.getByText("62.5%")).toBeVisible();
+      await expect(page.getByText("1.234567")).toHaveCount(0);
+
+      const missingMetric = page.locator('[data-metric-key="annualizedReturn"]');
+      await expect(missingMetric).toHaveCount(0);
+
+      const explanation = page.getByRole("button", { name: "累積収益率の説明" });
+      await expect(explanation).toHaveAttribute("aria-expanded", "false");
+      await explanation.click();
+      await expect(explanation).toHaveAttribute("aria-expanded", "true");
+      await expect(page.getByText(/入出金の影響を調整したうえで/)).toBeVisible();
+      await explanation.press("Enter");
+      await expect(explanation).toHaveAttribute("aria-expanded", "false");
+      await explanation.press("Space");
+      await expect(explanation).toHaveAttribute("aria-expanded", "true");
+
+      await page.getByRole("button", { name: "詳細指標を開く" }).click();
+      await expect(page.getByText("1.234567")).toBeVisible();
       await expect(page.getByText("2.5×")).toBeVisible();
       await expect(page.getByText("55%")).toBeVisible();
 
-      const missingMetric = page.locator('[data-metric-key="annualizedReturn"]');
-      await expect(missingMetric).toContainText("—");
-      await expect(missingMetric).not.toContainText(/^0$/u);
-
-      await page.getByText("Calculation Details").click();
+      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
+      await expect(page.getByText("performance-v3").first()).toBeVisible();
+      await expect(page.getByText("EXACT · 正確").first()).toBeVisible();
+      await expect(page.getByText("COMPLETE · 完全").first()).toBeVisible();
       await expect(page.getByText("phase4e-e2e-success-run")).toBeVisible();
-      await expect(page.getByText("abcdef123456")).toBeVisible();
-      await expect(page.getByText("Warning Codes")).toBeVisible();
+      await expect(page.getByText(/abcdef1234567890/)).toBeVisible();
+      await expect(page.getByText("Warning Codes").first()).toBeVisible();
       await expect(page.getByText("計算要求日時")).toBeVisible();
       await expect(page.getByText("計算開始日時")).toBeVisible();
       await expect(page.getByText("計算完了日時")).toBeVisible();
@@ -110,29 +126,29 @@ test.describe("Performance browser E2E", () => {
     test("PARTIALかつUNKNOWN_CASH_FLOWでも信頼済み取引指標を保持する", async ({ page }) => {
       await openAddressDetail(page, e2ePartialPerformanceAddress);
 
-      await expect(page.getByText("SUCCEEDED · 計算済み").first()).toBeVisible();
-      await expect(page.getByText("PARTIAL · 一部不足").first()).toBeVisible();
+      await expect(page.getByText("計算完了").first()).toBeVisible();
       await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
-      await expect(page.locator('[data-metric-key="twr"]')).toContainText("—");
-      await expect(page.getByText("分類不能な入出金履歴").first()).toBeVisible();
-      await expect(
-        page.getByText(
-          /履歴開始時点で保有中だったポジションを除外し、最初にポジションが0へ戻った後/,
-        ),
-      ).toBeVisible();
+      await expect(page.locator('[data-metric-key="twr"]')).toHaveCount(0);
+      await expect(page.getByText(/分類できない入出金/)).toHaveCount(0);
+
+      await page.getByRole("button", { name: "詳細指標を開く" }).click();
+      await expect(page.getByText(/分類できない入出金/).first()).toBeVisible();
+
+      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
       await expect(page.getByText("除外Fill件数")).toBeVisible();
       await expect(page.getByText("BTC: 1件除外")).toBeVisible();
 
       await page.reload();
       await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
-      await expect(page.locator('[data-metric-key="twr"]')).toContainText("—");
+      await expect(page.locator('[data-metric-key="twr"]')).toHaveCount(0);
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
     test("日次NAV一覧・概要・SVGチャートを表示する", async ({ page }) => {
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await expect(page.getByRole("heading", { name: "日次NAV" })).toBeVisible();
+      await page.getByRole("button", { name: "詳細指標を開く" }).click();
+      await expect(page.getByRole("heading", { name: "日次評価額" })).toBeVisible();
       await expect(page.getByText("日次NAV概要")).toBeVisible();
       const table = page.getByRole("table", { name: "日次NAV一覧" });
       await expect(table.getByRole("row")).toHaveCount(4);
@@ -150,45 +166,46 @@ test.describe("Performance browser E2E", () => {
     test("Position Cycle一覧とクライアントフィルターを表示する", async ({ page }) => {
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await expect(page.getByRole("heading", { name: "Position Cycles" })).toBeVisible();
-      const table = page.getByRole("table", { name: "Position Cycle一覧" });
+      await page.getByRole("button", { name: "詳細指標を開く" }).click();
+      await expect(page.getByRole("heading", { name: "取引サイクル" })).toBeVisible();
+      const table = page.getByRole("table", { name: "取引サイクル一覧" });
       await expect(table.getByRole("row")).toHaveCount(4);
-      await expect(table.getByText("Long", { exact: true }).first()).toBeVisible();
-      await expect(table.getByText("Short", { exact: true })).toBeVisible();
-      await expect(table.getByText("Open", { exact: true })).toBeVisible();
-      await expect(table.getByText("Closed", { exact: true }).first()).toBeVisible();
+      await expect(table.getByText("ロング", { exact: true }).first()).toBeVisible();
+      await expect(table.getByText("ショート", { exact: true })).toBeVisible();
+      await expect(table.getByText("保有中", { exact: true })).toBeVisible();
+      await expect(table.getByText("完了", { exact: true }).first()).toBeVisible();
       await expect(table.getByText("+99.5 · Profit")).toBeVisible();
       await expect(table.getByText("-77.875 · Loss")).toBeVisible();
 
-      await page.getByLabel("Coin").selectOption("ETH");
+      await page.getByRole("combobox", { name: "銘柄" }).selectOption("ETH");
       await expect(table.getByRole("row")).toHaveCount(2);
       await expect(table).toContainText("ETH");
-      await page.getByLabel("Coin").selectOption("ALL");
+      await page.getByRole("combobox", { name: "銘柄" }).selectOption("ALL");
 
-      await page.getByLabel("方向").selectOption("SHORT");
+      await page.getByRole("combobox", { name: "方向" }).selectOption("SHORT");
       await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("Short");
-      await page.getByLabel("方向").selectOption("ALL");
+      await expect(table).toContainText("ショート");
+      await page.getByRole("combobox", { name: "方向" }).selectOption("ALL");
 
-      await page.getByLabel("状態").selectOption("OPEN");
+      await page.getByRole("combobox", { name: "状態" }).selectOption("OPEN");
       await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("Open");
-      await page.getByLabel("状態").selectOption("ALL");
+      await expect(table).toContainText("保有中");
+      await page.getByRole("combobox", { name: "状態" }).selectOption("ALL");
 
-      await page.getByLabel("損益").selectOption("PROFIT");
+      await page.getByRole("combobox", { name: "損益" }).selectOption("PROFIT");
       await expect(table.getByRole("row")).toHaveCount(2);
       await expect(table).toContainText("Profit");
-      await page.getByLabel("損益").selectOption("LOSS");
+      await page.getByRole("combobox", { name: "損益" }).selectOption("LOSS");
       await expect(table.getByRole("row")).toHaveCount(2);
       await expect(table).toContainText("Loss");
-      await page.getByLabel("損益").selectOption("BREAK_EVEN");
+      await page.getByRole("combobox", { name: "損益" }).selectOption("BREAK_EVEN");
       await expect(table.getByRole("row")).toHaveCount(2);
       await expect(table).toContainText("Break-even");
 
-      await page.getByLabel("損益").selectOption("ALL");
-      await page.getByLabel("Coin").selectOption("BTC");
-      await page.getByLabel("方向").selectOption("SHORT");
-      await expect(page.getByText("条件に一致するPosition Cycleがありません")).toBeVisible();
+      await page.getByRole("combobox", { name: "損益" }).selectOption("ALL");
+      await page.getByRole("combobox", { name: "銘柄" }).selectOption("BTC");
+      await page.getByRole("combobox", { name: "方向" }).selectOption("SHORT");
+      await expect(page.getByText("条件に一致する取引サイクルがありません")).toBeVisible();
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
   });

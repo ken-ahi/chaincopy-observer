@@ -35,13 +35,13 @@ export function PositionCycleFilters({
 
   return (
     <div className="grid gap-3 rounded-xl border border-white/[0.08] bg-slate-950/40 p-3 sm:grid-cols-2 xl:grid-cols-4">
-      <Filter label="Coin">
+      <Filter label="銘柄">
         <select
           className="mt-1 w-full rounded-lg border border-white/[0.12] bg-slate-950 px-3 py-2 text-sm text-slate-200"
           onChange={(event) => onChange({ ...value, coin: event.target.value })}
           value={value.coin}
         >
-          <option value="ALL">All</option>
+          <option value="ALL">すべて</option>
           {coins.map((coin) => (
             <option key={coin} value={coin}>
               {coin}
@@ -55,9 +55,9 @@ export function PositionCycleFilters({
           onChange={(event) => onChange({ ...value, side: event.target.value as CycleSideFilter })}
           value={value.side}
         >
-          <option value="ALL">All</option>
-          <option value="LONG">Long</option>
-          <option value="SHORT">Short</option>
+          <option value="ALL">すべて</option>
+          <option value="LONG">ロング</option>
+          <option value="SHORT">ショート</option>
         </select>
       </Filter>
       <Filter label="状態">
@@ -68,9 +68,9 @@ export function PositionCycleFilters({
           }
           value={value.status}
         >
-          <option value="ALL">All</option>
-          <option value="OPEN">Open</option>
-          <option value="CLOSED">Closed</option>
+          <option value="ALL">すべて</option>
+          <option value="OPEN">保有中</option>
+          <option value="CLOSED">完了</option>
         </select>
       </Filter>
       <Filter label="損益">
@@ -79,10 +79,10 @@ export function PositionCycleFilters({
           onChange={(event) => onChange({ ...value, pnl: event.target.value as CyclePnlFilter })}
           value={value.pnl}
         >
-          <option value="ALL">All</option>
-          <option value="PROFIT">Profit</option>
-          <option value="LOSS">Loss</option>
-          <option value="BREAK_EVEN">Break-even</option>
+          <option value="ALL">すべて</option>
+          <option value="PROFIT">利益</option>
+          <option value="LOSS">損失</option>
+          <option value="BREAK_EVEN">損益なし</option>
         </select>
       </Filter>
     </div>
