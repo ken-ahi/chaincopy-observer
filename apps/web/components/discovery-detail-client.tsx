@@ -18,6 +18,12 @@ import {
   isManuallyExcluded,
   requestCandidateAction,
 } from "./discovery-candidate-actions";
+import {
+  candidateDataCertainty,
+  candidateFilterStatusLabel,
+  candidatePerformanceStatus,
+  candidateReasonLabels,
+} from "./discovery-display";
 
 export function DiscoveryDetailClient({ address }: { readonly address: string }) {
   const [candidate, setCandidate] = useState<DiscoveryCandidateDetail | null>(null);
@@ -88,12 +94,18 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
     return (
       <div className="mx-auto max-w-4xl px-4 py-10 sm:px-7">
         <Link className="text-sm text-cyan-300" href="/dashboard/discovery">
-          ← 探索一覧へ
+          ← 候補一覧へ
         </Link>
         <p className="mt-6 text-sm text-rose-200">{error ?? "候補が見つかりません。"}</p>
       </div>
     );
   }
+
+  const reasons = candidateReasonLabels([
+    ...candidate.exclusionReasons,
+    ...candidate.qualityIssues.map((issue) => issue.issueType),
+    ...(candidate.truncationReason ? [candidate.truncationReason] : []),
+  ]);
 
   return (
     <div className="mx-auto max-w-[96rem] px-4 py-7 sm:px-7">
@@ -102,19 +114,16 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
         href="/dashboard/discovery"
       >
         <ArrowLeft aria-hidden="true" className="size-3.5" />
-        探索一覧
+        候補一覧
       </Link>
       <div className="mt-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">
-            Discovery candidate
-          </p>
+          <p className="text-sm text-slate-400">候補の詳細</p>
           <h1 className="mt-2 break-all font-mono text-lg text-white">{candidate.address}</h1>
           <div className="mt-3 flex flex-wrap gap-2">
-            <StatusBadge value={candidate.enrichmentStatus} />
-            <StatusBadge value={candidate.filterStatus} />
-            <StatusBadge value={candidate.historyCompleteness} />
-            {candidate.historyTruncated ? <Badge variant="warning">TRUNCATED</Badge> : null}
+            <StatusBadge value={candidateFilterStatusLabel(candidate.filterStatus)} />
+            <StatusBadge value={`データの確かさ：${candidateDataCertainty(candidate)}`} />
+            <StatusBadge value={candidatePerformanceStatus(candidate)} />
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -131,7 +140,7 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
             variant="outline"
           >
             <Sparkles aria-hidden="true" className="size-3.5" />
-            詳細分析を再実行
+            取引履歴を再確認
           </Button>
           <Button
             aria-label={`${candidate.address} を${exclusionAction(candidate).label}`}
@@ -168,87 +177,40 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
       {error ? <Notice tone="error">{error}</Notice> : null}
       {message ? <Notice tone="success">{message}</Notice> : null}
 
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle>処理ステップ</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol className="grid gap-2 text-xs text-slate-400 sm:grid-cols-3 xl:grid-cols-6">
-            {[
-              "1. 候補を発見",
-              "2. 詳細分析",
-              "3. 適格性を判定",
-              "4. 監視対象に追加",
-              "5. 履歴を同期",
-              "6. Performanceを計算",
-            ].map((step, index) => (
-              <li
-                className={
-                  index === currentStep(candidate)
-                    ? "rounded-lg border border-cyan-300/30 bg-cyan-300/10 p-3 text-cyan-100"
-                    : "rounded-lg border border-white/[0.07] bg-white/[0.025] p-3"
-                }
-                key={step}
-              >
-                {step}
-              </li>
-            ))}
-          </ol>
-          <p className="mt-3 text-xs leading-5 text-slate-500">
-            詳細分析では、候補アドレスの過去取引、Funding、注文、ポジションを取得し、履歴完全性・データ品質・監視適格性を判定します。
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            除外解除後、候補の適格性を再評価します。状態は一時的にPENDINGになることがあります。
-          </p>
-        </CardContent>
-      </Card>
+      <p className="mt-5 text-sm text-slate-400">過去の売買成績と、データの確かさを確認します。</p>
 
       <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Metric label="発見日時" value={dateTime(candidate.firstSeenAt)} />
-        <Metric label="最終活動" value={dateTime(candidate.lastSeenAt)} />
-        <Metric label="観測取引" value={`${candidate.tradeCount} trades`} />
-        <Metric label="推定取引額" value={`$${decimalText(candidate.estimatedNotionalUsd)}`} />
-        <Metric label="最大取引額" value={`$${decimalText(candidate.largestTradeUsd)}`} />
-        <Metric label="平均取引額" value={`$${decimalText(candidate.averageTradeUsd)}`} />
         <Metric
-          label="Active day / hour"
-          value={`${candidate.activeDays} / ${candidate.activeHours}`}
+          label="主に取引している通貨"
+          value={
+            candidate.coins
+              .slice(0, 3)
+              .map((coin) => coin.coin)
+              .join(", ") || "-"
+          }
         />
-        <Metric label="Data quality" value={`${candidate.dataQualityScore}/100`} />
-        <Metric label="Retrieved fills" value={String(candidate.retrievedFillCount)} />
-        <Metric label="Available from" value={nullableDate(candidate.availableFrom)} />
-        <Metric label="Available to" value={nullableDate(candidate.availableTo)} />
-        <Metric label="監視対象への追加日時" value={nullableDate(candidate.promotedAt)} />
+        <Metric label="取引回数" value={`${candidate.tradeCount}回`} />
+        <Metric label="推定取引額" value={`$${decimalText(candidate.estimatedNotionalUsd)}`} />
+        <Metric label="活動日数" value={`${candidate.activeDays}日`} />
+        <Metric label="データの確かさ" value={candidateDataCertainty(candidate)} />
+        <Metric label="候補の状態" value={candidateFilterStatusLabel(candidate.filterStatus)} />
+        <Metric label="売買成績" value={candidatePerformanceStatus(candidate)} />
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         <Card>
           <CardHeader>
-            <CardTitle>観測統計</CardTitle>
+            <CardTitle>取引している通貨</CardTitle>
           </CardHeader>
           <CardContent>
-            <dl className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-3">
-              <Data
-                label="Maker / Taker"
-                value={`${candidate.makerCount} / ${candidate.takerCount}`}
-              />
-              <Data label="Buy / Sell" value={`${candidate.buyCount} / ${candidate.sellCount}`} />
-              <Data
-                label="Long / Short related"
-                value={`${candidate.longRelatedCount} / ${candidate.shortRelatedCount}`}
-              />
-              <Data label="Distinct coins" value={String(candidate.distinctCoins)} />
-              <Data label="発見元" value={candidate.discoverySource} />
-              <Data label="最終詳細分析" value={nullableDate(candidate.lastEnrichedAt)} />
-            </dl>
-            <div className="mt-5 overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
                   <tr>
-                    <th>Coin</th>
-                    <th>Trades</th>
-                    <th>First</th>
-                    <th>Last</th>
+                    <th>通貨</th>
+                    <th>取引回数</th>
+                    <th>最初の確認</th>
+                    <th>最後の確認</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -268,74 +230,21 @@ export function DiscoveryDetailClient({ address }: { readonly address: string })
 
         <Card>
           <CardHeader>
-            <CardTitle>履歴完全性・除外理由</CardTitle>
+            <CardTitle>確認が必要な理由</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-xs text-slate-500">
-              {candidate.exclusionReasons.join(", ") || "除外理由なし"}
-            </p>
-            {candidate.truncationReason ? (
-              <p className="mt-3 rounded-lg border border-amber-400/20 bg-amber-400/10 px-3 py-2 text-xs text-amber-200">
-                {candidate.truncationReason}
-              </p>
-            ) : null}
-            <div className="mt-5 space-y-3">
-              {candidate.qualityIssues.length === 0 ? (
-                <p className="text-xs text-slate-600">Data Quality Issueはありません。</p>
-              ) : (
-                candidate.qualityIssues.map((issue) => (
-                  <div
-                    className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3"
-                    key={`${issue.issueType}:${issue.lastDetectedAt}`}
-                  >
-                    <div className="flex justify-between gap-3">
-                      <p className="text-xs text-slate-200">{issue.issueType}</p>
-                      <Badge variant="warning">{issue.status}</Badge>
-                    </div>
-                    <p className="mt-2 text-xs text-slate-500">{issue.message}</p>
-                  </div>
-                ))
-              )}
-            </div>
+            {reasons.length > 0 ? (
+              <ul className="grid gap-2 text-sm leading-relaxed text-amber-50">
+                {reasons.map((reason) => (
+                  <li key={reason}>・{reason}</li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-400">追加で確認が必要な理由はありません。</p>
+            )}
           </CardContent>
         </Card>
       </div>
-
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle>詳細分析履歴</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="overflow-x-auto">
-            <table className="data-table min-w-[900px]">
-              <thead>
-                <tr>
-                  <th>Started</th>
-                  <th>Requested range</th>
-                  <th>Fills</th>
-                  <th>Completeness</th>
-                  <th>Result</th>
-                  <th>Error / truncation</th>
-                </tr>
-              </thead>
-              <tbody>
-                {candidate.enrichmentAttempts.map((attempt) => (
-                  <tr key={`${attempt.startedAt}:${attempt.requestedTo}`}>
-                    <td>{dateTime(attempt.startedAt)}</td>
-                    <td>
-                      {dateTime(attempt.requestedFrom)} – {dateTime(attempt.requestedTo)}
-                    </td>
-                    <td>{attempt.retrievedFillCount}</td>
-                    <td>{attempt.historyCompleteness}</td>
-                    <td>{attempt.succeeded ? "SUCCEEDED" : "FAILED"}</td>
-                    <td>{attempt.errorMessage ?? attempt.truncationReason ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
@@ -348,25 +257,6 @@ function Metric({ label, value }: { readonly label: string; readonly value: stri
         <p className="mt-2 truncate text-sm font-medium text-slate-200">{value}</p>
       </CardContent>
     </Card>
-  );
-}
-
-function currentStep(candidate: DiscoveryCandidateDetail): number {
-  if (candidate.promotedAt) return 4;
-  if (candidate.filterStatus === "ELIGIBLE") return 3;
-  if (candidate.enrichmentStatus === "SUCCEEDED") return 2;
-  if (candidate.enrichmentStatus === "QUEUED" || candidate.enrichmentStatus === "RUNNING") {
-    return 1;
-  }
-  return 0;
-}
-
-function Data({ label, value }: { readonly label: string; readonly value: string }) {
-  return (
-    <div>
-      <dt className="text-slate-600">{label}</dt>
-      <dd className="mt-1 break-all text-slate-300">{value}</dd>
-    </div>
   );
 }
 
@@ -392,12 +282,13 @@ function Notice({
 }
 
 function StatusBadge({ value }: { readonly value: string }) {
-  const positive = value === "SUCCEEDED" || value === "ELIGIBLE" || value === "COMPLETE";
+  const positive = value === "監視候補" || value === "監視中" || value.includes("高い");
   const warning =
-    value === "QUEUED" ||
-    value === "RUNNING" ||
-    value === "LIGHT_ELIGIBLE" ||
-    value.includes("INSUFFICIENT");
+    value === "確認待ち" ||
+    value === "確認中" ||
+    value.includes("一部確認") ||
+    value.includes("低い") ||
+    value.includes("確認前");
   return <Badge variant={positive ? "success" : warning ? "warning" : "neutral"}>{value}</Badge>;
 }
 
@@ -406,10 +297,6 @@ function decimalText(value: string): string {
   const grouped = (integer ?? "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const trimmedFraction = fraction?.replace(/0+$/, "");
   return trimmedFraction ? `${grouped}.${trimmedFraction.slice(0, 4)}` : grouped;
-}
-
-function nullableDate(value: string | null): string {
-  return value ? dateTime(value) : "—";
 }
 
 function dateTime(value: string): string {

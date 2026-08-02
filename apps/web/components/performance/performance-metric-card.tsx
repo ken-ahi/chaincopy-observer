@@ -17,7 +17,7 @@ export function PerformanceMetricCard({
     <Card className="min-w-0" data-metric-key={metric.key}>
       <CardContent className="p-4">
         <div className="flex min-w-0 items-start justify-between gap-2">
-          <p className="min-w-0 text-[11px] leading-relaxed text-slate-400">{metric.label}</p>
+          <p className="min-w-0 text-sm leading-relaxed text-slate-300">{metric.label}</p>
           <div className="flex shrink-0 items-center gap-1">
             {metric.referenceOnly ? <Badge variant="warning">参考値</Badge> : null}
             {metric.description ? (
@@ -42,9 +42,6 @@ export function PerformanceMetricCard({
         </p>
         {metric.unavailableReason ? (
           <p className="mt-2 text-sm leading-relaxed text-amber-100">{metric.unavailableReason}</p>
-        ) : null}
-        {metric.interpretation ? (
-          <p className="mt-2 text-sm leading-relaxed text-slate-300">{metric.interpretation}</p>
         ) : null}
         {metric.description ? (
           <p

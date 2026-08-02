@@ -34,6 +34,14 @@ import {
   requestCandidateAction,
   exclusionAction,
 } from "./discovery-candidate-actions";
+import {
+  candidateDataCertainty,
+  candidateFilterStatusLabel,
+  candidatePerformanceStatus,
+  discoveryStateLabel,
+  discoverySummaryItems,
+  enrichmentStatusLabel,
+} from "./discovery-display";
 
 export function DiscoveryClient() {
   const [candidates, setCandidates] = useState<ReadonlyArray<DiscoveryCandidate>>([]);
@@ -66,18 +74,14 @@ export function DiscoveryClient() {
       if (filterStatus) query.set("filterStatus", filterStatus);
       if (cursor) query.set("cursor", cursor);
       try {
-        const [page, nextSettings, nextStats] = await Promise.all([
-          apiRequest<CandidatePage>(`/api/discovery/candidates?${query.toString()}`),
-          apiRequest<DiscoverySettings>("/api/discovery/settings"),
-          apiRequest<DiscoveryStats>("/api/discovery/stats"),
-        ]);
+        const page = await apiRequest<CandidatePage>(
+          `/api/discovery/candidates?${query.toString()}`,
+        );
         if (requestId !== requestSequence.current) {
           return;
         }
         setCandidates((current) => (cursor ? [...current, ...page.items] : page.items));
         setNextCursor(page.nextCursor);
-        setSettings(nextSettings);
-        setStats(nextStats);
       } catch (cause) {
         if (requestId === requestSequence.current) {
           setError(errorMessage(cause));
@@ -95,6 +99,23 @@ export function DiscoveryClient() {
     void load();
   }, [load]);
 
+  const loadSummary = useCallback(async () => {
+    try {
+      const [nextSettings, nextStats] = await Promise.all([
+        apiRequest<DiscoverySettings>("/api/discovery/settings"),
+        apiRequest<DiscoveryStats>("/api/discovery/stats"),
+      ]);
+      setSettings(nextSettings);
+      setStats(nextStats);
+    } catch (cause) {
+      setError(errorMessage(cause));
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary]);
+
   async function setDiscoveryEnabled(enabled: boolean) {
     await runAction(async () => {
       const next = await apiRequest<DiscoverySettings>(
@@ -102,7 +123,7 @@ export function DiscoveryClient() {
         { method: "POST" },
       );
       setSettings(next);
-      return enabled ? "探索を開始しました。" : "探索を停止しました。";
+      return enabled ? "自動探索を開始しました。" : "自動探索を停止しました。";
     });
   }
 
@@ -150,69 +171,37 @@ export function DiscoveryClient() {
     <div className="mx-auto max-w-[96rem] px-4 py-7 sm:px-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.18em] text-cyan-300/70">
-            Official public market stream
-          </p>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-white">
-            Hyperliquid アドレス自動探索
-          </h1>
-          <p className="mt-2 max-w-3xl text-sm text-slate-500">
-            公式trades WebSocketからbuyer / sellerを抽出し、有望な公開アドレスだけをInfo
-            APIで詳細分析します。
+          <h1 className="text-2xl font-semibold tracking-tight text-white">優良アドレスを探す</h1>
+          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-slate-400">
+            公開されている売買情報から、成績を確認する候補を自動で探しています。
           </p>
         </div>
-        <div className="flex gap-2">
+        {settings ? (
           <Button
-            disabled={settings?.enabled === true}
-            onClick={() => void setDiscoveryEnabled(true)}
-            size="sm"
-          >
-            <Play aria-hidden="true" className="size-3.5" />
-            探索開始
-          </Button>
-          <Button
-            disabled={settings?.enabled !== true}
-            onClick={() => void setDiscoveryEnabled(false)}
+            onClick={() => void setDiscoveryEnabled(!settings.enabled)}
             size="sm"
             variant="outline"
           >
-            <Square aria-hidden="true" className="size-3.5" />
-            停止
+            {settings.enabled ? (
+              <Square aria-hidden="true" className="size-3.5" />
+            ) : (
+              <Play aria-hidden="true" className="size-3.5" />
+            )}
+            {settings.enabled ? "自動探索を停止" : "自動探索を開始"}
           </Button>
-        </div>
+        ) : null}
       </div>
 
       {error ? <Notice tone="error">{error}</Notice> : null}
       {message ? <Notice tone="success">{message}</Notice> : null}
 
-      <StatsGrid settings={settings} stats={stats} />
-      <Card className="mt-5">
-        <CardHeader>
-          <CardTitle>探索からPerformanceまで</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <ol className="grid gap-2 text-xs text-slate-400 sm:grid-cols-3 xl:grid-cols-6">
-            {[
-              "1. 候補を発見",
-              "2. 詳細分析",
-              "3. 適格性を判定",
-              "4. 監視対象に追加",
-              "5. 履歴を同期",
-              "6. Performanceを計算",
-            ].map((step) => (
-              <li className="rounded-lg border border-white/[0.07] bg-white/[0.025] p-3" key={step}>
-                {step}
-              </li>
-            ))}
-          </ol>
-          <p className="mt-3 text-xs leading-5 text-slate-500">
-            詳細分析では、候補アドレスの過去取引、Funding、注文、ポジションを取得し、履歴完全性・データ品質・監視適格性を判定します。
-          </p>
-          <p className="mt-2 text-xs leading-5 text-slate-500">
-            除外解除後、候補の適格性を再評価します。状態は一時的にPENDINGになることがあります。
-          </p>
-        </CardContent>
-      </Card>
+      <p
+        className="mt-5 inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/[0.06] px-3 py-1.5 text-sm font-medium text-cyan-100"
+        role="status"
+      >
+        {discoveryStateLabel(settings, stats)}
+      </p>
+      <SummaryGrid stats={stats} />
       {settings ? (
         <DiscoverySettingsCard
           onSaved={(next) => {
@@ -226,11 +215,14 @@ export function DiscoveryClient() {
       <Card className="mt-5">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>発見候補</CardTitle>
+            <CardTitle>候補一覧</CardTitle>
             <Button
               aria-label="探索候補を再読み込み"
               disabled={loading}
-              onClick={() => void load()}
+              onClick={() => {
+                void load();
+                void loadSummary();
+              }}
               size="sm"
               variant="outline"
             >
@@ -256,29 +248,29 @@ export function DiscoveryClient() {
               />
             </label>
             <select
-              aria-label="詳細分析状態"
+              aria-label="調査状態"
               className="input-field"
               onChange={(event) => setEnrichmentStatus(event.target.value as EnrichmentStatus | "")}
               value={enrichmentStatus}
             >
-              <option value="">詳細分析: すべて</option>
+              <option value="">調査状態: すべて</option>
               {["PENDING", "QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "RATE_LIMITED"].map(
                 (value) => (
                   <option key={value} value={value}>
-                    {value}
+                    {enrichmentStatusLabel(value as EnrichmentStatus)}
                   </option>
                 ),
               )}
             </select>
             <select
-              aria-label="フィルター状態"
+              aria-label="候補状態"
               className="input-field"
               onChange={(event) =>
                 setFilterStatus(event.target.value as CandidateFilterStatus | "")
               }
               value={filterStatus}
             >
-              <option value="">フィルター: すべて</option>
+              <option value="">候補状態: すべて</option>
               {[
                 "PENDING",
                 "LIGHT_ELIGIBLE",
@@ -288,7 +280,7 @@ export function DiscoveryClient() {
                 "PROMOTED",
               ].map((value) => (
                 <option key={value} value={value}>
-                  {value}
+                  {candidateFilterStatusLabel(value as CandidateFilterStatus)}
                 </option>
               ))}
             </select>
@@ -308,20 +300,17 @@ export function DiscoveryClient() {
           ) : null}
           {candidates.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="data-table min-w-[1500px]">
+              <table className="data-table min-w-[1180px]">
                 <thead>
                   <tr>
-                    <th>Address</th>
-                    <th>発見 / 最終活動</th>
-                    <th>観測</th>
+                    <th>アドレス</th>
+                    <th>主に取引している通貨</th>
+                    <th>取引回数</th>
                     <th>推定取引額</th>
-                    <th>銘柄</th>
-                    <th>最大取引額</th>
-                    <th>詳細分析</th>
-                    <th>Filter</th>
-                    <th>履歴完全性</th>
-                    <th>品質</th>
-                    <th>除外理由</th>
+                    <th>活動日数</th>
+                    <th>データの確かさ</th>
+                    <th>候補の状態</th>
+                    <th>売買成績</th>
                     <th>操作</th>
                   </tr>
                 </thead>
@@ -336,31 +325,21 @@ export function DiscoveryClient() {
                           {shortenAddress(candidate.address)}
                         </Link>
                       </td>
-                      <td>
-                        <p>{dateTime(candidate.firstSeenAt)}</p>
-                        <p className="mt-1 text-slate-500">{dateTime(candidate.lastSeenAt)}</p>
-                      </td>
-                      <td>{candidate.tradeCount} trades</td>
+                      <td>{candidate.coins.slice(0, 3).join(", ") || "-"}</td>
+                      <td>{candidate.tradeCount}回</td>
                       <td className="font-mono">${decimalText(candidate.estimatedNotionalUsd)}</td>
-                      <td>{candidate.coins.join(", ") || "—"}</td>
-                      <td className="font-mono">${decimalText(candidate.largestTradeUsd)}</td>
+                      <td>{candidate.activeDays}日</td>
                       <td>
-                        <StatusBadge value={candidate.enrichmentStatus} />
-                      </td>
-                      <td>
-                        <StatusBadge value={candidate.filterStatus} />
+                        <StatusBadge value={candidateDataCertainty(candidate)} />
                       </td>
                       <td>
-                        <StatusBadge value={candidate.historyCompleteness} />
+                        <StatusBadge value={candidateFilterStatusLabel(candidate.filterStatus)} />
                       </td>
-                      <td>{candidate.dataQualityScore}/100</td>
-                      <td className="max-w-72 text-slate-500">
-                        {candidate.exclusionReasons.join(", ") || "—"}
-                      </td>
+                      <td>{candidatePerformanceStatus(candidate)}</td>
                       <td>
                         <div className="flex gap-1.5">
                           <Button
-                            aria-label={`${candidate.address} を詳細分析`}
+                            aria-label={`${candidate.address} の取引履歴を確認`}
                             disabled={
                               pendingCandidateAddress === candidate.address ||
                               candidate.promotedAt !== null ||
@@ -373,7 +352,7 @@ export function DiscoveryClient() {
                             variant="outline"
                           >
                             <Sparkles aria-hidden="true" className="size-3.5" />
-                            詳細分析
+                            履歴を確認
                           </Button>
                           <Button
                             aria-label={`${candidate.address} を${exclusionAction(candidate).label}`}
@@ -429,34 +408,15 @@ export function DiscoveryClient() {
   );
 }
 
-function StatsGrid({
-  settings,
-  stats,
-}: {
-  readonly settings: DiscoverySettings | null;
-  readonly stats: DiscoveryStats | null;
-}) {
-  const values = [
-    ["WebSocket", stats?.websocketStatus ?? "—"],
-    ["受信イベント", stats?.receivedTradeEvents ?? "0"],
-    ["重複除外", stats?.duplicateTradeEvents ?? "0"],
-    ["発見アドレス", stats?.discoveredAddresses ?? "0"],
-    ["新規候補", stats?.newCandidates ?? "0"],
-    ["詳細分析待ち", String(stats?.enrichmentWaiting ?? 0)],
-    ["成功 / 失敗", `${stats?.enrichmentSucceeded ?? "0"} / ${stats?.enrichmentFailed ?? "0"}`],
-    ["通過 / 除外", `${stats?.filterPassed ?? 0} / ${stats?.excluded ?? 0}`],
-    ["API weight / min", String(stats?.apiWeightUsed ?? 0)],
-    ["Queue滞留", String(stats?.queueDepth ?? 0)],
-    ["最終イベント", stats?.lastEventAt ? dateTime(stats.lastEventAt) : "—"],
-    ["購読", settings?.mode === "ALL" ? "全銘柄" : (stats?.subscribedCoins.join(", ") ?? "—")],
-  ] as const;
+function SummaryGrid({ stats }: { readonly stats: DiscoveryStats | null }) {
+  const values = discoverySummaryItems(stats);
   return (
-    <div className="mt-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-      {values.map(([label, value]) => (
-        <Card key={label}>
+    <div className="mt-5 grid gap-3 sm:grid-cols-3 lg:max-w-4xl">
+      {values.map((item) => (
+        <Card key={item.label}>
           <CardContent className="py-4">
-            <p className="text-[10px] uppercase tracking-[0.14em] text-slate-600">{label}</p>
-            <p className="mt-2 truncate text-sm font-medium text-slate-200">{value}</p>
+            <p className="text-sm text-slate-400">{item.label}</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{item.value}</p>
           </CardContent>
         </Card>
       ))}
@@ -506,21 +466,21 @@ function DiscoverySettingsCard({
       <CardContent>
         <form className="grid gap-3 md:grid-cols-4" onSubmit={submit}>
           <label className="text-xs text-slate-500">
-            購読範囲
+            対象の通貨
             <select
-              aria-label="購読範囲"
+              aria-label="対象の通貨"
               className="input-field mt-1"
               onChange={(event) => setMode(event.target.value as "MAJOR" | "ALL")}
               value={mode}
             >
-              <option value="MAJOR">主要銘柄のみ</option>
-              <option value="ALL">全Perpetuals銘柄</option>
+              <option value="MAJOR">主要な通貨</option>
+              <option value="ALL">すべての通貨</option>
             </select>
           </label>
           <label className="text-xs text-slate-500">
-            最低観測回数
+            候補にする最低取引回数
             <input
-              aria-label="最低観測回数"
+              aria-label="候補にする最低取引回数"
               className="input-field mt-1"
               min="1"
               onChange={(event) => setMinimumTrades(event.target.value)}
@@ -530,9 +490,9 @@ function DiscoverySettingsCard({
             />
           </label>
           <label className="text-xs text-slate-500">
-            最低観測取引額 (USD)
+            候補にする最低取引額 (USD)
             <input
-              aria-label="最低観測取引額"
+              aria-label="候補にする最低取引額"
               className="input-field mt-1"
               inputMode="decimal"
               onChange={(event) => setMinimumNotional(event.target.value)}
@@ -548,10 +508,6 @@ function DiscoverySettingsCard({
             </Button>
           </div>
         </form>
-        <p className="mt-3 text-xs text-slate-600">
-          主要銘柄: {settings.priorityCoins.join(", ")}。全銘柄は公式metaのactive
-          universeから取得します。
-        </p>
         {error ? <Notice tone="error">{error}</Notice> : null}
       </CardContent>
     </Card>
@@ -580,13 +536,10 @@ function Notice({
 }
 
 function StatusBadge({ value }: { readonly value: string }) {
-  const positive = value === "CONNECTED" || value === "SUCCEEDED" || value === "ELIGIBLE";
+  const positive =
+    value === "高い" || value === "調査済み" || value === "監視候補" || value === "監視中";
   const warning =
-    value === "RUNNING" ||
-    value === "QUEUED" ||
-    value === "LIGHT_ELIGIBLE" ||
-    value === "INSUFFICIENT_HISTORY" ||
-    value === "INSUFFICIENT";
+    value === "確認中" || value === "確認待ち" || value === "一部確認が必要" || value === "低い";
   return <Badge variant={positive ? "success" : warning ? "warning" : "neutral"}>{value}</Badge>;
 }
 
@@ -599,14 +552,6 @@ function decimalText(value: string): string {
   const grouped = (integer ?? "0").replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   const trimmedFraction = fraction?.replace(/0+$/, "");
   return trimmedFraction ? `${grouped}.${trimmedFraction.slice(0, 4)}` : grouped;
-}
-
-function dateTime(value: string): string {
-  return new Intl.DateTimeFormat("ja-JP", {
-    dateStyle: "short",
-    timeStyle: "short",
-    timeZone: "Asia/Tokyo",
-  }).format(new Date(value));
 }
 
 function errorMessage(cause: unknown): string {

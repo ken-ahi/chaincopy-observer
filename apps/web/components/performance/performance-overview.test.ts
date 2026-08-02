@@ -23,6 +23,8 @@ import { CalculationDetails } from "./calculation-details.js";
 import {
   buildReliabilitySummary,
   canDisplayTrustedClosedCycleCount,
+  performanceReasonForCode,
+  selectPerformanceReasons,
   selectPrimaryMetrics,
 } from "./performance-display.js";
 import { PerformanceDetailedMetrics } from "./performance-detailed-metrics.js";
@@ -66,7 +68,7 @@ describe("Performance overview", () => {
 
     expect(html).toContain("このアドレスの売買成績");
     expect(html.match(/data-metric-key=/gu) ?? []).toHaveLength(6);
-    expect(html).toContain("この成績の確かさ");
+    expect(html).toContain("成績の確かさ");
     expect(html).toContain("成績を再計算");
     expect(html).not.toContain("最新の計算試行");
     expect(html).not.toContain("計算完了");
@@ -98,7 +100,8 @@ describe("Performance overview", () => {
     expect(html).toContain('data-metric-key="maxDrawdown"');
     expect(html).not.toContain('data-metric-key="annualizedReturn"');
     expect(selected.filter((item) => item.unavailable)).toHaveLength(3);
-    expect(html).toContain("一番大きく資産が減った割合は計算できません");
+    expect(html).toContain("最大の下落は計算できません");
+    expect(html).toContain("履歴不足");
   });
 
   it("全主要Metric欠損時も6カードと読み上げ可能なハイフンを表示する", () => {
@@ -160,12 +163,12 @@ describe("Performance overview", () => {
     const html = renderPerformance(performance({ metrics: primaryMetrics() }));
 
     for (const label of [
-      "資産がどれくらい増えたか",
-      "一番大きく資産が減った割合",
-      "利益と損失のバランス",
-      "利益になった取引の割合",
-      "成績を調べた取引数",
-      "一度の大勝ちへの依存",
+      "資産の増減",
+      "最大の下落",
+      "損益バランス",
+      "勝率",
+      "確認できた取引",
+      "大勝ちへの依存",
     ]) {
       expect(html).toContain(`aria-label="${label}の説明"`);
     }
@@ -177,7 +180,7 @@ describe("Performance overview", () => {
     for (const id of controls) {
       expect(html).toContain(`id="${id}"`);
     }
-    expect(html).toContain("最も調子が悪かった時に、資産が何％減ったかを表します。");
+    expect(html).toContain("一番調子が悪かった時に、資産が何％減ったかを表します。");
   });
 
   it("評価対象取引数は4条件成立時だけ表示する", () => {
@@ -236,12 +239,14 @@ describe("Performance overview", () => {
       );
 
       if (status === "PENDING" || status === "RUNNING") {
-        expect(html).toContain("成績を更新しています。");
+        expect(html).toContain("成績を計算中");
+        expect(html).toContain("成績の確かさ：");
+        expect(html).toContain("確認中");
+        expect(html).not.toContain('成績の確かさ：<span class="text-cyan-100">低い');
       } else {
-        expect(html).toContain("最新の更新に失敗しました。");
-        expect(html).toContain("前回正常に計算できた成績を表示しています。");
+        expect(html).toContain("最新の計算に失敗しました");
+        expect(html).toContain("前回の成績を表示しています");
       }
-      expect(html).toContain(formatPerformanceMinute(successfulRun.completedAt));
       expect(html).toContain('data-metric-key="cumulativeReturn"');
       expect(html).not.toContain(latestRun.runId);
     },
@@ -282,6 +287,20 @@ describe("Performance overview", () => {
     },
   );
 
+  it("履歴不足で結果がない場合も確かさを低いと表示する", () => {
+    const html = renderPerformance(
+      performance({
+        latestRun: run({ status: "INSUFFICIENT_DATA" }),
+        latestSuccessfulRun: null,
+        metrics: {},
+      }),
+    );
+
+    expect(html).toContain("成績の確かさ：");
+    expect(html).toContain(">低い<");
+    expect(html).toContain("履歴不足のため参考値です");
+  });
+
   it("COMPLETE、PARTIAL、GAP_DETECTEDを履歴状態として信頼性文へ反映する", () => {
     const complete = buildReliabilitySummary(performance())?.text;
     const partial = buildReliabilitySummary(
@@ -291,10 +310,10 @@ describe("Performance overview", () => {
       performance({ latestSuccessfulRun: run({ historyCompleteness: "GAP_DETECTED" }) }),
     );
 
-    expect(complete).toContain("対象期間の履歴");
-    expect(partial?.text).toContain("一部の履歴を評価対象から除外");
+    expect(complete).toBe("必要な履歴がそろっています");
+    expect(partial?.text).toBe("一部の履歴が不足しています");
     expect(partial?.consumedMeaningKeys).toContain("INCOMPLETE_TRADE_HISTORY");
-    expect(gap?.text).toContain("履歴の欠損を跨がず");
+    expect(gap?.text).toBe("履歴不足のため参考値です");
     expect(gap?.consumedMeaningKeys).toContain("NAV_HISTORY_GAP");
   });
 
@@ -403,7 +422,7 @@ describe("Performance overview", () => {
     expect(html).toContain(`id="${controls}"`);
   });
 
-  it("計算不能理由を主要カードに具体的な日本語で表示する", () => {
+  it("計算不能カードは短い状態だけを表示し、理由は詳細へ集約する", () => {
     const data = performance({
       availability: availability({
         return: {
@@ -416,8 +435,62 @@ describe("Performance overview", () => {
       metrics: { winRate: metric("winRate", "0.5") },
     });
     const overviewHtml = renderPerformance(data);
-    expect(overviewHtml).toContain("入出金前後の資産データが足りないため計算できません。");
+    const reasons = selectPerformanceReasons(data);
+
+    expect(overviewHtml).toContain("履歴不足");
+    expect(overviewHtml).not.toContain("入金や出金の前後に");
+    expect(reasons.map((reason) => reason.message)).toContain(
+      "入金や出金の前後に、資産がいくらあったか確認できません。そのため、売買で増えたのか、入金で増えたのかを区別できません。",
+    );
     expect(overviewHtml).not.toContain("MISSING_CASH_FLOW_BOUNDARY_NAV");
+  });
+
+  it("既知の内部理由を初心者向け日本語へ変換し、未知Codeも露出しない", () => {
+    const cases = [
+      "MISSING_CASH_FLOW_BOUNDARY_NAV",
+      "NON_POSITIVE_NAV",
+      "PARTIAL_HISTORY",
+      "TRADE_HISTORY_PREFIX_SKIPPED",
+      "POSITION_DISCONTINUITY",
+      "UNALLOCATED_FUNDING",
+      "MULTIPLE_SNAPSHOTS_SAME_DAY",
+      "CLOSED_PNL_MISMATCH",
+      "CALCULATION_WINDOW_ADJUSTED",
+      "PERP_ONLY_NAV",
+      "MINIMUM_HISTORY_NOT_MET",
+      "INSUFFICIENT_HISTORY",
+      "UNKNOWN_CASH_FLOW",
+      "DATA_ORDER_AMBIGUOUS",
+      "INVALID_DECIMAL",
+      "MISSING_INITIAL_STATE",
+      "NO_LOSING_CYCLES",
+      "NO_WINNING_CYCLES",
+      "ZERO_DENOMINATOR",
+      "ZERO_DOWNSIDE_DEVIATION",
+      "ZERO_DRAWDOWN",
+      "ZERO_GROSS_LOSS",
+      "ZERO_VARIANCE",
+    ] as const;
+
+    for (const code of cases) {
+      const reason = performanceReasonForCode(code);
+      expect(reason.message).not.toContain(code);
+      expect(reason.message).toMatch(/[ぁ-んァ-ヶ一-龠]/u);
+    }
+    expect(performanceReasonForCode("FUTURE_UNKNOWN_CODE").message).toBe(
+      "一部のデータを確認できません",
+    );
+  });
+
+  it("同じ初心者向け理由を詳細内で重複表示しない", () => {
+    const data = performance({
+      latestRun: run({ warningCodes: ["NON_POSITIVE_NAV"] }),
+      latestSuccessfulRun: run({ warningCodes: ["INVALID_INPUT", "NON_POSITIVE_NAV"] }),
+    });
+
+    expect(
+      selectPerformanceReasons(data).filter((reason) => reason.key === "invalid-asset-value"),
+    ).toHaveLength(1);
   });
 
   it("Return Laneだけ利用不能でも主要6指標を固定表示する", () => {
@@ -479,7 +552,7 @@ describe("Performance overview", () => {
     const overview = renderPerformance(data);
     const details = renderToStaticMarkup(createElement(PerformanceDetailedMetrics, { data }));
 
-    expect(overview).toContain("この成績の確かさ");
+    expect(overview).toContain("成績の確かさ");
     expect(details).not.toContain('data-metric-key="maxLeverage"');
     expect(details).not.toContain("INSUFFICIENT_HISTORY");
   });
@@ -495,7 +568,7 @@ describe("Performance overview", () => {
     const html = renderPerformance(data);
 
     expect(html).not.toContain(sharedReason);
-    expect(html).toContain("計算できない項目");
+    expect(html).not.toContain("計算できない項目");
   });
 
   it("詳細指標はP2 Metricの存在値だけを表示し欠損カードを作らない", () => {
@@ -513,7 +586,7 @@ describe("Performance overview", () => {
     expect(html).not.toContain(">—<");
   });
 
-  it("詳しい成績とデータ状態を独立した初期閉buttonとして描画する", () => {
+  it("詳しい成績と理由を独立した初期閉buttonとして描画する", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceDetailsPanels, {
         calculationDetailsOpen: false,
@@ -527,13 +600,13 @@ describe("Performance overview", () => {
     );
 
     expect(html).toContain("成績をくわしく見る");
-    expect(html).toContain("データの状態を見る");
+    expect(html).toContain("詳しい理由を見る");
     expect(html.match(/aria-expanded="false"/gu) ?? []).toHaveLength(2);
     expect(html).not.toContain("データ利用状況");
     expect(html).not.toContain("Daily NAV件数");
   });
 
-  it("データの状態を開いても内部ID・Code・生データ表を表示しない", () => {
+  it("詳しい理由を開いても内部ID・Code・生データ表を表示しない", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceDetailsPanels, {
         calculationDetailsOpen: true,
@@ -550,9 +623,9 @@ describe("Performance overview", () => {
       }),
     );
 
-    expect(html).toContain("データの状態を見る");
+    expect(html).toContain("詳しい理由を閉じる");
     expect(html).toContain("確認できた期間");
-    expect(html).toContain("履歴がそろっているか");
+    expect(html).toContain("確認できた取引数");
     expect(html).not.toContain("Run ID");
     expect(html).not.toContain("Input Fingerprint");
     expect(html).not.toContain("Warning Codes");
@@ -699,7 +772,8 @@ describe("Performance overview", () => {
     expect(source).toContain("最近の動き");
     expect(source).toContain("現在出している注文");
     expect(source).toContain("<PerformanceSection");
-    expect(source).toContain('href="#performance"');
+    expect(source).not.toContain('href="#performance"');
+    expect(source).not.toContain("売買成績を見る");
     expect(source).not.toContain("limit=100");
     expect(source).not.toContain("/funding?");
     expect(source).not.toContain("/ledger?");
