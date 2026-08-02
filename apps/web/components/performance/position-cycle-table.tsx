@@ -15,7 +15,7 @@ export function PositionCycleTable({
   return (
     <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
       <table className="min-w-[112rem] w-full text-left text-xs">
-        <caption className="sr-only">Position Cycle一覧</caption>
+        <caption className="sr-only">取引サイクル一覧</caption>
         <thead className="bg-slate-950/80 text-slate-500">
           <tr>
             {[
@@ -23,15 +23,15 @@ export function PositionCycleTable({
               "方向",
               "開始日時",
               "終了日時",
-              "平均Entry価格",
-              "平均Exit価格",
-              "Entry数量",
-              "Exit数量",
-              "Gross Realized PnL",
-              "Fee",
+              "平均エントリー価格",
+              "平均決済価格",
+              "エントリー数量",
+              "決済数量",
+              "実現損益（手数料前）",
+              "手数料",
               "Funding",
-              "Net Realized PnL",
-              "Fill数",
+              "実現損益（手数料後）",
+              "約定数",
               "状態",
             ].map((label) => (
               <th className="whitespace-nowrap px-3 py-2 font-medium" key={label} scope="col">
@@ -71,14 +71,14 @@ function Cell({ children }: { readonly children: React.ReactNode }): React.JSX.E
 
 function formatSide(side: string): string {
   if (side === "LONG") {
-    return "Long";
+    return "ロング";
   }
   if (side === "SHORT") {
-    return "Short";
+    return "ショート";
   }
   return "—";
 }
 
 function formatStatus(status: PositionCycleDto["status"]): string {
-  return status === "OPEN" ? "Open" : "Closed";
+  return status === "OPEN" ? "保有中" : "完了";
 }

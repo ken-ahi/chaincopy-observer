@@ -82,7 +82,7 @@ function renderView(
 
 describe("日次NAV表示", () => {
   it("NAVセクションを表示する", () => {
-    expect(renderView(state())).toContain("日次NAV");
+    expect(renderView(state())).toContain("日次評価額");
   });
 
   it("初回読み込み状態を表示する", () => {
@@ -104,8 +104,6 @@ describe("日次NAV表示", () => {
       "Funding",
       "手数料",
       "外部キャッシュフロー",
-      "精度区分",
-      "履歴完全性",
     ]) {
       expect(html).toContain(label);
     }
@@ -142,16 +140,16 @@ describe("日次NAV表示", () => {
     expect(formatPerformanceDay("2026-01-01T18:00:00.000Z")).toBe("2026/01/02");
   });
 
-  it("Precisionをコードと日本語で表示する", () => {
+  it("Precisionを日次一覧で反復表示しない", () => {
     const html = renderView(state({ items: [nav("nav-1", { precision: "DERIVED" })] }));
-    expect(html).toContain("DERIVED · 算出値");
+    expect(html).not.toContain("DERIVED · 算出値");
   });
 
-  it("History Completenessをコードと日本語で表示する", () => {
+  it("History Completenessを日次一覧で反復表示しない", () => {
     const html = renderView(
       state({ items: [nav("nav-1", { historyCompleteness: "GAP_DETECTED" })] }),
     );
-    expect(html).toContain("GAP_DETECTED · 履歴欠損");
+    expect(html).not.toContain("GAP_DETECTED · 履歴欠損");
   });
 
   it("複数点のNAVチャートを表示する", () => {
@@ -253,8 +251,8 @@ describe("日次NAV表示", () => {
         loading: true,
       }),
     );
-    expect(html).toContain("Performance");
-    expect(html).toContain("パフォーマンス情報を読み込み中");
+    expect(html).toContain("運用実績");
+    expect(html).toContain("運用実績を読み込んでいます");
   });
 
   it("アドレスまたはRun変更時のRESETで行とcursorを消去する", () => {

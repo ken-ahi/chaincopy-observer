@@ -184,9 +184,12 @@ export function NavSectionView({
     <section aria-labelledby="daily-nav-title" className="mt-8">
       <div className="mb-4">
         <h2 className="text-lg font-semibold text-white" id="daily-nav-title">
-          日次NAV
+          日次評価額
         </h2>
-        <p className="mt-1 text-xs text-slate-500">保存済みの日次評価額を日付順に表示します。</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-500">
+          raw Portfolio
+          Snapshot由来の保存済み日次評価額を日付順に表示します。明細表は横方向へスクロールできます。
+        </p>
       </div>
 
       {loading ? <StateMessage role="status">NAVを読み込んでいます</StateMessage> : null}

@@ -91,19 +91,19 @@ function renderView(current: PositionCycleState, loading = false): string {
   );
 }
 
-describe("Position Cycle表示", () => {
-  it("Position Cycleセクションを表示する", () => {
-    expect(renderView(state())).toContain("Position Cycles");
+describe("取引サイクル表示", () => {
+  it("取引サイクルセクションを表示する", () => {
+    expect(renderView(state())).toContain("取引サイクル");
   });
 
   it("初回読み込み状態を表示する", () => {
     expect(renderView(state({ initialLoading: true }), true)).toContain(
-      "Position Cycleを読み込んでいます",
+      "取引サイクルを読み込んでいます",
     );
   });
 
   it("データ0件の空状態を表示する", () => {
-    expect(renderView(state())).toContain("表示できるPosition Cycleがありません");
+    expect(renderView(state())).toContain("表示できる取引サイクルがありません");
   });
 
   it("Cycle一覧と全列見出しを表示する", () => {
@@ -113,15 +113,15 @@ describe("Position Cycle表示", () => {
       "方向",
       "開始日時",
       "終了日時",
-      "平均Entry価格",
-      "平均Exit価格",
-      "Entry数量",
-      "Exit数量",
-      "Gross Realized PnL",
-      "Fee",
+      "平均エントリー価格",
+      "平均決済価格",
+      "エントリー数量",
+      "決済数量",
+      "実現損益（手数料前）",
+      "手数料",
       "Funding",
-      "Net Realized PnL",
-      "Fill数",
+      "実現損益（手数料後）",
+      "約定数",
       "状態",
     ]) {
       expect(html).toContain(label);
@@ -141,14 +141,14 @@ describe("Position Cycle表示", () => {
         ],
       }),
     );
-    expect(html).toContain("Short");
-    expect(html).toContain("Open");
+    expect(html).toContain("ショート");
+    expect(html).toContain("保有中");
   });
 
   it("Closed Cycleを文字で表示する", () => {
     const html = renderView(state({ items: [cycle("closed")] }));
-    expect(html).toContain("Long");
-    expect(html).toContain("Closed");
+    expect(html).toContain("ロング");
+    expect(html).toContain("完了");
   });
 
   it("null値を0補完せずダッシュ表示する", () => {
@@ -254,7 +254,7 @@ describe("Position Cycle表示", () => {
         items: [cycle("btc")],
       }),
     );
-    expect(html).toContain("条件に一致するPosition Cycleがありません");
+    expect(html).toContain("条件に一致する取引サイクルがありません");
   });
 
   it("次ページを既存行へ追加しcursorを更新する", () => {
@@ -304,7 +304,7 @@ describe("Position Cycle表示", () => {
 
   it("初回取得失敗を安全な文言で表示する", () => {
     const html = renderView(state({ initialError: true }));
-    expect(html).toContain("Position Cycleを取得できませんでした");
+    expect(html).toContain("取引サイクルを取得できませんでした");
     expect(html).not.toContain("Stack");
   });
 
@@ -339,8 +339,8 @@ describe("Position Cycle表示", () => {
         state: navState,
       }),
     );
-    expect(overview).toContain("Performance");
-    expect(nav).toContain("日次NAV");
+    expect(overview).toContain("運用実績");
+    expect(nav).toContain("日次評価額");
   });
 
   it("アドレス変更時のRESETでデータ・cursor・フィルターを初期化する", () => {

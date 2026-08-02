@@ -1,7 +1,6 @@
 import * as React from "react";
 
 import { formatPerformanceAmount, formatPerformanceDay } from "./performance-formatters";
-import { HistoryCompletenessBadge, PrecisionBadge } from "./performance-status-badge";
 import { type DailyNavDto } from "../../lib/performance-api";
 
 export function NavTable({
@@ -24,8 +23,6 @@ export function NavTable({
               "Funding",
               "手数料",
               "外部キャッシュフロー",
-              "精度区分",
-              "履歴完全性",
             ].map((label) => (
               <th className="whitespace-nowrap px-3 py-2 font-medium" key={label} scope="col">
                 {label}
@@ -44,12 +41,6 @@ export function NavTable({
               <Cell>{formatPerformanceAmount(item.funding, { signed: true })}</Cell>
               <Cell>{formatPerformanceAmount(item.fees, { signed: true })}</Cell>
               <Cell>{formatPerformanceAmount(item.externalCashFlow, { signed: true })}</Cell>
-              <Cell>
-                <PrecisionBadge precision={item.precision} />
-              </Cell>
-              <Cell>
-                <HistoryCompletenessBadge completeness={item.historyCompleteness} />
-              </Cell>
             </tr>
           ))}
         </tbody>

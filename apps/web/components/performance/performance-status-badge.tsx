@@ -8,11 +8,11 @@ import {
 } from "../../lib/performance-api";
 
 const statusLabels: Record<PerformanceCalculationStatus, string> = {
-  PENDING: "PENDING · 計算待ち",
-  RUNNING: "RUNNING · 計算中",
-  SUCCEEDED: "SUCCEEDED · 計算済み",
-  INSUFFICIENT_DATA: "INSUFFICIENT_DATA · データ不足",
-  FAILED: "FAILED · 計算失敗",
+  PENDING: "計算待ち",
+  RUNNING: "計算中",
+  SUCCEEDED: "計算完了",
+  INSUFFICIENT_DATA: "データ不足",
+  FAILED: "計算できませんでした",
 };
 
 const precisionLabels: Record<PerformancePrecision, string> = {
@@ -31,8 +31,10 @@ const completenessLabels: Record<PerformanceHistoryCompleteness, string> = {
 };
 
 export function PerformanceStatusBadge({
+  diagnostic = false,
   status,
 }: {
+  readonly diagnostic?: boolean;
   readonly status: PerformanceCalculationStatus;
 }): React.JSX.Element {
   const variant =
@@ -43,7 +45,11 @@ export function PerformanceStatusBadge({
         : status === "FAILED" || status === "INSUFFICIENT_DATA"
           ? "warning"
           : "neutral";
-  return <Badge variant={variant}>{statusLabels[status]}</Badge>;
+  return (
+    <Badge variant={variant}>
+      {diagnostic ? `${status} · ${statusLabels[status]}` : statusLabels[status]}
+    </Badge>
+  );
 }
 
 export function PrecisionBadge({

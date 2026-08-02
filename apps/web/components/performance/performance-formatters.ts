@@ -34,6 +34,25 @@ export function formatPerformanceDate(value: string | null): string {
   }).format(date);
 }
 
+export function formatPerformanceMinute(value: string | null): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return new Intl.DateTimeFormat("ja-JP", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Tokyo",
+  }).format(date);
+}
+
 export function formatPerformanceDay(value: string | null): string {
   if (!value) {
     return "—";
