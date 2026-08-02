@@ -260,3 +260,12 @@
 - API Version選択: `performance-v3`を優先し、v3が存在しない場合に限り`performance-v2`へ明示的にfallbackする。`performance-v1`、未知Version、将来Versionは暗黙fallback対象にしない。fallback選択は暗黙の最新Run取得契約、履歴保持はDB共存契約であり、別の概念とする。明示`runId`取得はWallet所属などの既存安全条件を維持したうえで指定Runを尊重する。現行Versionを更新するときはfallback Versionも明示的に変更する。
 - 永続化/API: Wealth Index中間値はDBへ保存せず、既存`address_performance_metrics`へMax Drawdownを保存する。Prisma schema、Migration、API DTOおよびURLは変更しない。`calculationVersion`と`metricVersion`で診断可能な既存契約を維持する。
 - 残存制約: `accountClassTransfer`など現行分類で内部振替とされたイベントをMax Drawdownだけで再分類しない。Perpetuals評価範囲をまたぐ内部振替を全履歴で確定できない問題は残るため、分類契約を拡張する別フェーズで扱う。
+
+## ADR-031: Phase 4.2.3は通常画面から技術状態と重複説明を除く
+
+- 状態: 採用
+- 背景: Phase 4.2.2のアドレス詳細は、計算不能理由を主要指標カード、確かさ、データ状態へ重複表示していた。自動探索は通信・Queue・API利用量と処理工程を中心に表示し、有望なアドレスを調べる目的が伝わりにくかった。
+- Performance表示: 主要6指標は短い名称で常に固定表示し、計算不能値は`-`と「履歴不足」または「取引不足」だけを表示する。内部Warning、Reason、AvailabilityはWebの純粋関数で初心者向け理由へ変換・重複除去し、初期状態が閉じた「詳しい理由」へ集約する。計算中の確かさは「確認中」とし、正常完了の専用メッセージは表示しない。この表示契約はADR-029の空カード非表示と通常Warning表示を置き換える。
+- 自動探索表示: 通常画面はタイトル、利用者向け状態、見つかった候補・調査済み・監視候補、候補一覧、設定の順にする。通信方式、接続状態、受信件数、重複除外、Queue、API利用量、内部Status、工程説明は表示しない。候補は成績計算前に高収益と断定せず「成績確認前」と表示する。
+- 取得: 候補検索・絞り込み・追加読み込みでは候補APIだけを再取得し、設定と探索サマリーは初回表示または明示的な再読み込み時だけ取得する。探索処理、既存APIレスポンス、監査データは変更しない。
+- 非変更: DB schema、Worker、探索・同期・分析処理、`performance-v3`の金融計算、API契約は変更しない。技術情報はDB、API、ログに保持する。

@@ -54,17 +54,18 @@ test.describe("Performance browser E2E", () => {
       await expect(
         page.getByRole("heading", { exact: true, name: "このアドレスの売買成績" }),
       ).toBeVisible();
+      await expect(page.getByRole("link", { name: "売買成績を見る" })).toHaveCount(0);
       await expect(page.locator("[data-metric-key]")).toHaveCount(6);
       await expect(page.locator('[data-metric-key="cumulativeReturn"]')).toContainText("-");
-      await expect(page.getByText("この成績の確かさ")).toBeVisible();
+      await expect(page.getByText(/成績の確かさ/)).toBeVisible();
       await expect(page.getByText("低い", { exact: true })).toBeVisible();
-      await expect(
-        page.getByText("資産の履歴が足りないため計算できません。").first(),
-      ).toBeVisible();
+      await expect(page.locator('[data-metric-key="cumulativeReturn"]')).toContainText("履歴不足");
+      await expect(page.getByText(/履歴が不足しているため/)).toHaveCount(0);
       await assertInternalTermsHidden(page);
 
-      await page.getByRole("button", { name: "データの状態を見るを開く" }).click();
-      await expect(page.getByText("履歴がそろっているか")).toBeVisible();
+      await page.getByRole("button", { name: "詳しい理由を見る" }).click();
+      await expect(page.getByText(/履歴が不足しているため/)).toBeVisible();
+      await expect(page.getByText("確認できた取引数")).toBeVisible();
       await assertInternalTermsHidden(page);
     });
 
@@ -80,12 +81,13 @@ test.describe("Performance browser E2E", () => {
       await expect(calculateButton).toBeEnabled();
       await calculateButton.click();
 
-      await expect(page.getByText("計算待ち").first()).toBeVisible();
-      await expect(page.getByRole("button", { name: "計算待ち" })).toBeDisabled();
+      await expect(page.getByText("成績を計算中", { exact: true })).toBeVisible();
+      await expect(page.getByText("成績の確かさ：確認中")).toBeVisible();
+      await expect(page.getByRole("button", { name: "計算中" })).toBeDisabled();
 
       await completeManualPerformanceFixture(manualAddress);
 
-      await expect(page.getByText(/必要な履歴が足りません/)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByText("成績を計算できませんでした")).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("button", { name: "成績を再計算" })).toBeEnabled();
     });
 
@@ -105,15 +107,15 @@ test.describe("Performance browser E2E", () => {
       await expect(page.getByText("12.3456%")).toBeVisible();
       await expect(page.getByText("-4.5%")).toBeVisible();
       await expect(page.getByText("62.5%")).toBeVisible();
-      await expect(page.getByText("この成績の確かさ")).toBeVisible();
+      await expect(page.getByText(/成績の確かさ/)).toBeVisible();
       await expect(page.getByText("高い", { exact: true })).toBeVisible();
 
       const explanation = page.getByRole("button", {
-        name: "資産がどれくらい増えたかの説明",
+        name: "資産の増減の説明",
       });
       await expect(explanation).toHaveAttribute("aria-expanded", "false");
       await explanation.click();
-      await expect(page.getByText(/最初と比べて、資産が何％増減したか/)).toBeVisible();
+      await expect(page.getByText(/最初と比べて、資産が何％増えたか/)).toBeVisible();
       await explanation.press("Enter");
       await expect(explanation).toHaveAttribute("aria-expanded", "false");
 
@@ -124,10 +126,10 @@ test.describe("Performance browser E2E", () => {
       await expect(page.getByText("買いました", { exact: true }).first()).toBeVisible();
       await expect(page.getByRole("heading", { name: "現在出している注文" })).toBeVisible();
 
-      await page.getByRole("button", { name: "成績をくわしく見るを開く" }).click();
+      await page.getByRole("button", { name: "成績をくわしく見る" }).click();
       await expect(page.getByText("値動きに対する収益")).toBeVisible();
-      await page.getByRole("button", { name: "データの状態を見るを開く" }).click();
-      await expect(page.getByText("確認できたデータ")).toBeVisible();
+      await page.getByRole("button", { name: "詳しい理由を見る" }).click();
+      await expect(page.getByRole("heading", { name: "詳しい理由" })).toBeVisible();
       await assertInternalTermsHidden(page);
 
       expect(requestedPaths).toEqual(
@@ -151,7 +153,7 @@ test.describe("Performance browser E2E", () => {
       await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
       await expect(page.locator("[data-metric-key]")).toHaveCount(6);
       await expect(page.getByText("低い", { exact: true })).toBeVisible();
-      await expect(page.getByText(/一部の履歴を評価対象から除外/).first()).toBeVisible();
+      await expect(page.getByText("一部の履歴が不足しています")).toBeVisible();
       await expect(page.getByText("追加の注意事項があります")).toHaveCount(0);
       await assertInternalTermsHidden(page);
     });

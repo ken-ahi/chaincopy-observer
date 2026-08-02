@@ -1,4 +1,4 @@
-import { metricLane, type PerformanceLane } from "./performance-display";
+import { metricLane, performanceReasonForCode, type PerformanceLane } from "./performance-display";
 import { type AddressPerformanceDto } from "../../lib/performance-api";
 
 export type WarningMeaningKey =
@@ -32,7 +32,6 @@ interface WarningDefinition {
   readonly codes: ReadonlyArray<string>;
   readonly defaultScope: WarningScope;
   readonly key: WarningMeaningKey;
-  readonly message: string;
   readonly priority: number;
   readonly tieBreak: number;
 }
@@ -47,7 +46,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
     key: "INCOMPLETE_TRADE_HISTORY",
     codes: ["PARTIAL_HISTORY", "TRADE_HISTORY_PREFIX_SKIPPED", "POSITION_DISCONTINUITY"],
     defaultScope: "trade",
-    message: "一部の取引履歴を評価対象から除外しています",
     priority: 2,
     tieBreak: 0,
   },
@@ -55,7 +53,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
     key: "UNALLOCATED_FUNDING",
     codes: ["UNALLOCATED_FUNDING"],
     defaultScope: "trade",
-    message: "一部のFundingを取引へ割り当てられませんでした",
     priority: 2,
     tieBreak: 1,
   },
@@ -63,7 +60,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
     key: "NAV_HISTORY_GAP",
     codes: ["DATA_GAP", "RETURN_PERIOD_TRUNCATED_AT_GAP"],
     defaultScope: "return",
-    message: "履歴の欠損を跨がず、利用できる期間だけを評価しています",
     priority: 1,
     tieBreak: 2,
   },
@@ -76,7 +72,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
       "CALCULATION_WINDOW_ADJUSTED",
     ],
     defaultScope: "return",
-    message: "取得できた履歴のうち、利用できる範囲だけを評価しています",
     priority: 3,
     tieBreak: 3,
   },
@@ -84,7 +79,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
     key: "UNKNOWN_TRANSFER",
     codes: ["UNKNOWN_CASH_FLOW"],
     defaultScope: "return",
-    message: "分類できない入出金があるため、収益率とリスク指標を表示できません",
     priority: 0,
     tieBreak: 4,
   },
@@ -92,7 +86,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
     key: "MISSING_BOUNDARY_NAV",
     codes: ["MISSING_CASH_FLOW_BOUNDARY_NAV"],
     defaultScope: "return",
-    message: "入出金前後の純資産額を確認できないため、収益・リスク指標はまだ計算できません",
     priority: 0,
     tieBreak: 5,
   },
@@ -100,7 +93,6 @@ const definitions: ReadonlyArray<WarningDefinition> = [
     key: "INVALID_NAV_INPUT",
     codes: ["NON_POSITIVE_NAV", "INVALID_INPUT", "NO_POSITIVE_DATED_NAV"],
     defaultScope: "return",
-    message: "利用できないNAVデータがあるため、一部の指標を表示できません",
     priority: 0,
     tieBreak: 6,
   },
@@ -210,7 +202,7 @@ function normalizeWarningInputs(
 ): ReadonlyArray<UserWarning> {
   const grouped = new Map<
     WarningMeaningKey,
-    { definition: WarningDefinition; scopes: Set<WarningScope> }
+    { definition: WarningDefinition; message: string; scopes: Set<WarningScope> }
   >();
   for (const input of inputs) {
     if (ignoredCodes.has(input.code)) {
@@ -221,15 +213,19 @@ function normalizeWarningInputs(
     if (existing) {
       existing.scopes.add(input.scope);
     } else {
-      grouped.set(definition.key, { definition, scopes: new Set([input.scope]) });
+      grouped.set(definition.key, {
+        definition,
+        message: performanceReasonForCode(input.code, input.scope).message,
+        scopes: new Set([input.scope]),
+      });
     }
   }
 
   return [...grouped.values()]
-    .map(({ definition, scopes }) => ({
+    .map(({ definition, message, scopes }) => ({
       affectedLanes: scopes.has("overall") ? [...lanes] : lanes.filter((lane) => scopes.has(lane)),
       meaningKey: definition.key,
-      message: definition.message,
+      message,
       priority: definition.priority,
       source,
       tieBreak: definition.tieBreak,
@@ -249,7 +245,6 @@ function definitionForCode(code: string): WarningDefinition {
       key: "ADDITIONAL_CAUTION",
       codes: [code],
       defaultScope: "overall",
-      message: "計算結果に追加の注意事項があります",
       priority: 4,
       tieBreak: 99,
     }
