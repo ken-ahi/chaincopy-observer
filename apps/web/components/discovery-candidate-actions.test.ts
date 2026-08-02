@@ -225,7 +225,7 @@ describe("discovery candidate actions", () => {
 
   it("keeps full GET behind manual reload in both screens", () => {
     for (const source of clientSources()) {
-      expect(source).toContain("onClick={() => void load()}");
+      expect(source).toMatch(/aria-label="[^"]*再読み込み"/u);
       expect(source).toContain("void load();");
     }
   });

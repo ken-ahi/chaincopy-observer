@@ -3,7 +3,7 @@
 import * as React from "react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
-import { buildReliabilitySummary, selectPrimaryMetrics } from "./performance-display";
+import { selectPerformanceReasons } from "./performance-display";
 import { PerformanceDetailedMetrics } from "./performance-detailed-metrics";
 import { formatPerformanceMinute } from "./performance-formatters";
 import { PerformanceOverview } from "./performance-overview";
@@ -188,17 +188,19 @@ export function PerformanceDetailsPanels({
       <div className={`grid gap-3 ${successfulRun ? "sm:grid-cols-2" : "sm:grid-cols-1"}`}>
         {successfulRun ? (
           <DisclosureButton
+            closedLabel="成績をくわしく見る"
             controls={detailsId}
             expanded={detailsOpen}
-            label="成績をくわしく見る"
             onClick={onDetailsToggle}
+            openLabel="成績をくわしく閉じる"
           />
         ) : null}
         <DisclosureButton
+          closedLabel="詳しい理由を見る"
           controls={calculationDetailsId}
           expanded={calculationDetailsOpen}
-          label="データの状態を見る"
           onClick={onCalculationDetailsToggle}
+          openLabel="詳しい理由を閉じる"
         />
       </div>
 
@@ -233,16 +235,23 @@ function PerformanceDataStatus({
   readonly lastUpdatedAt: string | null;
 }) {
   const run = data.latestSuccessfulRun;
-  const reliability = buildReliabilitySummary(data);
-  const unavailable = selectPrimaryMetrics(data).filter((metric) => metric.unavailable);
+  const reasons = selectPerformanceReasons(data);
 
   return (
     <div className="grid gap-5 text-sm">
       <div>
-        <h3 className="font-semibold text-white">確認できたデータ</h3>
-        <p className="mt-2 leading-relaxed text-slate-300">
-          {reliability?.text ?? "成績を確認するための履歴がまだ十分にありません。"}
-        </p>
+        <h3 className="font-semibold text-white">詳しい理由</h3>
+        {reasons.length > 0 ? (
+          <ul className="mt-3 grid gap-2 leading-relaxed text-amber-50">
+            {reasons.map((reason) => (
+              <li key={reason.key}>・{reason.message}</li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-2 leading-relaxed text-slate-300">
+            追加で確認が必要な理由はありません。
+          </p>
+        )}
       </div>
       <dl className="grid gap-4 sm:grid-cols-2">
         <DataStatusItem label="確認できた期間">
@@ -250,30 +259,15 @@ function PerformanceDataStatus({
             ? `${formatPerformanceMinute(run.calculationFrom)} 〜 ${formatPerformanceMinute(run.calculationTo)}`
             : "-"}
         </DataStatusItem>
-        <DataStatusItem label="利用できた取引数">
+        <DataStatusItem label="確認できた取引数">
           {run && data.availability.trade.status !== "UNAVAILABLE"
             ? `${String(data.calculationDetails.trustedClosedCycleCount)}件`
             : "-"}
-        </DataStatusItem>
-        <DataStatusItem label="履歴がそろっているか">
-          {run?.historyCompleteness === "COMPLETE" ? "そろっています" : "一部不足しています"}
         </DataStatusItem>
         <DataStatusItem label="最終更新日時">
           {formatPerformanceMinute(lastUpdatedAt ?? run?.completedAt ?? null)}
         </DataStatusItem>
       </dl>
-      {unavailable.length > 0 ? (
-        <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-amber-50">
-          <p className="font-medium">計算できない項目</p>
-          <ul className="mt-2 grid gap-2 leading-relaxed">
-            {unavailable.map((metric) => (
-              <li key={metric.key}>
-                {metric.label}: {metric.unavailableReason}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
     </div>
   );
 }
@@ -294,21 +288,24 @@ function DataStatusItem({
 }
 
 function DisclosureButton({
+  closedLabel,
   controls,
   expanded,
-  label,
   onClick,
+  openLabel,
 }: {
+  readonly closedLabel: string;
   readonly controls: string;
   readonly expanded: boolean;
-  readonly label: string;
   readonly onClick: () => void;
+  readonly openLabel: string;
 }) {
+  const label = expanded ? openLabel : closedLabel;
   return (
     <button
       aria-controls={controls}
       aria-expanded={expanded}
-      aria-label={`${label}を${expanded ? "閉じる" : "開く"}`}
+      aria-label={label}
       className="flex min-h-11 w-full items-center justify-between rounded-xl border border-white/[0.1] bg-slate-950/30 px-4 py-3 text-left text-sm font-medium text-slate-100 hover:border-cyan-300/30 hover:bg-cyan-300/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-cyan-200"
       onClick={onClick}
       type="button"

@@ -136,12 +136,6 @@ export function AddressDetailClient({ address }: { readonly address: string }) {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <a
-                className="inline-flex min-h-11 items-center rounded-lg border border-white/[0.1] px-3 text-sm font-medium text-slate-300 transition hover:border-cyan-300/30 hover:text-cyan-200"
-                href="#performance"
-              >
-                売買成績を見る
-              </a>
               <Button onClick={() => void toggleWatch()} variant="outline">
                 {data.detail.address.isWatched ? (
                   <EyeOff aria-hidden="true" className="size-4" />

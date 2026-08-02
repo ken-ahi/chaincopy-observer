@@ -21,7 +21,7 @@ export type CandidateActionResult =
   | Readonly<{
       address: string;
       kind: "enrich";
-      message: "詳細分析を登録しました。";
+      message: "取引履歴の確認を登録しました。";
     }>
   | Readonly<{
       address: string;
@@ -110,7 +110,7 @@ export async function requestCandidateAction(
     return {
       address: candidate.address,
       kind,
-      message: "詳細分析を登録しました。",
+      message: "取引履歴の確認を登録しました。",
     };
   }
   return {
