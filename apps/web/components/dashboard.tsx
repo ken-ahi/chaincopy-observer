@@ -26,13 +26,13 @@ interface DashboardProps {
 }
 
 const navigation = [
-  { active: true, href: "/dashboard", icon: LayoutDashboard, label: "概要" },
+  { active: true, href: "/dashboard", icon: LayoutDashboard, label: "ホーム" },
   {
     href: "/dashboard/addresses",
     icon: UserRoundSearch,
-    label: "監視アドレス",
+    label: "監視中のアドレス",
   },
-  { href: "/dashboard/discovery", icon: Telescope, label: "自動探索" },
+  { href: "/dashboard/discovery", icon: Telescope, label: "優良アドレスを探す" },
   { href: "#planned-sections", icon: BarChart3, label: "ランキング" },
   { href: "#planned-sections", icon: BellRing, label: "売買シグナル" },
   { href: "#planned-sections", icon: Bot, label: "デモトレード" },
@@ -84,18 +84,11 @@ export function Dashboard({ email, name }: DashboardProps) {
           <div className="lg:hidden">
             <Brand />
           </div>
-          <div className="hidden lg:block">
-            <p className="text-xs text-slate-600">Phase 4 · Performance analytics</p>
-            <p className="mt-0.5 text-sm font-medium text-slate-200">おかえりなさい、{name}</p>
-          </div>
+          <p className="hidden text-sm font-medium text-slate-200 lg:block">
+            おかえりなさい、{name}
+          </p>
           <div className="flex items-center gap-3">
             <SystemVersion />
-            <span className="hidden xl:inline-flex">
-              <Badge variant="success">
-                <span className="size-1.5 rounded-full bg-emerald-300" />
-                Phase 4 complete
-              </Badge>
-            </span>
             <div className="hidden text-right sm:block">
               <p className="max-w-48 truncate text-xs text-slate-300">{email}</p>
               <p className="text-[10px] text-slate-600">許可済み所有者</p>

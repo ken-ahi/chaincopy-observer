@@ -52,49 +52,21 @@ export function SystemVersion() {
 }
 
 export function SystemVersionView({
-  api,
+  api: _api,
   status,
-  web,
+  web: _web,
 }: {
   readonly api: ServiceBuildInfo | null;
   readonly status: SystemVersionState["status"];
   readonly web: ServiceBuildInfo;
 }) {
-  const statusStyle =
-    status === "connected"
-      ? "text-emerald-300"
-      : status === "mismatch"
-        ? "text-amber-300"
-        : status === "unavailable"
-          ? "text-rose-300"
-          : "text-slate-500";
+  if (status === "loading" || status === "connected") {
+    return null;
+  }
 
   return (
-    <div
-      aria-label="稼働バージョン"
-      aria-live="polite"
-      className="min-w-fit text-[10px] leading-4 text-slate-400"
-    >
-      <p title={`Web builtAt: ${web.builtAt}`}>
-        Web v{web.version}
-        <span className="hidden md:inline"> {web.commit}</span>
-      </p>
-      {api ? (
-        <p title={`API builtAt: ${api.builtAt}`}>
-          API v{api.version}
-          <span className="hidden md:inline"> {api.commit}</span>
-          <span className={`hidden md:inline ${statusStyle}`}>
-            {status === "connected" ? " 接続済み" : ""}
-          </span>
-        </p>
-      ) : status === "unavailable" ? (
-        <p className={statusStyle}>APIバージョン取得失敗</p>
-      ) : (
-        <p className={statusStyle}>API確認中</p>
-      )}
-      {status === "mismatch" ? (
-        <p className={`hidden lg:block ${statusStyle}`}>Web/APIのビルドが一致していません</p>
-      ) : null}
-    </div>
+    <p aria-live="polite" className="max-w-64 text-xs leading-relaxed text-amber-200" role="alert">
+      最新データを取得できません。表示内容が古い可能性があります。
+    </p>
   );
 }

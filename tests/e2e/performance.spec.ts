@@ -12,6 +12,16 @@ import {
 const sensitivePattern =
   /INTERNAL_API_SECRET|DATABASE_URL|postgres:5432|redis:6379|api:3001|PrismaClient|at\s+\S+\.tsx?:\d+|[A-Z]:\\[^\s]+/iu;
 
+const internalUiTerms = [
+  "Sync Cursor",
+  "Sync Job",
+  "Run ID",
+  "Input Fingerprint",
+  "Warning Codes",
+  "Calculation Version",
+  "performance-v3",
+];
+
 test.describe("Performance browser E2E", () => {
   test.describe.configure({ mode: "serial" });
 
@@ -38,21 +48,24 @@ test.describe("Performance browser E2E", () => {
       ]);
     });
 
-    test("履歴不足Runを簡素化表示し診断Codeを計算の詳細へ分離する", async ({ page }) => {
+    test("履歴不足でも主要6指標を消さず、内部Codeを表示しない", async ({ page }) => {
       await openAddressDetail(page, e2eInsufficientPerformanceAddress);
 
-      await expect(page.getByRole("heading", { exact: true, name: "運用実績" })).toBeVisible();
-      await expect(page.getByText("データ不足").first()).toBeVisible();
-      await expect(page.getByText("現在表示できる主要指標はありません")).toBeVisible();
-      await expect(page.getByText("MINIMUM_HISTORY_NOT_MET")).toHaveCount(0);
-      await expect(page.getByText("INSUFFICIENT_HISTORY · 履歴不足")).toHaveCount(0);
-      await expect(page.getByText("累積収益率")).toHaveCount(0);
+      await expect(
+        page.getByRole("heading", { exact: true, name: "このアドレスの売買成績" }),
+      ).toBeVisible();
+      await expect(page.locator("[data-metric-key]")).toHaveCount(6);
+      await expect(page.locator('[data-metric-key="cumulativeReturn"]')).toContainText("-");
+      await expect(page.getByText("この成績の確かさ")).toBeVisible();
+      await expect(page.getByText("低い", { exact: true })).toBeVisible();
+      await expect(
+        page.getByText("資産の履歴が足りないため計算できません。").first(),
+      ).toBeVisible();
+      await assertInternalTermsHidden(page);
 
-      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
-      await expect(page.getByText("MINIMUM_HISTORY_NOT_MET").first()).toBeVisible();
-      await expect(page.getByText("INSUFFICIENT_HISTORY · 履歴不足").first()).toBeVisible();
-      await expect(page.getByText("UNAVAILABLE · 算出不可").first()).toBeVisible();
-      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
+      await page.getByRole("button", { name: "データの状態を見るを開く" }).click();
+      await expect(page.getByText("履歴がそろっているか")).toBeVisible();
+      await assertInternalTermsHidden(page);
     });
 
     test("未計算の監視アドレスを手動計算し、完了状態まで更新する", async ({ page }, testInfo) => {
@@ -60,9 +73,10 @@ test.describe("Performance browser E2E", () => {
 
       await openAddressDetail(page, manualAddress);
 
-      await expect(page.getByText(/まだ計算されていません/)).toBeVisible();
+      await expect(page.getByText(/まだ成績を計算していません/)).toBeVisible();
+      await expect(page.locator("[data-metric-key]")).toHaveCount(6);
 
-      const calculateButton = page.getByRole("button", { name: "実績を計算" });
+      const calculateButton = page.getByRole("button", { name: "成績を計算" });
       await expect(calculateButton).toBeEnabled();
       await calculateButton.click();
 
@@ -71,145 +85,93 @@ test.describe("Performance browser E2E", () => {
 
       await completeManualPerformanceFixture(manualAddress);
 
-      await expect(page.getByText("データ不足").first()).toBeVisible({
-        timeout: 10_000,
-      });
-      await expect(page.getByRole("button", { name: "実績を再計算" })).toBeEnabled();
+      await expect(page.getByText(/必要な履歴が足りません/)).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("button", { name: "成績を再計算" })).toBeEnabled();
     });
 
-    test("成功Runの主要指標、説明button、2つの詳細領域を表示する", async ({ page }) => {
+    test("成功時は初心者向け成績、確かさ、保有、最近の動き、未成立注文を表示する", async ({
+      page,
+    }) => {
+      const requestedPaths = trackAddressRequests(page, e2ePerformanceAddress);
       const performanceResponses = trackPerformanceResponses(page);
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await expect(page.getByRole("heading", { exact: true, name: "運用実績" })).toBeVisible();
-      await expect(page.getByText("計算完了").first()).toBeVisible();
-      await expect(page.getByText("performance-v3")).toHaveCount(0);
+      await expect(
+        page.getByRole("heading", { exact: true, name: "このアドレスの売買成績" }),
+      ).toBeVisible();
+      await expect(page.getByText("計算完了")).toHaveCount(0);
+      await expect(page.getByText("最新の計算試行")).toHaveCount(0);
+      await expect(page.locator("[data-metric-key]")).toHaveCount(6);
       await expect(page.getByText("12.3456%")).toBeVisible();
       await expect(page.getByText("-4.5%")).toBeVisible();
       await expect(page.getByText("62.5%")).toBeVisible();
-      await expect(page.getByText("1.234567")).toHaveCount(0);
+      await expect(page.getByText("この成績の確かさ")).toBeVisible();
+      await expect(page.getByText("高い", { exact: true })).toBeVisible();
 
-      const missingMetric = page.locator('[data-metric-key="annualizedReturn"]');
-      await expect(missingMetric).toHaveCount(0);
-
-      const explanation = page.getByRole("button", { name: "累積収益率の説明" });
+      const explanation = page.getByRole("button", {
+        name: "資産がどれくらい増えたかの説明",
+      });
       await expect(explanation).toHaveAttribute("aria-expanded", "false");
       await explanation.click();
-      await expect(explanation).toHaveAttribute("aria-expanded", "true");
-      await expect(page.getByText(/入出金の影響を調整したうえで/)).toBeVisible();
+      await expect(page.getByText(/最初と比べて、資産が何％増減したか/)).toBeVisible();
       await explanation.press("Enter");
       await expect(explanation).toHaveAttribute("aria-expanded", "false");
-      await explanation.press("Space");
-      await expect(explanation).toHaveAttribute("aria-expanded", "true");
 
-      await page.getByRole("button", { name: "詳細指標を開く" }).click();
-      await expect(page.getByText("1.234567")).toBeVisible();
-      await expect(page.getByText("2.5×")).toBeVisible();
-      await expect(page.getByText("55%")).toBeVisible();
+      await expect(page.getByRole("heading", { name: "現在の先物ポジション" })).toBeVisible();
+      await expect(page.getByText("買い", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "現在保有している通貨" })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "最近の動き" })).toBeVisible();
+      await expect(page.getByText("買いました", { exact: true }).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "現在出している注文" })).toBeVisible();
 
-      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
-      await expect(page.getByText("performance-v3").first()).toBeVisible();
-      await expect(page.getByText("EXACT · 正確").first()).toBeVisible();
-      await expect(page.getByText("COMPLETE · 完全").first()).toBeVisible();
-      await expect(page.getByText("phase4e-e2e-success-run")).toBeVisible();
-      await expect(page.getByText(/abcdef1234567890/)).toBeVisible();
-      await expect(page.getByText("Warning Codes").first()).toBeVisible();
-      await expect(page.getByText("計算要求日時")).toBeVisible();
-      await expect(page.getByText("計算開始日時")).toBeVisible();
-      await expect(page.getByText("計算完了日時")).toBeVisible();
+      await page.getByRole("button", { name: "成績をくわしく見るを開く" }).click();
+      await expect(page.getByText("値動きに対する収益")).toBeVisible();
+      await page.getByRole("button", { name: "データの状態を見るを開く" }).click();
+      await expect(page.getByText("確認できたデータ")).toBeVisible();
+      await assertInternalTermsHidden(page);
 
-      await expect(page.getByRole("heading", { name: "現在ポジション" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "約定履歴" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: "Sync Cursor" })).toBeVisible();
-      await expect(page.getByRole("heading", { name: /Data Quality Issue/ })).toBeVisible();
-
+      expect(requestedPaths).toEqual(
+        expect.arrayContaining([
+          `/api/addresses/${e2ePerformanceAddress}`,
+          `/api/addresses/${e2ePerformanceAddress}/fills?limit=10`,
+          `/api/addresses/${e2ePerformanceAddress}/orders?limit=10&status=open`,
+          `/api/addresses/${e2ePerformanceAddress}/positions`,
+        ]),
+      );
+      expect(requestedPaths.some((path) => path.includes("limit=100"))).toBe(false);
+      for (const hiddenEndpoint of ["/funding", "/ledger", "/data-quality", "/sync-status"]) {
+        expect(requestedPaths.some((path) => path.includes(hiddenEndpoint))).toBe(false);
+      }
       await assertNoSensitiveData(page, performanceResponses);
     });
 
-    test("PARTIALかつUNKNOWN_CASH_FLOWでも信頼済み取引指標を保持する", async ({ page }) => {
+    test("一部履歴だけ利用可能な場合は具体的な確かさを表示する", async ({ page }) => {
       await openAddressDetail(page, e2ePartialPerformanceAddress);
 
-      await expect(page.getByText("計算完了").first()).toBeVisible();
       await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
-      await expect(page.locator('[data-metric-key="twr"]')).toHaveCount(0);
-      await expect(page.getByText(/分類できない入出金/)).toHaveCount(0);
-
-      await page.getByRole("button", { name: "詳細指標を開く" }).click();
-      await expect(page.getByText(/分類できない入出金/).first()).toBeVisible();
-
-      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
-      await expect(page.getByText("除外Fill件数")).toBeVisible();
-      await expect(page.getByText("BTC: 1件除外")).toBeVisible();
-
-      await page.reload();
-      await expect(page.locator('[data-metric-key="winRate"]')).toContainText("100%");
-      await expect(page.locator('[data-metric-key="twr"]')).toHaveCount(0);
-      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
+      await expect(page.locator("[data-metric-key]")).toHaveCount(6);
+      await expect(page.getByText("低い", { exact: true })).toBeVisible();
+      await expect(page.getByText(/一部の履歴を評価対象から除外/).first()).toBeVisible();
+      await expect(page.getByText("追加の注意事項があります")).toHaveCount(0);
+      await assertInternalTermsHidden(page);
     });
 
-    test("日次NAV一覧・概要・SVGチャートを表示する", async ({ page }) => {
+    test("ヘッダーは正常時の工程・version・接続表示を隠し、異常時だけ警告する", async ({
+      page,
+    }) => {
+      await page.route("**/api/system/version", async (route) => route.abort());
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
-      await expect(page.getByRole("heading", { name: "日次評価額" })).toBeVisible();
-      await expect(page.getByText("日次NAV概要")).toBeVisible();
-      const table = page.getByRole("table", { name: "日次NAV一覧" });
-      await expect(table.getByRole("row")).toHaveCount(4);
-      await expect(page.getByRole("img", { name: "日付順の日次NAV推移" })).toBeVisible();
-      await expect(table.getByText("1000.123456789012").first()).toBeVisible();
-      await expect(table.getByText("+0.125")).toBeVisible();
-      await expect(table.getByText("-0.25")).toBeVisible();
-      await expect(table.getByText("2026/06/01")).toBeVisible();
-      const firstRow = table.getByRole("row").filter({ hasText: "2026/06/01" });
-      await expect(firstRow).toContainText("—");
-      await expect(firstRow).not.toContainText("NaN");
-      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
-    });
-
-    test("Position Cycle一覧とクライアントフィルターを表示する", async ({ page }) => {
-      await openAddressDetail(page, e2ePerformanceAddress);
-
-      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
-      await expect(page.getByRole("heading", { name: "取引サイクル" })).toBeVisible();
-      const table = page.getByRole("table", { name: "取引サイクル一覧" });
-      await expect(table.getByRole("row")).toHaveCount(4);
-      await expect(table.getByText("ロング", { exact: true }).first()).toBeVisible();
-      await expect(table.getByText("ショート", { exact: true })).toBeVisible();
-      await expect(table.getByText("保有中", { exact: true })).toBeVisible();
-      await expect(table.getByText("完了", { exact: true }).first()).toBeVisible();
-      await expect(table.getByText("+99.5 · Profit")).toBeVisible();
-      await expect(table.getByText("-77.875 · Loss")).toBeVisible();
-
-      await page.getByRole("combobox", { name: "銘柄" }).selectOption("ETH");
-      await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("ETH");
-      await page.getByRole("combobox", { name: "銘柄" }).selectOption("ALL");
-
-      await page.getByRole("combobox", { name: "方向" }).selectOption("SHORT");
-      await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("ショート");
-      await page.getByRole("combobox", { name: "方向" }).selectOption("ALL");
-
-      await page.getByRole("combobox", { name: "状態" }).selectOption("OPEN");
-      await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("保有中");
-      await page.getByRole("combobox", { name: "状態" }).selectOption("ALL");
-
-      await page.getByRole("combobox", { name: "損益" }).selectOption("PROFIT");
-      await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("Profit");
-      await page.getByRole("combobox", { name: "損益" }).selectOption("LOSS");
-      await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("Loss");
-      await page.getByRole("combobox", { name: "損益" }).selectOption("BREAK_EVEN");
-      await expect(table.getByRole("row")).toHaveCount(2);
-      await expect(table).toContainText("Break-even");
-
-      await page.getByRole("combobox", { name: "損益" }).selectOption("ALL");
-      await page.getByRole("combobox", { name: "銘柄" }).selectOption("BTC");
-      await page.getByRole("combobox", { name: "方向" }).selectOption("SHORT");
-      await expect(page.getByText("条件に一致する取引サイクルがありません")).toBeVisible();
-      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
+      await expect(
+        page.getByText("最新データを取得できません。表示内容が古い可能性があります。"),
+      ).toBeVisible();
+      await expect(page.getByText("Phase 3 · Discovery")).toHaveCount(0);
+      await expect(page.getByText(/Web v0\.3\.1/)).toHaveCount(0);
+      await expect(page.getByText(/API v0\.3\.1/)).toHaveCount(0);
+      await expect(page.getByText("接続済み", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("link", { name: "ホーム" })).toBeAttached();
+      await expect(page.getByRole("link", { name: "監視中のアドレス" }).first()).toBeAttached();
+      await expect(page.getByRole("link", { name: "優良アドレスを探す" })).toBeAttached();
     });
   });
 
@@ -235,6 +197,17 @@ async function openAddressDetail(page: Page, address: string): Promise<void> {
   expect(detailResponse.status()).toBe(200);
 }
 
+function trackAddressRequests(page: Page, address: string): Array<string> {
+  const paths: Array<string> = [];
+  page.on("request", (request) => {
+    const url = new URL(request.url());
+    if (url.pathname.startsWith(`/api/addresses/${address}`)) {
+      paths.push(`${url.pathname}${url.search}`);
+    }
+  });
+  return paths;
+}
+
 function trackPerformanceResponses(page: Page): Array<Promise<string>> {
   const bodies: Array<Promise<string>> = [];
   page.on("response", (response) => {
@@ -244,6 +217,12 @@ function trackPerformanceResponses(page: Page): Array<Promise<string>> {
     }
   });
   return bodies;
+}
+
+async function assertInternalTermsHidden(page: Page): Promise<void> {
+  for (const term of internalUiTerms) {
+    await expect(page.getByText(term, { exact: false })).toHaveCount(0);
+  }
 }
 
 async function assertNoSensitiveData(
@@ -257,19 +236,9 @@ async function assertNoSensitiveData(
 }
 
 async function completeManualPerformanceFixture(address: string): Promise<void> {
-  const database = new PrismaClient({
-    datasources: {
-      db: {
-        url:
-          process.env.DATABASE_URL ??
-          "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=chaincopy_e2e",
-      },
-    },
-  });
+  const database = databaseClient();
   try {
-    const wallet = await database.walletAddress.findFirstOrThrow({
-      where: { address },
-    });
+    const wallet = await database.walletAddress.findFirstOrThrow({ where: { address } });
     await database.metricCalculationRun.create({
       data: {
         calculationFrom: wallet.createdAt,
@@ -295,11 +264,34 @@ async function completeManualPerformanceFixture(address: string): Promise<void> 
     await database.$disconnect();
   }
 }
+
 async function createManualPerformanceWallet(retry: number): Promise<string> {
   const suffix = (retry + 1).toString(16).padStart(2, "0");
   const address = `0x${"a".repeat(38)}${suffix}`;
+  const database = databaseClient();
 
-  const database = new PrismaClient({
+  try {
+    const template = await database.walletAddress.findFirstOrThrow({
+      select: { ownerUserId: true, sourceId: true },
+      where: { address: e2eManualPerformanceAddress },
+    });
+    await database.walletAddress.create({
+      data: {
+        address,
+        displayName: `E2E Performance Manual Retry ${String(retry)}`,
+        isWatched: true,
+        ownerUserId: template.ownerUserId,
+        sourceId: template.sourceId,
+      },
+    });
+    return address;
+  } finally {
+    await database.$disconnect();
+  }
+}
+
+function databaseClient(): PrismaClient {
+  return new PrismaClient({
     datasources: {
       db: {
         url:
@@ -308,30 +300,4 @@ async function createManualPerformanceWallet(retry: number): Promise<string> {
       },
     },
   });
-
-  try {
-    const template = await database.walletAddress.findFirstOrThrow({
-      select: {
-        ownerUserId: true,
-        sourceId: true,
-      },
-      where: {
-        address: e2eManualPerformanceAddress,
-      },
-    });
-
-    await database.walletAddress.create({
-      data: {
-        address,
-        displayName: `E2E Performance Manual Retry ${retry}`,
-        isWatched: true,
-        ownerUserId: template.ownerUserId,
-        sourceId: template.sourceId,
-      },
-    });
-
-    return address;
-  } finally {
-    await database.$disconnect();
-  }
 }

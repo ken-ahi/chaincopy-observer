@@ -325,6 +325,27 @@ describe("address routes", () => {
       status: "QUEUED",
     });
   });
+
+  it("filters the small order page to open orders", async () => {
+    let receivedQuery: unknown;
+    const app = await createTestApi(
+      withAddressService({
+        listOrders: async (_address, query) => {
+          receivedQuery = query;
+          return { items: [], nextCursor: null };
+        },
+      }),
+    );
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/addresses/${addressSummary.address}/orders?limit=10&status=open`,
+      headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(receivedQuery).toEqual({ limit: 10, status: "open" });
+  });
 });
 
 describe("discovery routes", () => {

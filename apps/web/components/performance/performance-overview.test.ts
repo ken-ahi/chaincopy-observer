@@ -61,19 +61,21 @@ const baseRun: CalculationRunDto = {
 };
 
 describe("Performance overview", () => {
-  it("初期表示を運用実績、状態、主要6候補、再計算へ簡素化する", () => {
+  it("初期表示を初心者向け見出し、主要6指標、確かさ、再計算へ簡素化する", () => {
     const html = renderPerformance(performance({ metrics: primaryMetrics() }));
 
-    expect(html).toContain("運用実績");
-    expect(html).toContain("計算完了");
+    expect(html).toContain("このアドレスの売買成績");
     expect(html.match(/data-metric-key=/gu) ?? []).toHaveLength(6);
-    expect(html).toContain("実績を再計算");
+    expect(html).toContain("この成績の確かさ");
+    expect(html).toContain("成績を再計算");
+    expect(html).not.toContain("最新の計算試行");
+    expect(html).not.toContain("計算完了");
     expect(html).not.toContain("Saved analytics");
     expect(html).not.toContain("performance-v3");
     expect(html).not.toContain("SUCCEEDED");
   });
 
-  it("主要候補の存在値だけを固定順で表示する", () => {
+  it("主要6指標を固定順で表示し、欠損値は計算不能として残す", () => {
     const metrics = {
       cumulativeReturn: metric("cumulativeReturn", "0.0062"),
       winRate: metric("winRate", "0.333333333333"),
@@ -84,26 +86,33 @@ describe("Performance overview", () => {
 
     expect(selected.map((item) => item.key)).toEqual([
       "cumulativeReturn",
+      "maxDrawdown",
+      "profitFactor",
       "winRate",
       "trustedClosedCycleCount",
+      "topTradeContribution",
     ]);
     const html = renderPerformance(data);
     expect(html).toContain("0.62%");
     expect(html).toContain("33.3333%");
-    expect(html).not.toContain('data-metric-key="maxDrawdown"');
+    expect(html).toContain('data-metric-key="maxDrawdown"');
     expect(html).not.toContain('data-metric-key="annualizedReturn"');
-    expect(html).not.toContain(">—<");
+    expect(selected.filter((item) => item.unavailable)).toHaveLength(3);
+    expect(html).toContain("一番大きく資産が減った割合は計算できません");
   });
 
-  it("全主要Metric欠損時はカードを描画せず正本文言を表示する", () => {
+  it("全主要Metric欠損時も6カードと読み上げ可能なハイフンを表示する", () => {
     const data = performance({
       calculationDetails: calculationDetails({ trustedClosedCycleCount: 0 }),
       metrics: {},
     });
     const html = renderPerformance(data);
 
-    expect(html).toContain("現在表示できる主要指標はありません");
-    expect(html).not.toContain("data-metric-key");
+    expect(html.match(/data-metric-key=/gu) ?? []).toHaveLength(6);
+    expect(html.match(/は計算できません/gu)?.length ?? 0).toBeGreaterThanOrEqual(5);
+    expect(html).toContain("0件");
+    expect(html).not.toContain("N/A");
+    expect(html).not.toContain("UNAVAILABLE");
   });
 
   it("主要カードからPrecision、Warning、Metric Key、Versionを除く", () => {
@@ -151,12 +160,12 @@ describe("Performance overview", () => {
     const html = renderPerformance(performance({ metrics: primaryMetrics() }));
 
     for (const label of [
-      "累積収益率",
-      "最大下落率",
-      "利益と損失の効率",
-      "勝率",
-      "評価対象取引数",
-      "利益の一発依存度",
+      "資産がどれくらい増えたか",
+      "一番大きく資産が減った割合",
+      "利益と損失のバランス",
+      "利益になった取引の割合",
+      "成績を調べた取引数",
+      "一度の大勝ちへの依存",
     ]) {
       expect(html).toContain(`aria-label="${label}の説明"`);
     }
@@ -168,9 +177,7 @@ describe("Performance overview", () => {
     for (const id of controls) {
       expect(html).toContain(`id="${id}"`);
     }
-    expect(html).toContain(
-      "入出金の影響を調整した資産推移において、ピークから最大でどの程度下落したかを示します。",
-    );
+    expect(html).toContain("最も調子が悪かった時に、資産が何％減ったかを表します。");
   });
 
   it("評価対象取引数は4条件成立時だけ表示する", () => {
@@ -199,12 +206,15 @@ describe("Performance overview", () => {
     expect(canDisplayTrustedClosedCycleCount(data)).toBe(false);
   });
 
-  it("trustedClosedCycleCountが0なら評価対象取引数を表示しない", () => {
+  it("trustedClosedCycleCountが0なら0件として表示する", () => {
     const data = performance({
       calculationDetails: calculationDetails({ trustedClosedCycleCount: 0 }),
       metrics: { winRate: metric("winRate", "0.5") },
     });
-    expect(canDisplayTrustedClosedCycleCount(data)).toBe(false);
+    expect(canDisplayTrustedClosedCycleCount(data)).toBe(true);
+    expect(
+      selectPrimaryMetrics(data).find((item) => item.key === "trustedClosedCycleCount")?.value,
+    ).toBe("0件");
   });
 
   it("Trade系Metricがなければ評価対象取引数を表示しない", () => {
@@ -225,10 +235,14 @@ describe("Performance overview", () => {
         performance({ latestRun, latestSuccessfulRun: successfulRun, metrics: primaryMetrics() }),
       );
 
-      expect(html).toContain("前回の正常な計算結果を表示しています");
-      expect(html).toContain(`計算日時: ${formatPerformanceMinute(successfulRun.completedAt)}`);
+      if (status === "PENDING" || status === "RUNNING") {
+        expect(html).toContain("成績を更新しています。");
+      } else {
+        expect(html).toContain("最新の更新に失敗しました。");
+        expect(html).toContain("前回正常に計算できた成績を表示しています。");
+      }
+      expect(html).toContain(formatPerformanceMinute(successfulRun.completedAt));
       expect(html).toContain('data-metric-key="cumulativeReturn"');
-      expect(html).toContain(statusLabel(status));
       expect(html).not.toContain(latestRun.runId);
     },
   );
@@ -246,7 +260,7 @@ describe("Performance overview", () => {
       const html = renderPerformance(
         performance({ latestRun: run({ status }), latestSuccessfulRun: baseRun }),
       );
-      const button = /<button[^>]*>実績を再計算<\/button>/u.exec(html)?.[0];
+      const button = /<button[^>]*>成績を再計算<\/button>/u.exec(html)?.[0];
       expect(button).toBeDefined();
       expect(button).not.toContain(' disabled=""');
     },
@@ -262,8 +276,9 @@ describe("Performance overview", () => {
           metrics: primaryMetrics(),
         }),
       );
-      expect(html).not.toContain("前回の正常な計算結果");
-      expect(html).not.toContain("data-metric-key");
+      expect(html).not.toContain("前回正常に計算できた成績");
+      expect(html.match(/data-metric-key=/gu) ?? []).toHaveLength(6);
+      expect(html).not.toContain("0.62%");
     },
   );
 
@@ -388,7 +403,7 @@ describe("Performance overview", () => {
     expect(html).toContain(`id="${controls}"`);
   });
 
-  it("特定Laneの理由は第一階層へ出さず詳細指標内だけに日本語表示する", () => {
+  it("計算不能理由を主要カードに具体的な日本語で表示する", () => {
     const data = performance({
       availability: availability({
         return: {
@@ -401,16 +416,11 @@ describe("Performance overview", () => {
       metrics: { winRate: metric("winRate", "0.5") },
     });
     const overviewHtml = renderPerformance(data);
-    const detailsHtml = renderToStaticMarkup(createElement(PerformanceDetailedMetrics, { data }));
-
-    expect(overviewHtml).not.toContain("入出金前後の純資産額を確認できない");
+    expect(overviewHtml).toContain("入出金前後の資産データが足りないため計算できません。");
     expect(overviewHtml).not.toContain("MISSING_CASH_FLOW_BOUNDARY_NAV");
-    expect(detailsHtml).toContain("入出金前後の純資産額を確認できない");
-    expect(detailsHtml).toContain("最大下落率");
-    expect(detailsHtml).not.toContain("MISSING_CASH_FLOW_BOUNDARY_NAV");
   });
 
-  it("Return Laneだけ利用不能ならTrade系主要指標だけを表示する", () => {
+  it("Return Laneだけ利用不能でも主要6指標を固定表示する", () => {
     const data = performance({
       availability: availability({
         return: {
@@ -422,17 +432,16 @@ describe("Performance overview", () => {
       }),
       metrics: primaryMetrics(),
     });
-    const keys = selectPrimaryMetrics(data).map((item) => item.key);
+    const selected = selectPrimaryMetrics(data);
 
-    expect(keys).toEqual([
-      "profitFactor",
-      "winRate",
-      "trustedClosedCycleCount",
-      "topTradeContribution",
+    expect(selected).toHaveLength(6);
+    expect(selected.filter((item) => item.unavailable).map((item) => item.key)).toEqual([
+      "cumulativeReturn",
+      "maxDrawdown",
     ]);
   });
 
-  it("Trade Laneだけ利用不能ならReturn系主要指標だけを表示する", () => {
+  it("Trade Laneだけ利用不能でも主要6指標を固定表示する", () => {
     const data = performance({
       availability: availability({
         trade: {
@@ -444,12 +453,18 @@ describe("Performance overview", () => {
       }),
       metrics: primaryMetrics(),
     });
-    const keys = selectPrimaryMetrics(data).map((item) => item.key);
+    const selected = selectPrimaryMetrics(data);
 
-    expect(keys).toEqual(["cumulativeReturn", "maxDrawdown"]);
+    expect(selected).toHaveLength(6);
+    expect(selected.filter((item) => item.unavailable).map((item) => item.key)).toEqual([
+      "profitFactor",
+      "winRate",
+      "trustedClosedCycleCount",
+      "topTradeContribution",
+    ]);
   });
 
-  it("Exposure Laneだけ利用不能なら詳細指標で理由と対象Metric名を表示する", () => {
+  it("Exposure Laneだけ利用不能なら詳細成績を表示しない", () => {
     const data = performance({
       availability: availability({
         exposure: {
@@ -464,13 +479,12 @@ describe("Performance overview", () => {
     const overview = renderPerformance(data);
     const details = renderToStaticMarkup(createElement(PerformanceDetailedMetrics, { data }));
 
-    expect(overview).not.toContain("取得できた履歴のうち");
-    expect(details).toContain("最大レバレッジ");
-    expect(details).toContain("現在は利用できません");
+    expect(overview).toContain("この成績の確かさ");
     expect(details).not.toContain('data-metric-key="maxLeverage"');
+    expect(details).not.toContain("INSUFFICIENT_HISTORY");
   });
 
-  it("複数Laneの同一理由は第一階層へ1件だけ表示する", () => {
+  it("複数Laneの内部理由を通常画面へ露出しない", () => {
     const sharedReason = "INVALID_INPUT";
     const data = performance({
       availability: availability({
@@ -480,7 +494,8 @@ describe("Performance overview", () => {
     });
     const html = renderPerformance(data);
 
-    expect(html.match(/利用できないNAVデータがあるため/gu) ?? []).toHaveLength(1);
+    expect(html).not.toContain(sharedReason);
+    expect(html).toContain("計算できない項目");
   });
 
   it("詳細指標はP2 Metricの存在値だけを表示し欠損カードを作らない", () => {
@@ -498,10 +513,9 @@ describe("Performance overview", () => {
     expect(html).not.toContain(">—<");
   });
 
-  it("詳細指標と計算の詳細を独立した初期閉buttonとして描画する", () => {
+  it("詳しい成績とデータ状態を独立した初期閉buttonとして描画する", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceDetailsPanels, {
-        address: "0x111",
         calculationDetailsOpen: false,
         data: performance(),
         detailsOpen: false,
@@ -512,17 +526,16 @@ describe("Performance overview", () => {
       }),
     );
 
-    expect(html).toContain("詳細指標");
-    expect(html).toContain("計算の詳細");
+    expect(html).toContain("成績をくわしく見る");
+    expect(html).toContain("データの状態を見る");
     expect(html.match(/aria-expanded="false"/gu) ?? []).toHaveLength(2);
     expect(html).not.toContain("データ利用状況");
     expect(html).not.toContain("Daily NAV件数");
   });
 
-  it("計算の詳細を開くと日次評価額と取引サイクルへ追加開閉なしで到達する", () => {
+  it("データの状態を開いても内部ID・Code・生データ表を表示しない", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceDetailsPanels, {
-        address: "0x111",
         calculationDetailsOpen: true,
         data: performance({
           metrics: {
@@ -537,16 +550,20 @@ describe("Performance overview", () => {
       }),
     );
 
-    expect(html).toContain("計算の詳細");
-    expect(html).toContain("日次評価額");
-    expect(html).toContain("取引サイクル");
+    expect(html).toContain("データの状態を見る");
+    expect(html).toContain("確認できた期間");
+    expect(html).toContain("履歴がそろっているか");
+    expect(html).not.toContain("Run ID");
+    expect(html).not.toContain("Input Fingerprint");
+    expect(html).not.toContain("Warning Codes");
+    expect(html).not.toContain("日次NAV");
+    expect(html).not.toContain("Position Cycle");
     expect(html).not.toContain('data-metric-key="sharpeRatio"');
   });
 
   it("詳細指標を開くとP2 Metricだけへ追加開閉なしで到達する", () => {
     const html = renderToStaticMarkup(
       createElement(PerformanceDetailsPanels, {
-        address: "0x111",
         calculationDetailsOpen: false,
         data: performance({
           metrics: {
@@ -653,8 +670,8 @@ describe("Performance overview", () => {
     );
 
     expect(loading).toContain('role="status"');
-    expect(loading).toContain("運用実績を読み込んでいます");
-    expect(empty).toContain("まだ計算されていません");
+    expect(loading).toContain("売買成績を読み込んでいます");
+    expect(empty).toContain("まだ成績を計算していません");
     expect(error).toContain('role="alert"');
     expect(error).not.toContain("Internal API");
   });
@@ -676,13 +693,20 @@ describe("Performance overview", () => {
     expect(details).toContain("詳細はサーバーログを確認してください");
   });
 
-  it("既存のアドレス詳細要素とPerformance入口を維持する", () => {
+  it("アドレス詳細を投資判断に必要な表示と少数API取得へ絞る", () => {
     const source = readFileSync(new URL("../address-detail-client.tsx", import.meta.url), "utf8");
-    expect(source).toContain("現在ポジション");
-    expect(source).toContain("約定履歴");
-    expect(source).toContain("Data Quality Issue");
+    expect(source).toContain("現在の先物ポジション");
+    expect(source).toContain("最近の動き");
+    expect(source).toContain("現在出している注文");
     expect(source).toContain("<PerformanceSection");
     expect(source).toContain('href="#performance"');
+    expect(source).not.toContain("limit=100");
+    expect(source).not.toContain("/funding?");
+    expect(source).not.toContain("/ledger?");
+    expect(source).not.toContain("/data-quality?");
+    expect(source).not.toContain("/sync-status");
+    expect(source).not.toContain("Sync Cursor");
+    expect(source).not.toContain("Sync Job");
   });
 
   it("日時はJSTの既存formatterを使い、前回結果は分単位で表示する", () => {
@@ -797,12 +821,4 @@ function performance(overrides: Partial<AddressPerformanceDto> = {}): AddressPer
     },
     ...overrides,
   };
-}
-
-function statusLabel(status: CalculationRunDto["status"]): string {
-  if (status === "PENDING") return "計算待ち";
-  if (status === "RUNNING") return "計算中";
-  if (status === "FAILED") return "計算できませんでした";
-  if (status === "INSUFFICIENT_DATA") return "データ不足";
-  return "計算完了";
 }

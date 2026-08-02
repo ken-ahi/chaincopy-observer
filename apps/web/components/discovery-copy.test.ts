@@ -36,11 +36,11 @@ describe("discovery and phase copy", () => {
     expect(list).toContain("履歴完全性・データ品質・監視適格性を判定します");
   });
 
-  it("marks Phase 4 complete while leaving later features unavailable", () => {
+  it("hides development phase labels while leaving later features unavailable", () => {
     const dashboard = readFileSync(new URL("./dashboard.tsx", import.meta.url), "utf8");
 
-    expect(dashboard).toContain("Phase 4 · Performance analytics");
-    expect(dashboard).toContain("Phase 4 complete");
+    expect(dashboard).not.toContain("Phase 4 · Performance analytics");
+    expect(dashboard).not.toContain("Phase 4 complete");
     expect(dashboard).toContain("現在は利用できません");
     expect(dashboard).toContain("ランキング・分析");
   });

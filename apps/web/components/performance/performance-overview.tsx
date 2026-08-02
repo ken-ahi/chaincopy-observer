@@ -4,9 +4,6 @@ import { buildReliabilitySummary, selectPrimaryMetrics } from "./performance-dis
 import { formatPerformanceMinute } from "./performance-formatters";
 import { PerformanceMetricCard } from "./performance-metric-card";
 import { isPerformanceActionDisabled } from "./performance-polling";
-import { PerformanceStatusBadge } from "./performance-status-badge";
-import { PerformanceWarningSummary } from "./performance-warning-summary";
-import { buildPerformanceWarnings } from "./performance-warnings";
 import {
   type AddressPerformanceDto,
   type PerformanceCalculationStatus,
@@ -18,6 +15,7 @@ export interface PerformanceOverviewProps {
   readonly actionSubmitting?: boolean;
   readonly data: AddressPerformanceDto | null;
   readonly error: boolean;
+  readonly lastUpdatedAt?: string | null;
   readonly loading: boolean;
   readonly onAction?: () => void;
 }
@@ -28,6 +26,7 @@ export function PerformanceOverview({
   actionSubmitting = false,
   data,
   error,
+  lastUpdatedAt = null,
   loading,
   onAction,
 }: PerformanceOverviewProps): React.JSX.Element {
@@ -36,32 +35,27 @@ export function PerformanceOverview({
     ? "PENDING"
     : storedStatus;
   const actionDisabled = isPerformanceActionDisabled(storedStatus, actionSubmitting, actionQueued);
-  const actionLabel = data?.latestRun ? "実績を再計算" : "実績を計算";
+  const actionLabel = data?.latestRun ? "成績を再計算" : "成績を計算";
 
   return (
     <section aria-labelledby="performance-title" className="scroll-mt-5" id="performance">
       <div className="mb-4">
         <h2 className="text-xl font-semibold text-white" id="performance-title">
-          運用実績
+          このアドレスの売買成績
         </h2>
-        <p className="mt-1 text-xs leading-relaxed text-slate-500">
-          保存済みの計算結果を表示しています。表示値は画面上で再計算しません。
+        <p className="mt-1 text-sm leading-relaxed text-slate-400">
+          このアドレスが、過去の売買でどれくらいうまく利益を出していたかを表示します。
         </p>
       </div>
 
-      {loading ? <StateMessage role="status">運用実績を読み込んでいます</StateMessage> : null}
+      {loading ? <StateMessage role="status">売買成績を読み込んでいます。</StateMessage> : null}
       {error ? (
         <StateMessage role="alert">
-          運用実績を取得できませんでした。時間をおいて再読み込みしてください。
+          売買成績を取得できませんでした。時間をおいて再読み込みしてください。
         </StateMessage>
       ) : null}
-      {!loading && !error && data && displayStatus === null ? (
-        <StateMessage role="status">
-          まだ計算されていません。履歴同期の完了後に自動計算されます。すぐに実行する場合は「実績を計算」を押してください。
-        </StateMessage>
-      ) : null}
-      {!loading && !error && data && displayStatus !== null ? (
-        <PerformanceResult data={data} status={displayStatus} />
+      {!loading && !error && data ? (
+        <PerformanceResult data={data} lastUpdatedAt={lastUpdatedAt} status={displayStatus} />
       ) : null}
 
       {!loading && !error && data ? (
@@ -81,7 +75,7 @@ export function PerformanceOverview({
                   : actionLabel}
           </button>
           {actionError ? (
-            <p className="text-xs text-rose-200" role="alert">
+            <p className="text-sm text-rose-200" role="alert">
               {actionError}
             </p>
           ) : null}
@@ -93,110 +87,154 @@ export function PerformanceOverview({
 
 function PerformanceResult({
   data,
+  lastUpdatedAt,
   status,
 }: {
   readonly data: AddressPerformanceDto;
-  readonly status: PerformanceCalculationStatus;
+  readonly lastUpdatedAt: string | null;
+  readonly status: PerformanceCalculationStatus | null;
 }): React.JSX.Element {
   const primaryMetrics = selectPrimaryMetrics(data);
-  const reliability = buildReliabilitySummary(data);
-  const warnings = buildPerformanceWarnings(data, reliability?.consumedMeaningKeys ?? []);
-  const showingPreviousResult = status !== "SUCCEEDED" && data.latestSuccessfulRun !== null;
+  const showingPreviousResult =
+    (status === "FAILED" || status === "INSUFFICIENT_DATA") && data.latestSuccessfulRun !== null;
+  const updating = status === "PENDING" || status === "RUNNING";
 
   return (
     <div className="grid gap-5">
-      <div className="rounded-xl border border-white/[0.08] bg-slate-950/30 p-4">
-        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs font-medium text-slate-300">最新の計算試行</p>
-          <PerformanceStatusBadge status={status} />
-        </div>
-        <StatusDescription hasPreviousResult={showingPreviousResult} status={status} />
-      </div>
-
+      {updating ? (
+        <p
+          className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4 text-sm text-cyan-50"
+          role="status"
+        >
+          成績を更新しています。
+        </p>
+      ) : null}
       {showingPreviousResult ? (
-        <div className="rounded-xl border border-cyan-300/20 bg-cyan-300/[0.05] p-4">
-          <p className="text-sm font-medium text-cyan-50">前回の正常な計算結果を表示しています</p>
-          <p className="mt-1 text-xs text-cyan-100/80">
-            計算日時: {formatPerformanceMinute(data.latestSuccessfulRun?.completedAt ?? null)}
+        <div className="rounded-xl border border-amber-300/20 bg-amber-300/[0.05] p-4" role="alert">
+          <p className="text-sm font-medium text-amber-50">最新の更新に失敗しました。</p>
+          <p className="mt-1 text-sm text-amber-100/90">
+            前回正常に計算できた成績を表示しています。
           </p>
         </div>
       ) : null}
-
-      {reliability ? (
-        <p className="text-sm leading-relaxed text-slate-300">{reliability.text}</p>
+      {status === null ? (
+        <p className="rounded-xl border border-white/[0.1] bg-slate-950/30 p-4 text-sm text-slate-300">
+          まだ成績を計算していません。計算できない項目は「-」で表示します。
+        </p>
       ) : null}
-
-      <PerformanceWarningSummary model={warnings} />
+      {!showingPreviousResult && !updating && status === "INSUFFICIENT_DATA" ? (
+        <p className="rounded-xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-50">
+          成績の計算に必要な履歴が足りません。計算できる項目だけを表示します。
+        </p>
+      ) : null}
+      {!showingPreviousResult && !updating && status === "FAILED" ? (
+        <p
+          className="rounded-xl border border-amber-300/20 bg-amber-300/[0.05] p-4 text-sm text-amber-50"
+          role="alert"
+        >
+          売買成績を更新できませんでした。時間をおいてもう一度お試しください。
+        </p>
+      ) : null}
 
       <section aria-labelledby="primary-metrics-title">
-        <h3 className="text-sm font-semibold text-white" id="primary-metrics-title">
-          主要指標
+        <h3 className="sr-only" id="primary-metrics-title">
+          売買成績の主な数字
         </h3>
-        {primaryMetrics.length > 0 ? (
-          <div
-            className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
-            data-primary-metric-grid="true"
-          >
-            {primaryMetrics.map((metric) => (
-              <PerformanceMetricCard key={metric.key} metric={metric} />
-            ))}
-          </div>
-        ) : (
-          <p className="mt-3 rounded-xl border border-dashed border-white/[0.1] bg-slate-950/30 px-4 py-6 text-sm text-slate-400">
-            現在表示できる主要指標はありません
-          </p>
-        )}
+        <div
+          className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
+          data-primary-metric-grid="true"
+        >
+          {primaryMetrics.map((metric) => (
+            <PerformanceMetricCard key={metric.key} metric={metric} />
+          ))}
+        </div>
       </section>
+
+      <ReliabilitySection data={data} lastUpdatedAt={lastUpdatedAt} metrics={primaryMetrics} />
     </div>
   );
 }
 
-function StatusDescription({
-  hasPreviousResult,
-  status,
+function ReliabilitySection({
+  data,
+  lastUpdatedAt,
+  metrics,
 }: {
-  readonly hasPreviousResult: boolean;
-  readonly status: PerformanceCalculationStatus;
-}) {
-  const content = statusDescription(status, hasPreviousResult);
-  const role =
-    status === "FAILED"
-      ? "alert"
-      : status === "PENDING" || status === "RUNNING"
-        ? "status"
-        : undefined;
+  readonly data: AddressPerformanceDto;
+  readonly lastUpdatedAt: string | null;
+  readonly metrics: ReturnType<typeof selectPrimaryMetrics>;
+}): React.JSX.Element {
+  const summary = buildReliabilitySummary(data);
+  const unavailable = metrics.filter((metric) => metric.unavailable);
+  const level = reliabilityLevel(summary?.level ?? "低い", unavailable.length);
+  const reasons = [...new Set(unavailable.flatMap((metric) => metric.unavailableReason ?? []))];
+  const successfulRun = data.latestSuccessfulRun;
+  const countAvailable = !metrics.find((metric) => metric.key === "trustedClosedCycleCount")
+    ?.unavailable;
+
   return (
-    <p className="mt-3 text-xs leading-relaxed text-slate-400" role={role}>
-      {content}
-    </p>
+    <section
+      aria-labelledby="performance-reliability-title"
+      className="rounded-2xl border border-white/[0.08] bg-slate-950/30 p-5"
+    >
+      <div className="flex flex-wrap items-baseline gap-2">
+        <h3 className="text-base font-semibold text-white" id="performance-reliability-title">
+          この成績の確かさ
+        </h3>
+        <p className="text-lg font-semibold text-cyan-100">{level}</p>
+      </div>
+      <p className="mt-3 text-sm leading-relaxed text-slate-300">
+        {summary?.text ?? "成績を確認するための履歴がまだ十分にありません。"}
+      </p>
+      {unavailable.length > 0 ? (
+        <div className="mt-3 text-sm leading-relaxed text-amber-50">
+          <p>計算できない項目: {unavailable.map((metric) => metric.label).join("、")}</p>
+          {reasons.map((reason) => (
+            <p className="mt-1" key={reason}>
+              {reason}
+            </p>
+          ))}
+        </div>
+      ) : null}
+      <dl className="mt-4 grid gap-4 text-sm sm:grid-cols-3">
+        <ReliabilityItem label="確認できた期間">
+          {successfulRun
+            ? `${formatPerformanceMinute(successfulRun.calculationFrom)} 〜 ${formatPerformanceMinute(successfulRun.calculationTo)}`
+            : "-"}
+        </ReliabilityItem>
+        <ReliabilityItem label="成績を調べた取引数">
+          {countAvailable ? `${String(data.calculationDetails.trustedClosedCycleCount)}件` : "-"}
+        </ReliabilityItem>
+        <ReliabilityItem label="最終データ更新">
+          {formatPerformanceMinute(lastUpdatedAt ?? successfulRun?.completedAt ?? null)}
+        </ReliabilityItem>
+      </dl>
+    </section>
   );
 }
 
-function statusDescription(
-  status: PerformanceCalculationStatus,
-  hasPreviousResult: boolean,
-): string {
-  if (status === "PENDING") {
-    return hasPreviousResult
-      ? "実績の再計算開始を待っています。"
-      : "計算の開始を待っています。完了すると表示が更新されます。";
-  }
-  if (status === "RUNNING") {
-    return hasPreviousResult
-      ? "実績を再計算しています。完了すると表示が更新されます。"
-      : "運用実績を計算しています。完了すると表示が更新されます。";
-  }
-  if (status === "FAILED") {
-    return hasPreviousResult
-      ? "最新の再計算に失敗しました。時間をおいて再計算してください。"
-      : "運用実績の計算に失敗しました。時間をおいて再計算してください。";
-  }
-  if (status === "INSUFFICIENT_DATA") {
-    return hasPreviousResult
-      ? "最新の再計算では正式な指標に必要な履歴が不足していました。"
-      : "正式な運用実績を計算するための履歴が不足しています。";
-  }
-  return "保存済みの正常な計算結果を表示しています。";
+function reliabilityLevel(
+  base: "高い" | "一部確認が必要" | "低い",
+  unavailableCount: number,
+): "高い" | "一部確認が必要" | "低い" {
+  if (unavailableCount >= 3) return "低い";
+  if (unavailableCount > 0 && base === "高い") return "一部確認が必要";
+  return base;
+}
+
+function ReliabilityItem({
+  children,
+  label,
+}: {
+  readonly children: React.ReactNode;
+  readonly label: string;
+}) {
+  return (
+    <div>
+      <dt className="text-xs text-slate-500">{label}</dt>
+      <dd className="mt-1 leading-relaxed text-slate-200">{children}</dd>
+    </div>
+  );
 }
 
 function StateMessage({

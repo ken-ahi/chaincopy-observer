@@ -103,6 +103,10 @@ export interface HistoryListQuery {
   readonly limit: number;
 }
 
+export interface OrderListQuery extends HistoryListQuery {
+  readonly status?: "open";
+}
+
 export interface DataQualityListQuery extends HistoryListQuery {
   readonly status?: DataQualityIssueStatus;
 }
@@ -142,7 +146,7 @@ export interface AddressService {
   listFunding(address: string, query: HistoryListQuery): Promise<Page<unknown>>;
   listLedger(address: string, query: HistoryListQuery): Promise<Page<unknown>>;
   listPositions(address: string): Promise<ReadonlyArray<unknown>>;
-  listOrders(address: string, query: HistoryListQuery): Promise<Page<unknown>>;
+  listOrders(address: string, query: OrderListQuery): Promise<Page<unknown>>;
   listDataQuality(address: string, query: DataQualityListQuery): Promise<Page<unknown>>;
   getSyncStatus(address: string): Promise<AddressSyncStatus>;
   getHyperliquidHealth(): Promise<Readonly<Record<string, unknown>>>;
@@ -458,13 +462,16 @@ export class PrismaAddressService implements AddressService {
     }));
   }
 
-  public async listOrders(addressInput: string, query: HistoryListQuery) {
+  public async listOrders(addressInput: string, query: OrderListQuery) {
     const row = await this.findAddress(normalizeHyperliquidAddress(addressInput));
     const orders = await this.database.orderHistory.findMany({
       orderBy: [{ statusTimestamp: "desc" }, { id: "desc" }],
       ...(query.cursor ? { cursor: { id: query.cursor }, skip: 1 } : {}),
       take: query.limit + 1,
-      where: { walletAddressId: row.id },
+      where: {
+        walletAddressId: row.id,
+        ...(query.status ? { status: query.status } : {}),
+      },
     });
     return toPage(orders, query.limit, (order) => ({
       ...order,

@@ -1,4 +1,3 @@
-import { Badge } from "@chaincopy/ui";
 import { Activity, ArrowLeft, Radar, Telescope } from "lucide-react";
 import Link from "next/link";
 
@@ -21,33 +20,36 @@ export function AddressHeader({ email }: { readonly email: string }) {
           </Link>
           <nav className="flex items-center gap-3" aria-label="Dashboard">
             <Link
+              aria-label="ホーム"
               className="flex items-center gap-1.5 text-xs text-slate-500 transition hover:text-slate-200"
               href="/dashboard"
+              title="ホーム"
             >
               <ArrowLeft aria-hidden="true" className="size-3.5" />
-              概要
+              ホーム
             </Link>
             <Link
+              aria-label="監視中のアドレス"
               className="hidden items-center gap-1.5 text-xs text-slate-500 transition hover:text-cyan-200 md:flex"
               href="/dashboard/addresses"
+              title="監視中のアドレス"
             >
               <Activity aria-hidden="true" className="size-3.5" />
-              監視
+              監視中のアドレス
             </Link>
             <Link
+              aria-label="優良アドレスを探す"
               className="hidden items-center gap-1.5 text-xs text-slate-500 transition hover:text-cyan-200 md:flex"
               href="/dashboard/discovery"
+              title="優良アドレスを探す"
             >
               <Telescope aria-hidden="true" className="size-3.5" />
-              探索
+              優良アドレスを探す
             </Link>
           </nav>
         </div>
         <div className="flex items-center gap-3">
           <SystemVersion />
-          <span className="hidden xl:inline-flex">
-            <Badge variant="info">Phase 3 · Discovery</Badge>
-          </span>
           <span className="hidden max-w-48 truncate text-xs text-slate-500 sm:block">{email}</span>
           <SignOutButton />
         </div>
