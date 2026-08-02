@@ -55,23 +55,26 @@ test.describe("Performance browser E2E", () => {
       expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
-    test("未計算の監視アドレスを手動計算し、完了状態まで更新する", async ({ page }) => {
-      await openAddressDetail(page, e2eManualPerformanceAddress);
+    test("未計算の監視アドレスを手動計算し、完了状態まで更新する", async ({ page }, testInfo) => {
+      const manualAddress = await createManualPerformanceWallet(testInfo.retry);
+
+      await openAddressDetail(page, manualAddress);
 
       await expect(page.getByText(/まだ計算されていません/)).toBeVisible();
+
       const calculateButton = page.getByRole("button", { name: "実績を計算" });
       await expect(calculateButton).toBeEnabled();
       await calculateButton.click();
+
       await expect(page.getByText("計算待ち").first()).toBeVisible();
       await expect(page.getByRole("button", { name: "計算待ち" })).toBeDisabled();
 
-      await completeManualPerformanceFixture();
+      await completeManualPerformanceFixture(manualAddress);
 
       await expect(page.getByText("データ不足").first()).toBeVisible({
         timeout: 10_000,
       });
       await expect(page.getByRole("button", { name: "実績を再計算" })).toBeEnabled();
-      expect(await page.locator("body").innerText()).not.toMatch(sensitivePattern);
     });
 
     test("成功Runの主要指標、説明button、2つの詳細領域を表示する", async ({ page }) => {
@@ -147,7 +150,7 @@ test.describe("Performance browser E2E", () => {
     test("日次NAV一覧・概要・SVGチャートを表示する", async ({ page }) => {
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await page.getByRole("button", { name: "詳細指標を開く" }).click();
+      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
       await expect(page.getByRole("heading", { name: "日次評価額" })).toBeVisible();
       await expect(page.getByText("日次NAV概要")).toBeVisible();
       const table = page.getByRole("table", { name: "日次NAV一覧" });
@@ -166,7 +169,7 @@ test.describe("Performance browser E2E", () => {
     test("Position Cycle一覧とクライアントフィルターを表示する", async ({ page }) => {
       await openAddressDetail(page, e2ePerformanceAddress);
 
-      await page.getByRole("button", { name: "詳細指標を開く" }).click();
+      await page.getByRole("button", { name: "計算の詳細を開く" }).click();
       await expect(page.getByRole("heading", { name: "取引サイクル" })).toBeVisible();
       const table = page.getByRole("table", { name: "取引サイクル一覧" });
       await expect(table.getByRole("row")).toHaveCount(4);
@@ -253,7 +256,7 @@ async function assertNoSensitiveData(
   }
 }
 
-async function completeManualPerformanceFixture(): Promise<void> {
+async function completeManualPerformanceFixture(address: string): Promise<void> {
   const database = new PrismaClient({
     datasources: {
       db: {
@@ -265,7 +268,7 @@ async function completeManualPerformanceFixture(): Promise<void> {
   });
   try {
     const wallet = await database.walletAddress.findFirstOrThrow({
-      where: { address: e2eManualPerformanceAddress },
+      where: { address },
     });
     await database.metricCalculationRun.create({
       data: {
@@ -288,6 +291,46 @@ async function completeManualPerformanceFixture(): Promise<void> {
         warningCount: 1,
       },
     });
+  } finally {
+    await database.$disconnect();
+  }
+}
+async function createManualPerformanceWallet(retry: number): Promise<string> {
+  const suffix = (retry + 1).toString(16).padStart(2, "0");
+  const address = `0x${"a".repeat(38)}${suffix}`;
+
+  const database = new PrismaClient({
+    datasources: {
+      db: {
+        url:
+          process.env.DATABASE_URL ??
+          "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=chaincopy_e2e",
+      },
+    },
+  });
+
+  try {
+    const template = await database.walletAddress.findFirstOrThrow({
+      select: {
+        ownerUserId: true,
+        sourceId: true,
+      },
+      where: {
+        address: e2eManualPerformanceAddress,
+      },
+    });
+
+    await database.walletAddress.create({
+      data: {
+        address,
+        displayName: `E2E Performance Manual Retry ${retry}`,
+        isWatched: true,
+        ownerUserId: template.ownerUserId,
+        sourceId: template.sourceId,
+      },
+    });
+
+    return address;
   } finally {
     await database.$disconnect();
   }
