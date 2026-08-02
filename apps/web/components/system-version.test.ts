@@ -21,15 +21,21 @@ const api: ServiceBuildInfo = {
 };
 
 describe("SystemVersion", () => {
-  it("shows Web and API version, commit, build time, and connected state", () => {
+  it("利用者向けヘッダーは正式な日本語ナビゲーションだけを表示する", () => {
+    const source = readFileSync(new URL("./address-header.tsx", import.meta.url), "utf8");
+
+    expect(source).toContain("ホーム");
+    expect(source).toContain("監視中のアドレス");
+    expect(source).toContain("優良アドレスを探す");
+    expect(source).not.toContain("Phase 3 · Discovery");
+    expect(source).not.toContain("Web version");
+    expect(source).not.toContain("API version");
+  });
+
+  it("正常時はバージョンと接続済み表示を出さない", () => {
     const html = renderVersion(api, "connected");
 
-    expect(html).toContain("Web v0.3.1");
-    expect(html).toContain("API v0.3.1");
-    expect(html).toContain("dc37ffc");
-    expect(html).toContain("接続済み");
-    expect(html).toContain("Web builtAt: 2026-07-28T13:30:00.000Z");
-    expect(html).toContain("API builtAt: 2026-07-28T13:30:00.000Z");
+    expect(html).toBe("");
   });
 
   it("requires both version and commit to match", () => {
@@ -41,10 +47,14 @@ describe("SystemVersion", () => {
   it.each([
     ["version", { ...api, version: "0.2.1" }],
     ["commit", { ...api, commit: "1234567" }],
-  ])("shows the mismatch warning for a %s mismatch", (_field, mismatchedApi) => {
+  ])("%s不一致時は内部情報のない日本語警告を表示する", (_field, mismatchedApi) => {
     const html = renderVersion(mismatchedApi, "mismatch");
 
-    expect(html).toContain("Web/APIのビルドが一致していません");
+    expect(html).toContain("最新データを取得できません");
+    expect(html).toContain('role="alert"');
+    expect(html).not.toContain("Web/API");
+    expect(html).not.toContain("0.3.1");
+    expect(html).not.toContain("dc37ffc");
   });
 
   it("keeps page content visible when the API version request fails", () => {
@@ -62,8 +72,9 @@ describe("SystemVersion", () => {
     );
 
     expect(html).toContain("Observation deck");
-    expect(html).toContain("Web v0.3.1");
-    expect(html).toContain("APIバージョン取得失敗");
+    expect(html).toContain("最新データを取得できません");
+    expect(html).not.toContain("Web v0.3.1");
+    expect(html).not.toContain("APIバージョン取得失敗");
   });
 
   it("shares one no-store request across initial consumers", async () => {
@@ -101,3 +112,4 @@ function jsonResponse(payload: unknown): Response {
     headers: { "content-type": "application/json" },
   });
 }
+import { readFileSync } from "node:fs";

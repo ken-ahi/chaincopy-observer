@@ -52,6 +52,10 @@ const dataQualityListQuerySchema = listQuerySchema.extend({
   status: z.enum(["OPEN", "RESOLVED"]).optional(),
 });
 
+const orderListQuerySchema = listQuerySchema.extend({
+  status: z.literal("open").optional(),
+});
+
 type ApiInstance<LoggerType extends FastifyBaseLogger> = FastifyInstance<
   RawServerDefault,
   RawRequestDefaultExpression,
@@ -170,9 +174,25 @@ export function registerAddressRoutes<LoggerType extends FastifyBaseLogger>(
   registerListRoute(app, "/api/addresses/:address/ledger", (address, query) =>
     addressService.listLedger(address, query),
   );
-  registerListRoute(app, "/api/addresses/:address/orders", (address, query) =>
-    addressService.listOrders(address, query),
-  );
+  app.get("/api/addresses/:address/orders", async (request, reply) => {
+    const params = addressParamsSchema.safeParse(request.params);
+    const query = orderListQuerySchema.safeParse(request.query);
+    if (!params.success) {
+      return reply.code(400).send(validationResponse(params.error));
+    }
+    if (!query.success) {
+      return reply.code(400).send(validationResponse(query.error));
+    }
+    try {
+      return await addressService.listOrders(params.data.address, {
+        limit: query.data.limit,
+        ...(query.data.cursor ? { cursor: query.data.cursor } : {}),
+        ...(query.data.status ? { status: query.data.status } : {}),
+      });
+    } catch (error) {
+      return sendAddressError(error, reply);
+    }
+  });
 
   app.get("/api/addresses/:address/positions", async (request, reply) => {
     const params = addressParamsSchema.safeParse(request.params);

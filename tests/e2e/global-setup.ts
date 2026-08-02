@@ -225,6 +225,77 @@ export default async function globalSetup() {
       },
     ],
   });
+  await database.normalizedTrade.create({
+    data: {
+      closedPnl: "0",
+      coin: "BTC",
+      crossed: true,
+      direction: "Open Long",
+      externalTradeId: "phase4-2-2-recent-buy",
+      fee: "0.25",
+      feeToken: "USDC",
+      fingerprint: "phase4-2-2-recent-buy-fingerprint",
+      occurredAt: new Date("2026-06-30T08:00:00.000Z"),
+      orderId: "phase4-2-2-recent-buy-order",
+      price: "60000",
+      side: "BUY",
+      size: "0.1",
+      sourceId: source.id,
+      startPosition: "0",
+      transactionHash: "phase4-2-2-recent-buy-transaction",
+      walletAddressId: performanceWallet.id,
+    },
+  });
+  await database.perpPosition.create({
+    data: {
+      coin: "BTC",
+      entryPrice: "60000",
+      leverageType: "cross",
+      leverageValue: "2",
+      liquidationPrice: "30000",
+      marginUsed: "3000",
+      maxLeverage: "50",
+      positionValue: "6000",
+      returnOnEquity: "0.05",
+      side: "LONG",
+      size: "0.1",
+      sourceId: source.id,
+      unrealizedPnl: "300",
+      updatedExternalAt: new Date("2026-06-30T09:00:00.000Z"),
+      walletAddressId: performanceWallet.id,
+    },
+  });
+  await database.spotBalanceSnapshot.create({
+    data: {
+      capturedAt: new Date("2026-06-30T09:00:00.000Z"),
+      coin: "HYPE",
+      entryNotional: "1500",
+      fingerprint: "phase4-2-2-spot-hype-fingerprint",
+      hold: "0",
+      sourceId: source.id,
+      tokenIndex: 150,
+      total: "100",
+      walletAddressId: performanceWallet.id,
+    },
+  });
+  await database.orderHistory.create({
+    data: {
+      clientOrderId: null,
+      coin: "ETH",
+      fingerprint: "phase4-2-2-open-order-fingerprint",
+      limitPrice: "2500",
+      orderId: "phase4-2-2-open-order",
+      orderType: "Limit",
+      originalSize: "1.5",
+      reduceOnly: false,
+      side: "BUY",
+      size: "1.5",
+      sourceId: source.id,
+      status: "open",
+      statusTimestamp: new Date("2026-06-30T09:30:00.000Z"),
+      walletAddressId: performanceWallet.id,
+    },
+  });
   await database.cashFlow.create({
     data: {
       amount: "1",
@@ -276,7 +347,9 @@ export default async function globalSetup() {
     data: [
       ["cumulativeReturn", "0.123456789012", "EXACT"],
       ["maxDrawdown", "-0.045", "EXACT"],
+      ["profitFactor", "2.4", "EXACT"],
       ["sharpeRatio", "1.23456789", "DERIVED"],
+      ["topTradeContribution", "0.4", "EXACT"],
       ["winRate", "0.625", "EXACT"],
       ["medianLeverage", "2.5", "EXACT"],
       ["largestCoinShare", "0.55", "ESTIMATED"],

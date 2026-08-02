@@ -67,8 +67,9 @@ test("registers, deduplicates, watches, syncs, and opens an address", async ({ p
   await row.getByRole("link").click();
   await expect(page).toHaveURL(new RegExp(`/dashboard/addresses/${e2eAddress}$`));
   await expect(page.getByText(e2eAddress)).toBeVisible();
-  await expect(page.getByRole("heading", { name: "現在ポジション" })).toBeVisible();
-  await expect(page.getByText("現在ポジションはありません。")).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Sync Cursor" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Data Quality Issue/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "現在の先物ポジション" })).toBeVisible();
+  await expect(page.getByText("現在の先物ポジションはありません。")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "最近の動き" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sync Cursor" })).toHaveCount(0);
+  await expect(page.getByRole("heading", { name: /Data Quality Issue/ })).toHaveCount(0);
 });

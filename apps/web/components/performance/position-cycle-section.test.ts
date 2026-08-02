@@ -339,7 +339,7 @@ describe("取引サイクル表示", () => {
         state: navState,
       }),
     );
-    expect(overview).toContain("運用実績");
+    expect(overview).toContain("このアドレスの売買成績");
     expect(nav).toContain("日次評価額");
   });
 

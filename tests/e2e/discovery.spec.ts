@@ -107,14 +107,12 @@ test("prevents duplicate promotion while showing the pending state", async ({ pa
   expect(promotionRequestCount).toBe(1);
 });
 
-test("shows matching Web and API build information", async ({ page }) => {
+test("hides build information when Web and API match", async ({ page }) => {
   await page.goto("/dashboard");
 
-  const version = page.getByLabel("稼働バージョン");
-  await expect(version).toContainText("Web v0.3.1");
-  await expect(version).toContainText("API v0.3.1");
-  await expect(version).toContainText("unknown");
-  await expect(version).toContainText("接続済み");
+  await expect(page.getByText("Web v0.3.1")).toHaveCount(0);
+  await expect(page.getByText("API v0.3.1")).toHaveCount(0);
+  await expect(page.getByText("接続済み", { exact: true })).toHaveCount(0);
 });
 
 test("shows a Web/API mismatch warning", async ({ page }) => {
@@ -133,7 +131,10 @@ test("shows a Web/API mismatch warning", async ({ page }) => {
 
   await page.goto("/dashboard");
 
-  await expect(page.getByText("Web/APIのビルドが一致していません")).toBeVisible();
+  await expect(
+    page.getByText("最新データを取得できません。表示内容が古い可能性があります。"),
+  ).toBeVisible();
+  await expect(page.getByText("Web/APIのビルドが一致していません")).toHaveCount(0);
 });
 
 test("keeps the dashboard usable when API build information is unavailable", async ({ page }) => {
@@ -151,7 +152,10 @@ test("keeps the dashboard usable when API build information is unavailable", asy
   await page.goto("/dashboard");
 
   await expect(page.getByRole("heading", { name: "Observation deck" })).toBeVisible();
-  await expect(page.getByText("APIバージョン取得失敗")).toBeVisible();
+  await expect(
+    page.getByText("最新データを取得できません。表示内容が古い可能性があります。"),
+  ).toBeVisible();
+  await expect(page.getByText("APIバージョン取得失敗")).toHaveCount(0);
 });
 
 test("rejects unauthenticated discovery API requests", async ({ request }) => {
@@ -222,11 +226,11 @@ test("toggles candidate exclusion, queues re-evaluation, and cleans up", async (
   await database.$disconnect();
 });
 
-test("shows Phase 4 completion without enabling Phase 5 features", async ({ page }) => {
+test("hides development phases without enabling later features", async ({ page }) => {
   await page.goto("/dashboard");
 
-  await expect(page.getByText("Phase 4 · Performance analytics")).toBeVisible();
-  await expect(page.getByText("Phase 4 complete")).toBeVisible();
+  await expect(page.getByText("Phase 4 · Performance analytics")).toHaveCount(0);
+  await expect(page.getByText("Phase 4 complete")).toHaveCount(0);
   await expect(page.getByText("ランキング・分析")).toBeVisible();
   await expect(page.getByText("現在は利用できません")).toBeVisible();
 });

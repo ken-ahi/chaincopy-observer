@@ -34,12 +34,21 @@ export function PerformanceMetricCard({
             ) : null}
           </div>
         </div>
-        <p className="mt-2 break-words text-lg font-semibold tabular-nums text-white">
+        <p
+          aria-label={metric.unavailable ? `${metric.label}は計算できません` : undefined}
+          className="mt-2 break-words text-2xl font-semibold tabular-nums text-white"
+        >
           {metric.value}
         </p>
+        {metric.unavailableReason ? (
+          <p className="mt-2 text-sm leading-relaxed text-amber-100">{metric.unavailableReason}</p>
+        ) : null}
+        {metric.interpretation ? (
+          <p className="mt-2 text-sm leading-relaxed text-slate-300">{metric.interpretation}</p>
+        ) : null}
         {metric.description ? (
           <p
-            className="mt-3 border-t border-white/[0.08] pt-3 text-xs leading-relaxed text-slate-300"
+            className="mt-3 border-t border-white/[0.08] pt-3 text-sm leading-relaxed text-slate-300"
             hidden={!descriptionOpen}
             id={descriptionId}
           >

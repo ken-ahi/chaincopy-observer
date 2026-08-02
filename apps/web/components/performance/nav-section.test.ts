@@ -251,8 +251,8 @@ describe("日次NAV表示", () => {
         loading: true,
       }),
     );
-    expect(html).toContain("運用実績");
-    expect(html).toContain("運用実績を読み込んでいます");
+    expect(html).toContain("このアドレスの売買成績");
+    expect(html).toContain("売買成績を読み込んでいます");
   });
 
   it("アドレスまたはRun変更時のRESETで行とcursorを消去する", () => {
