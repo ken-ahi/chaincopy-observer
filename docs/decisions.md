@@ -230,6 +230,24 @@
 - version: 計算versionを`performance-v2`、アプリversionを`0.3.0`とする。v1 Runは削除せず共存させ、現行Overviewはv2を優先する。
 - 永続化: 既存のRun、Daily NAV、Position Cycle、Metric列で表現できるためPrisma Migrationは追加しない。Lane可用性と診断件数は保存済みMetric・子行・対象期間の生データからAPIで導出する。
 
+## ADR-029: Phase 4.2はPerformanceの判断情報を最大6指標へ絞る
+
+- 状態: 設計採用（実装前）
+- 背景: Phase 4.1.1完了後の`performance-v3` Performance画面は、計算可能な20種類のMetric枠、Availability、Precision、Warning Code、Run診断値、日次NAV、Position Cycleを同じ初期表示へ並べるため、収益性・損失リスク・再現性・データ信頼性を短時間で判断しにくい。
+- 方式: 初期表示を最新計算状態、必要な場合の前回正常結果表示、データ信頼性文、累積収益率、最大下落率、利益と損失の効率、勝率、評価対象取引数、利益の一発依存度、意味単位で最大3件の注意、再計算操作に限定する。値がないMetricの空カードは描画せず、補助Metric、日次NAV、Position Cycleは閉じた「詳細指標」、内部Codeと追跡値は閉じた「計算の詳細」へ移す。
+- Run選択: `latestRun`は最新の計算試行状態、`latestSuccessfulRun`と`metrics`、`availability`、`calculationDetails`は表示中の正常結果として分離する。最新Runが`PENDING`、`RUNNING`、`FAILED`、`INSUFFICIENT_DATA`でも最新成功RunがあればAPI変更なしで主要指標を表示し、「前回の正常な計算結果を表示しています」とその`completedAt`を明示する。状態、Error、Metric、診断値の取得元を混同せず、Warningは入力と生CodeをRun別に保持したまま通常表示だけ意味キー単位で統合する。
+- Version選択: 暗黙取得では`performance-v3`を優先し、v3が存在しない場合だけ`performance-v2`へfallbackする。`performance-v1`、未知Version、将来Versionは暗黙fallbackせず、明示`runId`では既存の安全条件を満たす指定Runを尊重する。
+- Max Drawdown: 計算契約はADR-030を正本とし、v3ではTWR Return Periodから構築したWealth Index由来の保存Metricを表示する。`UNKNOWN_CASH_FLOW`、`MISSING_CASH_FLOW_BOUNDARY_NAV`、`NON_POSITIVE_NAV`などでReturn Laneが計算不能な場合は最大下落率を`0`や`—`で補完せず、特にCash Flow境界NAV不足では最大下落率カードを表示しない。raw Daily NAVは表示・監査用として維持する。
+- Lane理由: ReturnだけのCash Flow境界NAV不足または評価期間不足、Tradeだけの完了取引不足、ExposureだけのSnapshot不足など、Lane固有理由は初期状態で閉じた「詳細指標」だけに日本語表示する。全体または複数Laneへ影響する問題だけを第一階層へ表示できる。第一階層へ表示した意味は詳細指標で理由文も参照文も重複表示せず、生Warning Codeは「計算の詳細」だけに残す。
+- Warning: 最新試行は`latestRun.warningCodes`、表示中の正常結果は`latestSuccessfulRun.warningCodes`、Metric warningCodes、`availability.reasons`、`calculationDetails`を別入力とする。生成規則は変えず、Webの通常表示時だけ画面全体を1つの重複排除範囲としてユーザー向け意味キーへ統合する。同一意味キーが両Runにある場合は最新試行を優先し、表示中正常結果側の同一意味キーを通常表示から除く。最大3件はRun別でなく両Runを合わせた画面全体へ適用し、残件の展開後も「最新の計算試行」「表示中の正常結果」の区分を維持する。生Warning Codeは重複削除せず各Run別に「計算の詳細」へ残す。
+- 取引数: `trustedClosedCycleCount`は空状態でも`0`になり得るため、最新成功Runが存在し、Trade Laneが利用不能でなく、件数が1件以上で、Trade系の正常なMetricが存在する場合だけ主要指標へ表示する。条件を満たさない`0`は正常結果として扱わない。
+- 説明操作: 主要指標の1～2文の説明は、`aria-label`、`aria-expanded`、`aria-controls`を持つbuttonで開閉する。クリック、Enter、Space、モバイルタップで操作でき、hoverだけに依存させない。
+- 階層: 「詳細指標」と「計算の詳細」は同じ階層の独立した開閉領域とし、どちらも初期状態を閉じる。「詳細指標」の内部にMetricグループ、日次NAV、Position Cycleの新しい多段折りたたみを追加しない。
+- レイアウト: 主要指標は1920pxと1366pxで3列、タブレットで2列、モバイルで1列とし、4列以上にしない。
+- リスク指標: 最大レバレッジと最大銘柄比率は既存仕様に重大閾値がないため新しい危険判定へ使わず、詳細指標に保持する。
+- 非変更: 金融計算と`performance-v3`への更新はPhase 4.1.1で修正済みであり、Phase 4.2は表示変更だけとする。v3の金融計算、Metric値、Daily NAV、Position Cycle、input fingerprint、Run状態、Lane availability、Warning生成、DB保存、APIレスポンス、再計算処理を変更しない。Phase 5のスコア、Confidence Score、推奨、分類、ランキング、AI説明、新規金融Metric、新規リスク閾値を追加しない。
+- 詳細: `docs/phase4-2-performance-ui-inventory.md`、`docs/phase4-2-performance-ui-spec.md`、`docs/phase4-2-performance-ui-test-matrix.md`を参照する。
+
 ## ADR-030: Max Drawdown uses TWR wealth index
 
 - 状態: 採用
