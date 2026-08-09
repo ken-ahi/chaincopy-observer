@@ -162,6 +162,21 @@ Phase 4Cでは既存の取引・snapshotを入力の正本として参照し、�
 
 raw payloadは監査・再正規化の根拠として維持するが、分析処理がraw JSONの偶発的なfield名へ恒常的に依存しないようにする。
 
+## 8.1 Phase 4.3参考ウォレット選定モデル
+
+Migration `20260808090000_phase4_3_wallet_selection`は既存データを変更せず、次の4 modelと2 enumを追加する。Service reviewのMigration `20260809090000_phase4_3_current_selection_run`はsettingsへ現在有効なSelection Runのnullable pointerを追加する。
+
+| model                     | 主な役割・制約                                                                                                             |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `WalletSelectionSettings` | Hyperliquid DataSourceごとの現行条件。`sourceId`で一意。率は`numeric(38,18)`。`currentSelectionRunId`で現在有効なRunを明示 |
+| `WalletSelectionRun`      | policy、入力fingerprint、設定snapshot、評価日時、4状態件数。`(sourceId, policyVersion, inputFingerprint)`で一意            |
+| `WalletSelectionResult`   | Run内のwallet別自動状態、順位、理由、Performance Run参照。`(selectionRunId, walletAddressId)`で一意                        |
+| `WalletSelectionOverride` | walletごとの`AUTO / INCLUDE / EXCLUDE`と任意メモ。`walletAddressId`で一意                                                  |
+
+`WalletSelectionAutomaticStatus`は`SELECTED / QUALIFIED / REVIEW / EXCLUDED`、`WalletSelectionOverrideDecision`は`AUTO / INCLUDE / EXCLUDE`である。Resultは金融値を複製せず、`performanceRunId`から保存済みPerformanceを追跡する。Performance Run削除時は参照を`SET NULL`、walletまたはselection run削除時は従属行をcascadeする。current Run削除時はsettingsのpointerを`SET NULL`とする。
+
+Runと全Resultは単一transactionで作成する。同じsource、policy、入力fingerprintに一意制約を置き、再評価や競合時の重複Runを抑止する。Migrationは全テーブル・物理カラムへ日本語コメントを付与する。
+
 ## 9. 現行テーブル・カラム論理名定義
 
 本節はPrisma管理対象のアプリケーションテーブル35件、物理カラム457件を対象とする。物理名は`@map`、`@@map`と既存Migrationを照合し、PostgreSQLコメントは`20260726233000_phase4_japanese_database_comments`で付与する。リレーション専用のPrisma仮想フィールドは物理カラムに含めない。
