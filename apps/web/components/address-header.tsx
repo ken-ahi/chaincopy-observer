@@ -1,4 +1,4 @@
-import { Activity, ArrowLeft, Radar, Telescope } from "lucide-react";
+import { Activity, ArrowLeft, Radar, Telescope, UsersRound } from "lucide-react";
 import Link from "next/link";
 
 import { SignOutButton } from "./sign-out-button";
@@ -45,6 +45,15 @@ export function AddressHeader({ email }: { readonly email: string }) {
             >
               <Telescope aria-hidden="true" className="size-3.5" />
               優良アドレスを探す
+            </Link>
+            <Link
+              aria-label="参考アドレス"
+              className="hidden items-center gap-1.5 text-xs text-slate-500 transition hover:text-cyan-200 lg:flex"
+              href="/dashboard/selection"
+              title="参考アドレス"
+            >
+              <UsersRound aria-hidden="true" className="size-3.5" />
+              参考アドレス
             </Link>
           </nav>
         </div>

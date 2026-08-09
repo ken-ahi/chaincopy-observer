@@ -6,6 +6,7 @@ import { createApi } from "./app.js";
 import { type DiscoveryService } from "./discovery-service.js";
 import { type HealthService } from "./health.js";
 import { type PerformanceService } from "./performance-service.js";
+import { type WalletSelectionService } from "./wallet-selection-service.js";
 
 const env = apiEnvSchema.parse({
   NODE_ENV: "test",
@@ -90,6 +91,7 @@ async function createTestApi() {
     healthService,
     logger: createLogger("api-version-test", "fatal"),
     performanceService: {} as PerformanceService,
+    walletSelectionService: {} as WalletSelectionService,
   });
   apps.push(app);
   return app;

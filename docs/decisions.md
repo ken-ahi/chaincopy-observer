@@ -269,3 +269,15 @@
 - 自動探索表示: 通常画面はタイトル、利用者向け状態、見つかった候補・調査済み・監視候補、候補一覧、設定の順にする。通信方式、接続状態、受信件数、重複除外、Queue、API利用量、内部Status、工程説明は表示しない。候補は成績計算前に高収益と断定せず「成績確認前」と表示する。
 - 取得: 候補検索・絞り込み・追加読み込みでは候補APIだけを再取得し、設定と探索サマリーは初回表示または明示的な再読み込み時だけ取得する。探索処理、既存APIレスポンス、監査データは変更しない。
 - 非変更: DB schema、Worker、探索・同期・分析処理、`performance-v3`の金融計算、API契約は変更しない。技術情報はDB、API、ログに保持する。
+
+## ADR-032: Phase 4.3の参考ウォレット選定はルール判定と年率収益率順位とする
+
+- 状態: 採用
+- 背景: Phase 5以降の入力へ全監視ウォレットを無条件に渡すと、履歴不足、古いデータ、未計算、過大な下落、一取引への利益集中を持つウォレットまで同列に扱うことになる。一方、任意の配点による総合スコアは根拠が不透明で、Phase 5.2のウォレット加重と責務が重なる。
+- 方式: `wallet-selection-v1`は成功した保存済み`performance-v3`だけを正本とする。まずREVIEW / EXCLUDEDをfail closedで判定し、通過ウォレットを年率換算収益率、最大下落幅、完了取引数、addressで安定順位付けする。上位N件をSELECTED、残りをQUALIFIEDとし、条件未達を水増ししない。
+- Decimal: 年率換算収益率、最大下落、一取引利益寄与、閾値の比較は`decimal.js`またはPrisma Decimalを使用し、欠損値を0へ変換しない。
+- 評価期間: 最低評価期間はPerformance Run全体ではなく、年率換算収益率Metric自身の`calculationFrom / calculationTo`で判定する。Metric期間が欠損または不正ならfail closedでREVIEWとする。
+- 永続化: 設定、選定Run、ウォレット別結果、手動Overrideを分離する。金融値は複製せずPerformance Runを参照し、同一入力fingerprintのRunを再利用する。settingsに現在有効なRunのpointerを持ち、新規Run、Result、pointer更新は1 transactionで保存する。過去Runを再利用しても評価日時は書き換えない。
+- 手動指定: INCLUDE / EXCLUDE / AUTOは有効状態だけを変え、自動判定、順位、理由を消さない。Phase 5へ自動状態と手動指定を別項目で渡す。
+- 延期: 重み付き総合スコア、勝率・Profit Factorによる除外、Performance完了後の自動再評価、schedulerは実装しない。重み付けはPhase 5.2で正式に設計する。
+- 非変更: `performance-v3`、Discovery処理、Worker、注文・署名・秘密鍵処理は変更しない。

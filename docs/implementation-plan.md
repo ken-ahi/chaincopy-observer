@@ -2,7 +2,7 @@
 
 > 2026-07-26の所有者指示により、Phase 1/2の直後にHyperliquid自動探索を「Phase 3」として実施した。Phase 4は監査・仕様確定（4A）と純粋計算実装（4B）に分ける。
 
-最終更新: 2026-07-26
+最終更新: 2026-08-08
 
 ## 共通完了ゲート
 
@@ -111,15 +111,42 @@ Phase 4BではDCA/Leverage分類、score、ranking、シグナルへ進まない
 
 Phase 4CではAPI、Web、分類、score、ranking、シグナルへ進まない。全口座NAV、清算回数、payoff ratioなど入力または純粋関数が不足する指標は値を作らない。
 
-## Phase 5: シグナル
+### Phase 4.1–4.2.3: Performance信頼性・表示改善
 
-- deterministic signal rule
-- confidence、consensus、risk filter
-- signal fingerprint
-- fail closedと抑止理由
-- Web signal UI
+- 指標Lane単位のfail closedと`performance-v2`
+- TWR Wealth Index由来Max Drawdownと`performance-v3`
+- 初心者向け主要6指標、理由の集約、Discovery画面簡素化
 
-## Phase 6: デモトレード
+### Phase 4.3: 参考ウォレット正式選定
+
+- 保存済み`performance-v3`だけを用いるルール判定
+- SELECTED / QUALIFIED / REVIEW / EXCLUDED
+- 年率収益率を主指標とする安定順位、上限適用、水増し禁止
+- 選定設定、Run、結果、手動Overrideの追跡
+- Phase 5向け`listEffectiveSelectedWallets()`契約
+- `/dashboard/selection`と認証済みAPI
+
+Phase 4.3では重み付きスコア、scheduler、PerformanceやDiscoveryの変更、実取引機能を追加しない。
+
+## Phase 5: 売買行動の分析と指標化
+
+### Phase 5.0: 売買を意味のある行動イベントへ変換
+
+### Phase 5.1: 複数ウォレットを通貨別に集約
+
+### Phase 5.2: ウォレットごとの重み付け
+
+### Phase 5.3: 買い・売り指標を生成
+
+### Phase 5.4: 時間変化・方向転換を検出
+
+## Phase 6: メール通知
+
+- 即時、集約、定期通知
+- notification fingerprintと重複抑止
+- 配信状態、rate limit、suppression
+
+## Phase 7: デモトレード
 
 - demo portfolio/order/fill/position/ledger
 - Risk Adjusted/Mirror mode
@@ -129,29 +156,18 @@ Phase 4CではAPI、Web、分類、score、ranking、シグナルへ進まない
 
 禁止: 実注文interfaceとの共通化。
 
-## Phase 7: メール通知
+## Phase 8: 戦略検証・改善
 
-- Resend send API
-- 即時/集約/digest
-- notification idempotency
-- Webhook署名と配信状態
-- rate limit、suppression
-- test email
+- デモ結果と比較ポートフォリオの評価
+- 戦略version、再現可能な検証、改善履歴
 
-## 旧Phase 8案: 自動アドレス探索（Phase 3へ前倒し済み）
+## Phase 9: 人間承認ありの半自動売買（将来計画）
 
-- 公開データからの候補抽出
-- 除外リスト、bot/contract分類
-- candidate enrichment queue
-- 条件未達を水増ししない
-- 手動CSV/JSON経路は採用しない
+- 開始前に独立したSecurity Reviewを必須とする
+- それまではExchange endpoint、署名、取引用秘密鍵、実注文を禁止する
+- 承認・取消・監査・上限・緊急停止を設計できる場合だけ着手する
 
-## Phase 9: 本番運用強化
+## Phase 10: リスク制御された自動売買（将来計画）
 
-- 本番デプロイ
-- Sentry等のエラー監視
-- rate limit/WAF/CSP強化
-- backup/restore試験
-- load test、障害注入、DR
-- ログ90日保持
-- 運用runbookとsecret rotation
+- Phase 9の安全性、監査、長期デモ検証を完了した後だけ検討する
+- 現行実装ではExchange endpoint、署名、秘密鍵、seed phrase、出金、注文、資金移動を引き続き禁止する

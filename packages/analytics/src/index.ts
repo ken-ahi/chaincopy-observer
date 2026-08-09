@@ -39,4 +39,22 @@ export {
   calculateTradeStatistics,
   calculateWinRate,
 } from "./trade-statistics.js";
+export {
+  DEFAULT_WALLET_SELECTION_POLICY,
+  effectiveWalletSelectionStatus,
+  evaluateWalletSelection,
+  isEffectivelySelected,
+  validateWalletSelectionPolicy,
+  WALLET_SELECTION_POLICY_VERSION,
+  WalletSelectionPolicyError,
+} from "./wallet-selection.js";
+export type {
+  WalletSelectionAutomaticStatus,
+  WalletSelectionCandidateInput,
+  WalletSelectionOverrideDecision,
+  WalletSelectionPerformanceInput,
+  WalletSelectionPolicy,
+  WalletSelectionReasonCode,
+  WalletSelectionResult,
+} from "./wallet-selection.js";
 export type * from "./types.js";

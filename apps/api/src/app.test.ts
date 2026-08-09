@@ -25,6 +25,11 @@ import {
   type PerformanceService,
   type PositionCycleDto,
 } from "./performance-service.js";
+import {
+  type WalletSelectionRunDto,
+  type WalletSelectionService,
+  WalletSelectionWalletNotFoundError,
+} from "./wallet-selection-service.js";
 
 const env = apiEnvSchema.parse({
   NODE_ENV: "test",
@@ -154,6 +159,27 @@ const performanceService: PerformanceService = {
   listCycles: async () => ({ items: [], nextCursor: null }),
 };
 
+const emptyWalletSelection: WalletSelectionRunDto = { items: [], run: null };
+
+const walletSelectionService: WalletSelectionService = {
+  evaluate: async () => ({ ...emptyWalletSelection, reused: false }),
+  getCurrentSelection: async () => emptyWalletSelection,
+  getSettings: async () => ({
+    maxAutoSelected: 100,
+    maximumDataAgeHours: 24,
+    maximumDrawdown: "0.5",
+    maximumTopTradeContribution: "0.75",
+    minimumAnnualizedReturn: "0",
+    minimumEvaluationDays: 90,
+    minimumTrustedClosedCycles: 20,
+    policyVersion: "wallet-selection-v1",
+    updatedAt: "2026-08-08T00:00:00.000Z",
+  }),
+  listEffectiveSelectedWallets: async () => [],
+  setOverride: async () => null,
+  updateSettings: async () => walletSelectionService.getSettings(),
+};
+
 const addressSummary: AddressSummary = {
   address: "0x1111111111111111111111111111111111111111",
   currentPositionCount: 0,
@@ -181,10 +207,17 @@ function withDiscoveryService(overrides: Partial<DiscoveryService>): DiscoverySe
   return { ...discoveryService, ...overrides };
 }
 
+function withWalletSelectionService(
+  overrides: Partial<WalletSelectionService>,
+): WalletSelectionService {
+  return { ...walletSelectionService, ...overrides };
+}
+
 async function createTestApi(
   service: AddressService = addressService,
   performance: PerformanceService = performanceService,
   discovery: DiscoveryService = discoveryService,
+  walletSelection: WalletSelectionService = walletSelectionService,
 ) {
   const app = await createApi({
     addressService: service,
@@ -193,6 +226,7 @@ async function createTestApi(
     healthService,
     logger: createLogger("api-test", "fatal"),
     performanceService: performance,
+    walletSelectionService: walletSelection,
   });
   apps.push(app);
   return app;
@@ -1046,6 +1080,143 @@ describe("performance routes", () => {
   });
 });
 
+describe("wallet selection routes", () => {
+  const address = "0x1111111111111111111111111111111111111111";
+
+  it("rejects unauthenticated wallet selection requests", async () => {
+    const app = await createTestApi();
+    const responses = await Promise.all([
+      app.inject({ method: "GET", url: "/api/wallet-selection" }),
+      app.inject({ method: "GET", url: "/api/wallet-selection/settings" }),
+      app.inject({ method: "POST", url: "/api/wallet-selection/evaluate" }),
+    ]);
+    expect(responses.map((response) => response.statusCode)).toEqual([401, 401, 401]);
+  });
+
+  it("returns the latest selection, settings, and Phase 5 selected set", async () => {
+    const selection: WalletSelectionRunDto = {
+      items: [],
+      run: {
+        evaluatedAt: "2026-08-08T00:00:00.000Z",
+        excludedCount: 0,
+        id: "selection-run-1",
+        inputFingerprint: "fingerprint",
+        policyVersion: "wallet-selection-v1",
+        qualifiedCount: 0,
+        reviewCount: 0,
+        selectedCount: 0,
+        universeCount: 0,
+      },
+    };
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      discoveryService,
+      withWalletSelectionService({
+        getCurrentSelection: async () => selection,
+        listEffectiveSelectedWallets: async () => [
+          {
+            address,
+            automaticStatus: "SELECTED",
+            manualOverride: "AUTO",
+            performanceRunId: "performance-run-1",
+            selectionRunId: "selection-run-1",
+            walletAddressId: "wallet-1",
+          },
+        ],
+      }),
+    );
+
+    const [list, settings, selected] = await Promise.all([
+      authorizedGet(app, "/api/wallet-selection"),
+      authorizedGet(app, "/api/wallet-selection/settings"),
+      authorizedGet(app, "/api/wallet-selection/effective-selected"),
+    ]);
+    expect(list.json()).toEqual(selection);
+    expect(settings.json()).toMatchObject({ policyVersion: "wallet-selection-v1" });
+    expect(selected.json().items).toHaveLength(1);
+  });
+
+  it("validates and updates settings without evaluating automatically", async () => {
+    let updated: unknown = null;
+    let evaluated = false;
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      discoveryService,
+      withWalletSelectionService({
+        evaluate: async () => {
+          evaluated = true;
+          return { ...emptyWalletSelection, reused: false };
+        },
+        updateSettings: async (input) => {
+          updated = input;
+          return walletSelectionService.getSettings();
+        },
+      }),
+    );
+
+    const invalid = await authorizedPatch(app, "/api/wallet-selection/settings", {
+      maximumDrawdown: -1,
+    });
+    const valid = await authorizedPatch(app, "/api/wallet-selection/settings", {
+      maxAutoSelected: 25,
+      maximumDrawdown: "0.4",
+    });
+    expect(invalid.statusCode).toBe(400);
+    expect(valid.statusCode).toBe(200);
+    expect(updated).toEqual({ maxAutoSelected: 25, maximumDrawdown: "0.4" });
+    expect(evaluated).toBe(false);
+  });
+
+  it("evaluates and validates manual override decisions", async () => {
+    let decision: string | null = null;
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      discoveryService,
+      withWalletSelectionService({
+        setOverride: async (_address, nextDecision) => {
+          decision = nextDecision;
+          return null;
+        },
+      }),
+    );
+    const evaluation = await authorizedPost(app, "/api/wallet-selection/evaluate");
+    const invalid = await authorizedPatch(app, `/api/wallet-selection/${address}/override`, {
+      decision: "FORCE",
+    });
+    const valid = await authorizedPatch(app, `/api/wallet-selection/${address}/override`, {
+      decision: "INCLUDE",
+    });
+    expect(evaluation.statusCode).toBe(200);
+    expect(invalid.statusCode).toBe(400);
+    expect(valid.statusCode).toBe(200);
+    expect(decision).toBe("INCLUDE");
+  });
+
+  it("returns 404 without exposing internal wallet details", async () => {
+    const app = await createTestApi(
+      addressService,
+      performanceService,
+      discoveryService,
+      withWalletSelectionService({
+        setOverride: async (requestedAddress) => {
+          throw new WalletSelectionWalletNotFoundError(requestedAddress);
+        },
+      }),
+    );
+    const response = await authorizedPatch(app, `/api/wallet-selection/${address}/override`, {
+      decision: "AUTO",
+    });
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      error: "not_found",
+      message: "The monitored wallet was not found.",
+    });
+  });
+});
+
 function calculationRun(overrides: Partial<CalculationRunDto> = {}): CalculationRunDto {
   return {
     runId: "run-1",
@@ -1081,5 +1252,18 @@ async function authorizedPost(app: Awaited<ReturnType<typeof createApi>>, url: s
     method: "POST",
     url,
     headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+  });
+}
+
+async function authorizedPatch(
+  app: Awaited<ReturnType<typeof createApi>>,
+  url: string,
+  body: Readonly<Record<string, unknown>>,
+) {
+  return app.inject({
+    body,
+    headers: { "x-internal-api-secret": env.INTERNAL_API_SECRET },
+    method: "PATCH",
+    url,
   });
 }

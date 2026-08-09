@@ -8,4 +8,5 @@ export const e2eManualPerformanceAddress = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 export const e2ePartialPerformanceAddress = "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 export const e2ePerformanceAddress = "0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
 export const e2ePromotionAddress = "0xdddddddddddddddddddddddddddddddddd000006";
+export const e2eSelectionAddress = "0xcccccccccccccccccccccccccccccccccccccccc";
 export const e2eSessionToken = "phase2-e2e-session-token";

@@ -17,6 +17,7 @@ import { createApi } from "./app.js";
 import { PrismaDiscoveryService } from "./discovery-service.js";
 import { DatabaseRedisHealthService } from "./health.js";
 import { PrismaPerformanceService } from "./performance-service.js";
+import { PrismaWalletSelectionService } from "./wallet-selection-service.js";
 
 loadRootEnvironment();
 
@@ -42,6 +43,7 @@ const performanceQueue = new Queue<PerformanceJobData>(performanceQueueName, {
 const addressService = new PrismaAddressService(prisma, hyperliquidQueue);
 const discoveryService = new PrismaDiscoveryService(prisma, discoveryQueue, candidateQueue);
 const performanceService = new PrismaPerformanceService(prisma, performanceQueue);
+const walletSelectionService = new PrismaWalletSelectionService(prisma);
 const app = await createApi({
   addressService,
   discoveryService,
@@ -49,6 +51,7 @@ const app = await createApi({
   healthService,
   logger,
   performanceService,
+  walletSelectionService,
 });
 
 async function shutdown(signal: string): Promise<void> {

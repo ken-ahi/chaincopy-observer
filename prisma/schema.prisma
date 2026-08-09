@@ -156,6 +156,19 @@ enum PositionCycleStatus {
   CLOSED
 }
 
+enum WalletSelectionAutomaticStatus {
+  SELECTED
+  QUALIFIED
+  REVIEW
+  EXCLUDED
+}
+
+enum WalletSelectionOverrideDecision {
+  AUTO
+  INCLUDE
+  EXCLUDE
+}
+
 /// アプリ利用者
 model User {
   /// ID
@@ -249,47 +262,49 @@ model VerificationToken {
 /// データソース
 model DataSource {
   /// ID
-  id                   String                      @id @default(cuid())
+  id                      String                      @id @default(cuid())
   /// データソースキー
-  key                  String                      @unique
+  key                     String                      @unique
   /// データソース名
-  name                 String
+  name                    String
   /// データソース種別
-  kind                 DataSourceKind
+  kind                    DataSourceKind
   /// 有効フラグ
-  enabled              Boolean                     @default(false)
+  enabled                 Boolean                     @default(false)
   /// ステータス
-  status               OperationalStatus           @default(UNKNOWN)
+  status                  OperationalStatus           @default(UNKNOWN)
   /// 最終成功日時
-  lastSuccessAt        DateTime?                   @map("last_success_at")
+  lastSuccessAt           DateTime?                   @map("last_success_at")
   /// 最終失敗日時
-  lastFailureAt        DateTime?                   @map("last_failure_at")
+  lastFailureAt           DateTime?                   @map("last_failure_at")
   /// ステータスメッセージ
-  statusMessage        String?                     @map("status_message")
+  statusMessage           String?                     @map("status_message")
   /// 登録日時
-  createdAt            DateTime                    @default(now()) @map("created_at")
+  createdAt               DateTime                    @default(now()) @map("created_at")
   /// 更新日時
-  updatedAt            DateTime                    @updatedAt @map("updated_at")
-  syncJobs             SyncJob[]
-  systemAlerts         SystemAlert[]
-  walletAddresses      WalletAddress[]
-  rawEvents            RawEvent[]
-  normalizedTrades     NormalizedTrade[]
-  fundingPayments      FundingPayment[]
-  cashFlows            CashFlow[]
-  perpPositions        PerpPosition[]
-  perpPositionEvents   PerpPositionEvent[]
-  portfolioSnapshots   PortfolioSnapshot[]
-  spotBalanceSnapshots SpotBalanceSnapshot[]
-  orderHistory         OrderHistory[]
-  syncCursors          SyncCursor[]
-  dataQualityIssues    DataQualityIssue[]
-  addressCandidates    AddressCandidate[]
-  discoveryTrades      DiscoveryTrade[]
-  discoverySettings    DiscoverySettings?
-  discoveryStats       DiscoveryStats?
-  discoveryCursors     DiscoveryCursor[]
-  discoveryIssues      DiscoveryDataQualityIssue[]
+  updatedAt               DateTime                    @updatedAt @map("updated_at")
+  syncJobs                SyncJob[]
+  systemAlerts            SystemAlert[]
+  walletAddresses         WalletAddress[]
+  rawEvents               RawEvent[]
+  normalizedTrades        NormalizedTrade[]
+  fundingPayments         FundingPayment[]
+  cashFlows               CashFlow[]
+  perpPositions           PerpPosition[]
+  perpPositionEvents      PerpPositionEvent[]
+  portfolioSnapshots      PortfolioSnapshot[]
+  spotBalanceSnapshots    SpotBalanceSnapshot[]
+  orderHistory            OrderHistory[]
+  syncCursors             SyncCursor[]
+  dataQualityIssues       DataQualityIssue[]
+  addressCandidates       AddressCandidate[]
+  discoveryTrades         DiscoveryTrade[]
+  discoverySettings       DiscoverySettings?
+  discoveryStats          DiscoveryStats?
+  discoveryCursors        DiscoveryCursor[]
+  discoveryIssues         DiscoveryDataQualityIssue[]
+  walletSelectionSettings WalletSelectionSettings?
+  walletSelectionRuns     WalletSelectionRun[]
 
   @@map("data_sources")
 }
@@ -342,42 +357,44 @@ model SyncJob {
 /// 監視ウォレットアドレス
 model WalletAddress {
   /// ID
-  id                    String                     @id @default(cuid())
+  id                      String                     @id @default(cuid())
   /// ウォレットアドレス
-  address               String
+  address                 String
   /// 表示名
-  displayName           String?                    @map("display_name")
+  displayName             String?                    @map("display_name")
   /// 監視対象フラグ
-  isWatched             Boolean                    @default(true) @map("is_watched")
+  isWatched               Boolean                    @default(true) @map("is_watched")
   /// 最終同期日時
-  lastSyncAt            DateTime?                  @map("last_sync_at")
+  lastSyncAt              DateTime?                  @map("last_sync_at")
   /// データソースID
-  sourceId              String                     @map("source_id")
-  source                DataSource                 @relation(fields: [sourceId], references: [id], onDelete: Restrict)
+  sourceId                String                     @map("source_id")
+  source                  DataSource                 @relation(fields: [sourceId], references: [id], onDelete: Restrict)
   /// 所有ユーザーID
-  ownerUserId           String?                    @map("owner_user_id")
-  ownerUser             User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
+  ownerUserId             String?                    @map("owner_user_id")
+  ownerUser               User?                      @relation(fields: [ownerUserId], references: [id], onDelete: SetNull)
   /// 登録日時
-  createdAt             DateTime                   @default(now()) @map("created_at")
+  createdAt               DateTime                   @default(now()) @map("created_at")
   /// 更新日時
-  updatedAt             DateTime                   @updatedAt @map("updated_at")
-  rawEvents             RawEvent[]
-  normalizedTrades      NormalizedTrade[]
-  fundingPayments       FundingPayment[]
-  cashFlows             CashFlow[]
-  perpPositions         PerpPosition[]
-  perpPositionEvents    PerpPositionEvent[]
-  portfolioSnapshots    PortfolioSnapshot[]
-  spotBalanceSnapshots  SpotBalanceSnapshot[]
-  orderHistory          OrderHistory[]
-  syncCursors           SyncCursor[]
-  syncJobs              SyncJob[]
-  dataQualityIssues     DataQualityIssue[]
-  promotedCandidates    AddressCandidate[]         @relation("CandidatePromotion")
-  metricCalculationRuns MetricCalculationRun[]
-  dailyNavs             DailyNav[]
-  positionCycles        PositionCycle[]
-  performanceMetrics    AddressPerformanceMetric[]
+  updatedAt               DateTime                   @updatedAt @map("updated_at")
+  rawEvents               RawEvent[]
+  normalizedTrades        NormalizedTrade[]
+  fundingPayments         FundingPayment[]
+  cashFlows               CashFlow[]
+  perpPositions           PerpPosition[]
+  perpPositionEvents      PerpPositionEvent[]
+  portfolioSnapshots      PortfolioSnapshot[]
+  spotBalanceSnapshots    SpotBalanceSnapshot[]
+  orderHistory            OrderHistory[]
+  syncCursors             SyncCursor[]
+  syncJobs                SyncJob[]
+  dataQualityIssues       DataQualityIssue[]
+  promotedCandidates      AddressCandidate[]         @relation("CandidatePromotion")
+  metricCalculationRuns   MetricCalculationRun[]
+  dailyNavs               DailyNav[]
+  positionCycles          PositionCycle[]
+  performanceMetrics      AddressPerformanceMetric[]
+  walletSelectionResults  WalletSelectionResult[]
+  walletSelectionOverride WalletSelectionOverride?
 
   @@unique([sourceId, address])
   @@index([isWatched, updatedAt])
@@ -1225,49 +1242,50 @@ model DataQualityIssue {
 /// 指標計算実行
 model MetricCalculationRun {
   /// ID
-  id                  String                         @id @default(cuid())
+  id                     String                         @id @default(cuid())
   /// ウォレットアドレスID
-  walletAddressId     String                         @map("wallet_address_id")
-  walletAddress       WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  walletAddressId        String                         @map("wallet_address_id")
+  walletAddress          WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
   /// 計算バージョン
-  calculationVersion  String                         @map("calculation_version")
+  calculationVersion     String                         @map("calculation_version")
   /// 計算開始日時
-  calculationFrom     DateTime                       @map("calculation_from")
+  calculationFrom        DateTime                       @map("calculation_from")
   /// 計算終了日時
-  calculationTo       DateTime                       @map("calculation_to")
+  calculationTo          DateTime                       @map("calculation_to")
   /// 要求日時
-  requestedAt         DateTime                       @map("requested_at")
+  requestedAt            DateTime                       @map("requested_at")
   /// 計算要求元
-  requestedBy         String                         @map("requested_by")
+  requestedBy            String                         @map("requested_by")
   /// 開始日時
-  startedAt           DateTime?                      @map("started_at")
+  startedAt              DateTime?                      @map("started_at")
   /// 完了日時
-  completedAt         DateTime?                      @map("completed_at")
+  completedAt            DateTime?                      @map("completed_at")
   /// ステータス
-  status              MetricCalculationStatus        @default(PENDING)
+  status                 MetricCalculationStatus        @default(PENDING)
   /// 履歴完全性
-  historyCompleteness PerformanceHistoryCompleteness @map("history_completeness")
+  historyCompleteness    PerformanceHistoryCompleteness @map("history_completeness")
   /// 精度区分
-  precision           PerformancePrecision?
+  precision              PerformancePrecision?
   /// 入力フィンガープリント
-  inputFingerprint    String                         @map("input_fingerprint")
+  inputFingerprint       String                         @map("input_fingerprint")
   /// 重複排除キー
-  deduplicationKey    String                         @unique(map: "metric_runs_dedup_key") @map("deduplication_key")
+  deduplicationKey       String                         @unique(map: "metric_runs_dedup_key") @map("deduplication_key")
   /// 警告件数
-  warningCount        Int                            @default(0) @map("warning_count")
+  warningCount           Int                            @default(0) @map("warning_count")
   /// 警告コード
-  warningCodes        String[]                       @default([]) @map("warning_codes")
+  warningCodes           String[]                       @default([]) @map("warning_codes")
   /// エラーコード
-  errorCode           String?                        @map("error_code")
+  errorCode              String?                        @map("error_code")
   /// エラーメッセージ
-  errorMessage        String?                        @map("error_message") @db.Text
-  dailyNavs           DailyNav[]
-  positionCycles      PositionCycle[]
-  performanceMetrics  AddressPerformanceMetric[]
+  errorMessage           String?                        @map("error_message") @db.Text
+  dailyNavs              DailyNav[]
+  positionCycles         PositionCycle[]
+  performanceMetrics     AddressPerformanceMetric[]
+  walletSelectionResults WalletSelectionResult[]
   /// 登録日時
-  createdAt           DateTime                       @default(now()) @map("created_at")
+  createdAt              DateTime                       @default(now()) @map("created_at")
   /// 更新日時
-  updatedAt           DateTime                       @updatedAt @map("updated_at")
+  updatedAt              DateTime                       @updatedAt @map("updated_at")
 
   @@index([walletAddressId, status, requestedAt], map: "metric_runs_wallet_status_requested_idx")
   @@index([walletAddressId, calculationVersion, inputFingerprint], map: "metric_runs_input_idx")
@@ -1392,6 +1410,119 @@ model AddressPerformanceMetric {
   @@unique([calculationRunId, metricKey], map: "performance_metrics_run_key")
   @@index([walletAddressId, metricKey, calculationTo], map: "performance_metrics_wallet_key_to_idx")
   @@map("address_performance_metrics")
+}
+
+/// 参考ウォレット選定設定
+model WalletSelectionSettings {
+  /// ID
+  id                          String              @id @default(cuid())
+  /// データソースID
+  sourceId                    String              @unique @map("source_id")
+  source                      DataSource          @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// 現在有効な選定実行ID
+  currentSelectionRunId       String?             @unique(map: "wallet_selection_settings_current_run_key") @map("current_selection_run_id")
+  currentSelectionRun         WalletSelectionRun? @relation("CurrentWalletSelectionRun", fields: [currentSelectionRunId], references: [id], onDelete: SetNull, map: "wallet_selection_settings_current_run_id_fkey")
+  /// 自動選定する最大件数
+  maxAutoSelected             Int                 @default(100) @map("max_auto_selected")
+  /// 最低評価期間（日）
+  minimumEvaluationDays       Int                 @default(90) @map("minimum_evaluation_days")
+  /// 最低完了取引数
+  minimumTrustedClosedCycles  Int                 @default(20) @map("minimum_trusted_closed_cycles")
+  /// 最低年率換算収益率
+  minimumAnnualizedReturn     Decimal             @default(0) @map("minimum_annualized_return") @db.Decimal(38, 18)
+  /// 最大下落の上限
+  maximumDrawdown             Decimal             @default(0.5) @map("maximum_drawdown") @db.Decimal(38, 18)
+  /// 大勝ち依存の上限
+  maximumTopTradeContribution Decimal             @default(0.75) @map("maximum_top_trade_contribution") @db.Decimal(38, 18)
+  /// データ更新の許容時間
+  maximumDataAgeHours         Int                 @default(24) @map("maximum_data_age_hours")
+  /// 登録日時
+  createdAt                   DateTime            @default(now()) @map("created_at")
+  /// 更新日時
+  updatedAt                   DateTime            @updatedAt @map("updated_at")
+
+  @@map("wallet_selection_settings")
+}
+
+/// 参考ウォレット選定実行
+model WalletSelectionRun {
+  /// ID
+  id                 String                   @id @default(cuid())
+  /// データソースID
+  sourceId           String                   @map("source_id")
+  source             DataSource               @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  /// 選定ポリシーバージョン
+  policyVersion      String                   @map("policy_version")
+  /// 入力フィンガープリント
+  inputFingerprint   String                   @map("input_fingerprint")
+  /// 選定設定スナップショット
+  policySnapshot     Json                     @map("policy_snapshot")
+  /// 評価日時
+  evaluatedAt        DateTime                 @map("evaluated_at")
+  /// 評価対象件数
+  universeCount      Int                      @map("universe_count")
+  /// 参考対象件数
+  selectedCount      Int                      @map("selected_count")
+  /// 候補件数
+  qualifiedCount     Int                      @map("qualified_count")
+  /// 要確認件数
+  reviewCount        Int                      @map("review_count")
+  /// 対象外件数
+  excludedCount      Int                      @map("excluded_count")
+  results            WalletSelectionResult[]
+  currentForSettings WalletSelectionSettings? @relation("CurrentWalletSelectionRun")
+  /// 登録日時
+  createdAt          DateTime                 @default(now()) @map("created_at")
+
+  @@unique([sourceId, policyVersion, inputFingerprint], map: "wallet_selection_runs_input_key")
+  @@index([sourceId, evaluatedAt], map: "wallet_selection_runs_source_evaluated_idx")
+  @@map("wallet_selection_runs")
+}
+
+/// 参考ウォレット選定結果
+model WalletSelectionResult {
+  /// ID
+  id               String                         @id @default(cuid())
+  /// 選定実行ID
+  selectionRunId   String                         @map("selection_run_id")
+  selectionRun     WalletSelectionRun             @relation(fields: [selectionRunId], references: [id], onDelete: Cascade)
+  /// ウォレットアドレスID
+  walletAddressId  String                         @map("wallet_address_id")
+  walletAddress    WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// Performance計算実行ID
+  performanceRunId String?                        @map("performance_run_id")
+  performanceRun   MetricCalculationRun?          @relation(fields: [performanceRunId], references: [id], onDelete: SetNull)
+  /// 自動判定ステータス
+  automaticStatus  WalletSelectionAutomaticStatus @map("automatic_status")
+  /// 収益性順位
+  rank             Int?
+  /// 判定理由コード
+  reasonCodes      String[]                       @default([]) @map("reason_codes")
+  /// 登録日時
+  createdAt        DateTime                       @default(now()) @map("created_at")
+
+  @@unique([selectionRunId, walletAddressId], map: "wallet_selection_results_run_wallet_key")
+  @@index([walletAddressId, createdAt], map: "wallet_selection_results_wallet_created_idx")
+  @@map("wallet_selection_results")
+}
+
+/// 参考ウォレット手動指定
+model WalletSelectionOverride {
+  /// ID
+  id              String                          @id @default(cuid())
+  /// ウォレットアドレスID
+  walletAddressId String                          @unique @map("wallet_address_id")
+  walletAddress   WalletAddress                   @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  /// 手動指定
+  decision        WalletSelectionOverrideDecision @default(AUTO)
+  /// 所有者メモ
+  note            String?                         @db.Text
+  /// 登録日時
+  createdAt       DateTime                        @default(now()) @map("created_at")
+  /// 更新日時
+  updatedAt       DateTime                        @updatedAt @map("updated_at")
+
+  @@map("wallet_selection_overrides")
 }
 
 /// システムアラート

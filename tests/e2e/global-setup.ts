@@ -13,6 +13,7 @@ import {
   e2ePartialPerformanceAddress,
   e2ePerformanceAddress,
   e2ePromotionAddress,
+  e2eSelectionAddress,
   e2eSessionToken,
 } from "./fixtures";
 
@@ -121,6 +122,80 @@ export default async function globalSetup() {
       ownerUserId: user.id,
       sourceId: source.id,
     },
+  });
+  const selectionWallet = await database.walletAddress.create({
+    data: {
+      address: e2eSelectionAddress,
+      displayName: "E2E Selected Wallet",
+      isWatched: true,
+      lastSyncAt: new Date(),
+      ownerUserId: user.id,
+      sourceId: source.id,
+    },
+  });
+  const selectionCalculationFrom = new Date("2026-04-01T00:00:00.000Z");
+  const selectionCalculationTo = new Date("2026-08-01T00:00:00.000Z");
+  const selectionPerformanceRun = await database.metricCalculationRun.create({
+    data: {
+      calculationFrom: selectionCalculationFrom,
+      calculationTo: selectionCalculationTo,
+      calculationVersion: "performance-v3",
+      completedAt: new Date("2026-08-01T00:00:02.000Z"),
+      deduplicationKey: "phase4-3-e2e-selected-deduplication-key",
+      historyCompleteness: "COMPLETE",
+      id: "phase4-3-e2e-selected-performance-run",
+      inputFingerprint: "cccccc1234567890cccccc1234567890cccccc1234567890cccccc1234567890",
+      precision: "EXACT",
+      requestedAt: new Date("2026-08-01T00:00:00.000Z"),
+      requestedBy: "phase4-3-browser-e2e",
+      startedAt: new Date("2026-08-01T00:00:01.000Z"),
+      status: "SUCCEEDED",
+      walletAddressId: selectionWallet.id,
+      warningCodes: [],
+      warningCount: 0,
+    },
+  });
+  await database.addressPerformanceMetric.createMany({
+    data: [
+      ["annualizedReturn", "0.34"],
+      ["cumulativeReturn", "0.58"],
+      ["maxDrawdown", "-0.12"],
+      ["profitFactor", "2.1"],
+      ["topTradeContribution", "0.21"],
+      ["winRate", "0.55"],
+    ].map(([metricKey, metricValue]) => ({
+      calculationFrom: selectionCalculationFrom,
+      calculationRunId: selectionPerformanceRun.id,
+      calculationTo: selectionCalculationTo,
+      metricKey: metricKey!,
+      metricValue: metricValue!,
+      metricVersion: "performance-v3",
+      precision: "EXACT" as const,
+      status: "AVAILABLE" as const,
+      walletAddressId: selectionWallet.id,
+      warningCodes: [],
+    })),
+  });
+  await database.positionCycle.createMany({
+    data: Array.from({ length: 20 }, (_, index) => ({
+      averageEntryPrice: "100",
+      averageExitPrice: "110",
+      calculationRunId: selectionPerformanceRun.id,
+      closedAt: new Date(`2026-05-${String(index + 2).padStart(2, "0")}T00:00:00.000Z`),
+      coin: "BTC",
+      entryQuantity: "1",
+      exitQuantity: "1",
+      fees: "0.1",
+      fillCount: 2,
+      funding: "0",
+      grossRealizedPnl: "10",
+      inputFingerprint: `phase4-3-e2e-selected-cycle-${index}`,
+      netRealizedPnl: "9.9",
+      openedAt: new Date(`2026-05-${String(index + 1).padStart(2, "0")}T00:00:00.000Z`),
+      side: "LONG" as const,
+      status: "CLOSED" as const,
+      walletAddressId: selectionWallet.id,
+    })),
   });
   const calculationFrom = new Date("2026-06-01T00:00:00.000Z");
   const calculationTo = new Date("2026-06-30T23:59:59.999Z");

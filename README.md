@@ -1,6 +1,6 @@
 # ChainCopy Observer
 
-Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所有者1名専用の Web アプリケーションです。現在は Phase 3 まで実装済みで、既存のHyperliquid監視に加え、公式市場ストリームから公開アドレス候補を自動発見できます。
+Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所有者1名専用の Web アプリケーションです。現在はHyperliquidの監視・自動探索、`performance-v3`の個別成績計算、Phase 4.3の参考ウォレット選定まで実装しています。
 
 実売買、注文送信、ウォレット接続、署名、秘密鍵・シードフレーズ・API Wallet の取扱いはありません。
 
@@ -31,6 +31,16 @@ Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所
 - 手動Enrichment、候補除外、適格候補の既存Phase 2監視Queueへの昇格
 
 候補供給にCSV/JSONインポート、スクレイピング、有料API、Requester Pays S3、自前ノードは使用しません。
+
+## Phase 4.3 の機能
+
+- 保存済み`performance-v3`を使った監視ウォレットの決定論的な選定
+- 参考対象、候補、要確認、対象外の4状態と安定順位
+- 選定条件の保存、明示的な再評価、同一入力Runの再利用
+- 手動の参考対象化、対象外化、自動判定への復帰
+- `/dashboard/selection`の初心者向け一覧とPhase 5向け正式取得契約
+
+重み付き総合スコア、Performance完了後の自動再評価、実注文・署名機能は含みません。
 
 ## Phase 1 基盤として継続する機能
 
@@ -308,6 +318,8 @@ tests/e2e/
 - [意思決定](docs/decisions.md)
 - [仮定](docs/assumptions.md)
 - [Phase別計画](docs/implementation-plan.md)
+- [Phase 4.3 参考ウォレット選定仕様](docs/phase4-3-wallet-selection-spec.md)
+- [Phase 4.3 Test Matrix](docs/phase4-3-wallet-selection-test-matrix.md)
 - [正本仕様](docs/SPEC.md)
 
-Phase 3 はHyperliquidアドレス自動探索までです。Phase 4の収益計算・戦略分類・ランキング・デモトレード、およびSui/Cetus連携には進んでいません。
+現在はHyperliquid自動探索、`performance-v3`の個別成績計算、Phase 4.3の参考ウォレット選定までです。売買行動の集約、重み付きスコア、シグナル、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
