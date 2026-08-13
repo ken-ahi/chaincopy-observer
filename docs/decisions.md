@@ -8,6 +8,7 @@
 - 影響: raw response と reject 注文の長期完全監査より、実際の売買行動分析に必要な正規化データの継続運用を優先する。未知 status と WebSocket raw は安全側に保持する。
 - CLI runtime の依存関係: root CLI から `@chaincopy/database` の build 済み runtime export を使用する。lockfile 再解決時に runtime blocker の調査と無関係な transitive dependency override を同時に追加したため、検証済み `brace-expansion 5.0.9` を脆弱な `5.0.8` へ戻してしまった。security override は `5.0.9` に固定し、install、audit、依存経路、`db:cleanup --help` を一組で検証する。
 - Rollup: `rollup@4.62.3` は supply-chain policy 適用後の通常解決でも単一版になるため、override は不要と判断して削除する。CLI runtime の成立は Rollup 固定ではなく、root workspace dependency と database package の runtime build/export を回帰テストすることで保証する。
+- Cleanup index: batch 候補は主キー順ではなく retention index 順で選ぶ。1.13 億件の既存 `order_history` への index 作成は migration と分離し、運用者が `CREATE INDEX CONCURRENTLY` maintenance SQL を明示実行する。CLI は必要な列順の index が valid/ready でなければ実削除と EXPLAIN を停止し、dry-run の件数確認だけを許可する。
 
 最終更新: 2026-07-26
 

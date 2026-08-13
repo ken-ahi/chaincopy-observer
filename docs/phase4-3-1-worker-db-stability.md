@@ -33,7 +33,20 @@ Scheduler は再起動時に各周期の現在 bucket だけを投入し、過�
 pnpm db:cleanup --dry-run
 pnpm db:cleanup --dry-run --table sync_jobs
 pnpm db:cleanup --dry-run --table order_history --status badAloPxRejected
+pnpm db:cleanup --explain --table order_history --status badAloPxRejected
 ```
+
+### 大規模 cleanup の index preflight
+
+batch 候補は `(status, retention timestamp, id)` の順（`sync_jobs` は既存 `(status, created_at)`）で選択する。削除済みの古い index entry が先頭から消えるため、主キー先頭の scan + filter を batch ごとに繰り返さない。`id` は同一 timestamp の決定的な tie-breaker である。
+
+既存巨大テーブルに通常の `CREATE INDEX` を行う migration は追加しない。Worker と cleanup を停止し、空き容量、replication lag、長時間 transaction を確認した maintenance window で、次を `psql` から transaction 外で明示実行する。これは今回まだ実 DB では実行しない。
+
+```bash
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/maintenance/create-cleanup-indexes-concurrently.sql
+```
+
+別 session から `pg_stat_progress_create_index` を監視し、完了後に `pnpm db:cleanup --explain ...` で `order_history_cleanup_status_timestamp_id_idx`（raw event は対応する cleanup index）の Index Scan が選ばれることを確認する。`--dry-run` は index 作成前にも件数確認だけ実行できるが、実削除と `--explain` は必要 index が `indisready` かつ `indisvalid` でない限り fail-fast するため、未整備状態で巨大 cleanup を開始できない。失敗した concurrent build が invalid index を残した場合は、その index だけを運用者が `DROP INDEX CONCURRENTLY` してから再実行する。
 
 実削除は運用者が dry-run 結果を確認した後だけ行う。
 
