@@ -53,6 +53,15 @@ export async function enqueueHyperliquidJob(
   return job.id ?? jobId;
 }
 
+export async function hasPendingHyperliquidJob(
+  queue: Queue<HyperliquidJobData>,
+  name: HyperliquidJobName,
+  walletAddressId: string,
+): Promise<boolean> {
+  const jobs = await queue.getJobs(["active", "waiting", "delayed", "prioritized"], 0, 999, true);
+  return jobs.some((job) => job.name === name && job.data.walletAddressId === walletAddressId);
+}
+
 export async function enqueueHyperliquidGapRecovery(
   queue: Queue<HyperliquidJobData>,
   data: HyperliquidJobData,
@@ -85,6 +94,8 @@ export async function enqueueWalletBackfillChildren(
       hyperliquidJobNames.fundingSync,
       hyperliquidJobNames.ledgerSync,
       hyperliquidJobNames.positionSnapshot,
+      hyperliquidJobNames.portfolioSnapshot,
+      hyperliquidJobNames.historicalOrdersSync,
       hyperliquidJobNames.dataQualityAudit,
       hyperliquidJobNames.websocketListener,
     ].map((name) => enqueueHyperliquidJob(queue, name, data, 60_000, parentJobId)),

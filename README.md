@@ -1,5 +1,7 @@
 # ChainCopy Observer
 
+Phase 4.3.1 では Worker / DB 負荷安定化として同期周期の分離、設定可能な Worker concurrency、Queue backpressure、明示的な retention と batch cleanup CLI を追加した。運用方法は [docs/phase4-3-1-worker-db-stability.md](docs/phase4-3-1-worker-db-stability.md) を参照すること。実 DB の cleanup は必ず `pnpm db:cleanup --dry-run` から開始し、確認前に DELETE を実行しない。
+
 Hyperliquid と Sui/Cetus の公開取引データを分析・監視する、所有者1名専用の Web アプリケーションです。現在はHyperliquidの監視・自動探索、`performance-v3`の個別成績計算、Phase 4.3の参考ウォレット選定まで実装しています。
 
 実売買、注文送信、ウォレット接続、署名、秘密鍵・シードフレーズ・API Wallet の取扱いはありません。

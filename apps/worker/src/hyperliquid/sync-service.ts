@@ -216,18 +216,6 @@ export class HyperliquidSyncService {
         capturedAt,
       );
     });
-    await runPart("portfolio", async () => {
-      const response = await this.client.portfolio(job.walletAddress);
-      const capturedAt = new Date();
-      await this.saveHttpRaw(job, "portfolio", response);
-      await this.repository.savePortfolioHistory(
-        job.walletAddressId,
-        job.walletAddress,
-        response.data,
-        response.rawText,
-        capturedAt,
-      );
-    });
     await runPart("openOrders", async () => {
       const response = await this.client.openOrders(job.walletAddress);
       await this.saveHttpRaw(job, "openOrders", response);
@@ -237,15 +225,6 @@ export class HyperliquidSyncService {
       const response = await this.client.frontendOpenOrders(job.walletAddress);
       await this.saveHttpRaw(job, "frontendOpenOrders", response);
       await this.repository.saveOpenOrders(job.walletAddressId, job.walletAddress, response.data);
-    });
-    await runPart("historicalOrders", async () => {
-      const response = await this.client.historicalOrders(job.walletAddress);
-      await this.saveHttpRaw(job, "historicalOrders", response);
-      await this.repository.saveHistoricalOrders(
-        job.walletAddressId,
-        job.walletAddress,
-        response.data,
-      );
     });
     await runPart("userRateLimit", async () => {
       const response = await this.client.userRateLimit(job.walletAddress);
@@ -269,6 +248,35 @@ export class HyperliquidSyncService {
     );
     await this.repository.markSourceSuccess("Hyperliquid snapshot completed.");
     return { failures, successes };
+  }
+
+  public async snapshotPortfolio(
+    job: HyperliquidJobData,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    const response = await this.client.portfolio(job.walletAddress);
+    const capturedAt = new Date();
+    await this.saveHttpRaw(job, "portfolio", response);
+    await this.repository.savePortfolioHistory(
+      job.walletAddressId,
+      job.walletAddress,
+      response.data,
+      response.rawText,
+      capturedAt,
+    );
+    return { capturedAt: capturedAt.toISOString() };
+  }
+
+  public async syncHistoricalOrders(
+    job: HyperliquidJobData,
+  ): Promise<Readonly<Record<string, unknown>>> {
+    const response = await this.client.historicalOrders(job.walletAddress);
+    await this.saveHttpRaw(job, "historicalOrders", response);
+    const inserted = await this.repository.saveHistoricalOrders(
+      job.walletAddressId,
+      job.walletAddress,
+      response.data,
+    );
+    return { fetched: response.data.length, inserted };
   }
 
   public async recoverGap(job: HyperliquidJobData): Promise<Readonly<Record<string, unknown>>> {

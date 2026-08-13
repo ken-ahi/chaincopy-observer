@@ -48,6 +48,16 @@ class LeaseRedis {
 class RecordingQueue {
   public readonly names: string[] = [];
 
+  public constructor(private readonly backlog = 0) {}
+
+  public async getJobCounts(): Promise<Record<string, number>> {
+    return { active: 0, delayed: 0, prioritized: 0, waiting: this.backlog };
+  }
+
+  public async getJobs(): Promise<readonly []> {
+    return [];
+  }
+
   public async add(
     name: string,
     _data: HyperliquidJobData,
@@ -64,6 +74,15 @@ function createSupervisor() {
     stop: vi.fn(async () => undefined),
   };
 }
+
+const schedule = {
+  accountMs: 600_000,
+  auditMs: 3_600_000,
+  backlogLimit: 500,
+  fillMs: 60_000,
+  orderHistoryMs: 3_600_000,
+  portfolioMs: 1_800_000,
+} as const;
 
 describe("HyperliquidScheduler", () => {
   it("allows only one process to schedule and supervise a source", async () => {
@@ -90,6 +109,7 @@ describe("HyperliquidScheduler", () => {
       firstSupervisor,
       "hyperliquid-mainnet",
       60_000,
+      schedule,
       logger,
     );
     const second = new HyperliquidScheduler(
@@ -99,6 +119,7 @@ describe("HyperliquidScheduler", () => {
       secondSupervisor,
       "hyperliquid-mainnet",
       60_000,
+      schedule,
       logger,
     );
 
@@ -114,7 +135,9 @@ describe("HyperliquidScheduler", () => {
         hyperliquidJobNames.fillSync,
         hyperliquidJobNames.fundingSync,
         hyperliquidJobNames.ledgerSync,
-        hyperliquidJobNames.positionSnapshot,
+        hyperliquidJobNames.currentStateSnapshot,
+        hyperliquidJobNames.portfolioSnapshot,
+        hyperliquidJobNames.historicalOrdersSync,
         hyperliquidJobNames.dataQualityAudit,
       ]);
       expect(secondQueue.names).toEqual([]);
@@ -147,6 +170,7 @@ describe("HyperliquidScheduler", () => {
       firstSupervisor,
       "hyperliquid-mainnet",
       60_000,
+      schedule,
       logger,
     );
     const second = new HyperliquidScheduler(
@@ -156,6 +180,7 @@ describe("HyperliquidScheduler", () => {
       secondSupervisor,
       "hyperliquid-mainnet",
       60_000,
+      schedule,
       logger,
     );
 
@@ -169,5 +194,33 @@ describe("HyperliquidScheduler", () => {
     finishWebSocketStop?.();
     await stopping;
     await second.stop();
+  });
+
+  it("suppresses enqueue when the queue backlog reaches the configured limit", async () => {
+    const database = {
+      walletAddress: {
+        findMany: vi.fn(async () => [
+          { address: "0x1111111111111111111111111111111111111111", id: "wallet-1" },
+        ]),
+      },
+    } as unknown as PrismaClient;
+    const queue = new RecordingQueue(schedule.backlogLimit);
+    const scheduler = new HyperliquidScheduler(
+      database,
+      new LeaseRedis() as unknown as Redis,
+      queue as unknown as Queue<HyperliquidJobData>,
+      createSupervisor(),
+      "hyperliquid-mainnet",
+      60_000,
+      schedule,
+      pino({ level: "silent" }),
+    );
+
+    try {
+      await scheduler.start();
+      expect(queue.names).toEqual([]);
+    } finally {
+      await scheduler.stop();
+    }
   });
 });

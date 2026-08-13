@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { apiEnvSchema, webEnvSchema } from "./env.js";
+import { apiEnvSchema, webEnvSchema, workerEnvSchema } from "./env.js";
 
 const shared = {
   NODE_ENV: "test",
@@ -34,5 +34,19 @@ describe("environment schemas", () => {
     });
 
     expect(result.success).toBe(false);
+  });
+
+  it("uses conservative worker concurrency and split sync defaults", () => {
+    const result = workerEnvSchema.parse(shared);
+    expect(result.HYPERLIQUID_WORKER_CONCURRENCY).toBe(2);
+    expect(result.HYPERLIQUID_DISCOVERY_WORKER_CONCURRENCY).toBe(4);
+    expect(result.HYPERLIQUID_ACCOUNT_SYNC_INTERVAL_MS).toBe(600_000);
+    expect(result.HYPERLIQUID_ORDER_HISTORY_SYNC_INTERVAL_MS).toBe(3_600_000);
+  });
+
+  it("rejects unsafe worker concurrency", () => {
+    expect(
+      workerEnvSchema.safeParse({ ...shared, HYPERLIQUID_WORKER_CONCURRENCY: "0" }).success,
+    ).toBe(false);
   });
 });

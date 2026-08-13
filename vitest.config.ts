@@ -21,7 +21,12 @@ export default defineConfig({
     },
   },
   test: {
-    include: ["apps/**/*.test.ts", "packages/**/*.test.ts", "tests/**/*.test.ts"],
+    include: [
+      "apps/**/*.test.ts",
+      "packages/**/*.test.ts",
+      "scripts/**/*.test.ts",
+      "tests/**/*.test.ts",
+    ],
     coverage: {
       reporter: ["text", "json-summary"],
     },

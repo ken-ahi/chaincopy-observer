@@ -50,6 +50,22 @@ export const workerEnvSchema = sharedSchema.extend({
   HYPERLIQUID_NETWORK: z.enum(["mainnet", "testnet"]).default("mainnet"),
   HYPERLIQUID_HTTP_TIMEOUT_MS: z.coerce.number().int().min(1_000).max(60_000).default(10_000),
   HYPERLIQUID_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).default(60_000),
+  HYPERLIQUID_FILL_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).optional(),
+  HYPERLIQUID_ACCOUNT_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).default(600_000),
+  HYPERLIQUID_PORTFOLIO_SYNC_INTERVAL_MS: z.coerce.number().int().min(10_000).default(1_800_000),
+  HYPERLIQUID_ORDER_HISTORY_SYNC_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(10_000)
+    .default(3_600_000),
+  HYPERLIQUID_DATA_QUALITY_AUDIT_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .min(10_000)
+    .default(3_600_000),
+  HYPERLIQUID_QUEUE_BACKLOG_LIMIT: z.coerce.number().int().min(1).max(100_000).default(500),
+  HYPERLIQUID_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
+  HYPERLIQUID_DISCOVERY_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
   HYPERLIQUID_DISCOVERY_ENABLED: booleanEnvironmentSchema.default(false),
   HYPERLIQUID_DISCOVERY_MODE: z.enum(["MAJOR", "ALL"]).default("MAJOR"),
   HYPERLIQUID_DISCOVERY_PRIORITY_COINS: commaSeparatedSchema.default([

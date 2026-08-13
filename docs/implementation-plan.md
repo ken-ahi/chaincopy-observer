@@ -119,6 +119,14 @@ Phase 4CではAPI、Web、分類、score、ranking、シグナルへ進まない
 
 ### Phase 4.3: 参考ウォレット正式選定
 
+### Phase 4.3.1: Worker / DB 負荷安定化
+
+- 用途別の同期周期と historical orders の低頻度化
+- Worker concurrency と Queue backpressure
+- sync job、HTTP raw event、reject order の retention
+- dry-run 対応 batch cleanup と安全な容量回収手順
+- performance-v3 / wallet-selection-v1 の契約維持
+
 - 保存済み`performance-v3`だけを用いるルール判定
 - SELECTED / QUALIFIED / REVIEW / EXCLUDED
 - 年率収益率を主指標とする安定順位、上限適用、水増し禁止
