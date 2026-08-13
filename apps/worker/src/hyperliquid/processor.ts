@@ -167,7 +167,12 @@ export class HyperliquidJobProcessor {
       case hyperliquidJobNames.ledgerSync:
         return this.syncService.syncLedger(data);
       case hyperliquidJobNames.positionSnapshot:
+      case hyperliquidJobNames.currentStateSnapshot:
         return this.syncService.snapshotPositions(data);
+      case hyperliquidJobNames.portfolioSnapshot:
+        return this.syncService.snapshotPortfolio(data);
+      case hyperliquidJobNames.historicalOrdersSync:
+        return this.syncService.syncHistoricalOrders(data);
       case hyperliquidJobNames.gapRecovery:
         return this.syncService.recoverGap(data);
       case hyperliquidJobNames.dataQualityAudit:

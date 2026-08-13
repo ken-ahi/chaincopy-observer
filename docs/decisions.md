@@ -1,5 +1,14 @@
 # Architecture Decision Log
 
+## ADR-033: 分析データと運用・監査データで同期頻度と保持期間を分ける
+
+- 状態: 採用
+- 背景: 毎分の全 API 同期と無期限保存により、`order_history`、`raw_events`、`sync_jobs` がローカル DB と Disk I/O を制御不能に増加させた。
+- 決定: Fill、現在状態、Portfolio、Historical orders、品質監査を独立周期に分ける。分析の正本となる Fill/Funding/Ledger と performance-v3 / wallet-selection-v1 の入力を保護し、成功同期履歴、HTTP raw response、既知 reject 注文だけを明示的 retention の対象にする。cleanup は dry-run と小さい独立 batch を持つ専用 maintenance CLI で行い、Migration やアプリから巨大 DELETE / `VACUUM FULL` を実行しない。
+- 影響: raw response と reject 注文の長期完全監査より、実際の売買行動分析に必要な正規化データの継続運用を優先する。未知 status と WebSocket raw は安全側に保持する。
+- CLI runtime の依存関係: root CLI から `@chaincopy/database` の build 済み runtime export を使用する。lockfile 再解決時に runtime blocker の調査と無関係な transitive dependency override を同時に追加したため、検証済み `brace-expansion 5.0.9` を脆弱な `5.0.8` へ戻してしまった。security override は `5.0.9` に固定し、install、audit、依存経路、`db:cleanup --help` を一組で検証する。
+- Rollup: `rollup@4.62.3` は supply-chain policy 適用後の通常解決でも単一版になるため、override は不要と判断して削除する。CLI runtime の成立は Rollup 固定ではなく、root workspace dependency と database package の runtime build/export を回帰テストすることで保証する。
+
 最終更新: 2026-07-26
 
 ## ADR-001: Web、API、Workerを分離する

@@ -11,20 +11,21 @@ import { type Queue } from "bullmq";
 import { type Redis } from "ioredis";
 import { type Logger } from "pino";
 
-import { enqueueHyperliquidJob } from "./queue.js";
+import { enqueueHyperliquidJob, hasPendingHyperliquidJob } from "./queue.js";
 
 const releaseLeaseScript =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('del', KEYS[1]) else return 0 end";
 const renewLeaseScript =
   "if redis.call('get', KEYS[1]) == ARGV[1] then return redis.call('pexpire', KEYS[1], ARGV[2]) else return 0 end";
 
-const periodicJobs: ReadonlyArray<HyperliquidJobName> = [
-  hyperliquidJobNames.fillSync,
-  hyperliquidJobNames.fundingSync,
-  hyperliquidJobNames.ledgerSync,
-  hyperliquidJobNames.positionSnapshot,
-  hyperliquidJobNames.dataQualityAudit,
-];
+export interface HyperliquidScheduleConfig {
+  readonly accountMs: number;
+  readonly auditMs: number;
+  readonly backlogLimit: number;
+  readonly fillMs: number;
+  readonly orderHistoryMs: number;
+  readonly portfolioMs: number;
+}
 
 interface SchedulerWebSocketSupervisor {
   reconcile(
@@ -52,6 +53,7 @@ export class HyperliquidScheduler {
     private readonly websocketSupervisor: SchedulerWebSocketSupervisor,
     private readonly sourceKey: string,
     private readonly intervalMs: number,
+    private readonly schedule: HyperliquidScheduleConfig,
     private readonly logger: Logger,
   ) {
     this.leaseDurationMs = Math.max(30_000, intervalMs * 3);
@@ -133,11 +135,33 @@ export class HyperliquidScheduler {
       },
     });
     await this.websocketSupervisor.reconcile(wallets);
+    const counts = await this.queue.getJobCounts("active", "waiting", "delayed", "prioritized");
+    const backlog = Object.values(counts).reduce((total, count) => total + count, 0);
+    if (backlog >= this.schedule.backlogLimit) {
+      this.logger.warn(
+        { backlog, backlogLimit: this.schedule.backlogLimit, sourceKey: this.sourceKey },
+        "Hyperliquid scheduler suppressed enqueue because of queue backlog",
+      );
+      return;
+    }
     const now = new Date().toISOString();
-    const jobIds = await Promise.all(
-      wallets.flatMap((wallet) =>
-        periodicJobs.map((jobName) =>
-          enqueueHyperliquidJob(
+    const periodicJobs: ReadonlyArray<readonly [HyperliquidJobName, number]> = [
+      [hyperliquidJobNames.fillSync, this.schedule.fillMs],
+      [hyperliquidJobNames.fundingSync, this.schedule.accountMs],
+      [hyperliquidJobNames.ledgerSync, this.schedule.accountMs],
+      [hyperliquidJobNames.currentStateSnapshot, this.schedule.accountMs],
+      [hyperliquidJobNames.portfolioSnapshot, this.schedule.portfolioMs],
+      [hyperliquidJobNames.historicalOrdersSync, this.schedule.orderHistoryMs],
+      [hyperliquidJobNames.dataQualityAudit, this.schedule.auditMs],
+    ];
+    const jobIds: string[] = [];
+    for (const wallet of wallets) {
+      for (const [jobName, bucketMs] of periodicJobs) {
+        if (await hasPendingHyperliquidJob(this.queue, jobName, wallet.id)) {
+          continue;
+        }
+        jobIds.push(
+          await enqueueHyperliquidJob(
             this.queue,
             jobName,
             {
@@ -145,11 +169,11 @@ export class HyperliquidScheduler {
               walletAddress: wallet.address,
               walletAddressId: wallet.id,
             },
-            this.intervalMs,
+            bucketMs,
           ),
-        ),
-      ),
-    );
+        );
+      }
+    }
     this.logger.info(
       {
         jobCount: jobIds.length,

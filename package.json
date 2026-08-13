@@ -23,9 +23,11 @@
     "db:migrate": "prisma migrate dev",
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
+    "db:cleanup": "tsx scripts/db-cleanup.ts",
     "deploy:local": "sh scripts/deploy-local.sh"
   },
   "devDependencies": {
+    "@chaincopy/database": "workspace:*",
     "@next/eslint-plugin-next": "16.2.11",
     "@playwright/test": "1.62.0",
     "@prisma/client": "6.19.3",

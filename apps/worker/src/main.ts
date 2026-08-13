@@ -125,7 +125,21 @@ const scheduler = new HyperliquidScheduler(
   hyperliquidQueue,
   websocketSupervisor,
   sourceKey,
-  env.HYPERLIQUID_SYNC_INTERVAL_MS,
+  Math.min(
+    env.HYPERLIQUID_FILL_SYNC_INTERVAL_MS ?? env.HYPERLIQUID_SYNC_INTERVAL_MS,
+    env.HYPERLIQUID_ACCOUNT_SYNC_INTERVAL_MS,
+    env.HYPERLIQUID_PORTFOLIO_SYNC_INTERVAL_MS,
+    env.HYPERLIQUID_ORDER_HISTORY_SYNC_INTERVAL_MS,
+    env.HYPERLIQUID_DATA_QUALITY_AUDIT_INTERVAL_MS,
+  ),
+  {
+    accountMs: env.HYPERLIQUID_ACCOUNT_SYNC_INTERVAL_MS,
+    auditMs: env.HYPERLIQUID_DATA_QUALITY_AUDIT_INTERVAL_MS,
+    backlogLimit: env.HYPERLIQUID_QUEUE_BACKLOG_LIMIT,
+    fillMs: env.HYPERLIQUID_FILL_SYNC_INTERVAL_MS ?? env.HYPERLIQUID_SYNC_INTERVAL_MS,
+    orderHistoryMs: env.HYPERLIQUID_ORDER_HISTORY_SYNC_INTERVAL_MS,
+    portfolioMs: env.HYPERLIQUID_PORTFOLIO_SYNC_INTERVAL_MS,
+  },
   logger,
 );
 const discoverySupervisor = new HyperliquidDiscoveryWebSocketSupervisor(
@@ -279,7 +293,7 @@ const hyperliquidWorker = new Worker<HyperliquidJobData>(
     ),
   {
     connection: redis,
-    concurrency: 4,
+    concurrency: env.HYPERLIQUID_WORKER_CONCURRENCY,
   },
 );
 
@@ -315,7 +329,7 @@ const discoveryWorker = new Worker<HyperliquidDiscoveryJobData>(
   (job) => discoveryProcessor.process(job),
   {
     connection: redis,
-    concurrency: 8,
+    concurrency: env.HYPERLIQUID_DISCOVERY_WORKER_CONCURRENCY,
   },
 );
 

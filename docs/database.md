@@ -131,6 +131,8 @@ erDiagram
 
 ## 7. 保持・削除
 
+Phase 4.3.1 の初期 retention は、`sync_jobs` の成功 7 日・失敗 30 日、HTTP `raw_events` 30 日、既知 reject `order_history` 7 日とする。実行中同期、WebSocket raw、filled/open/canceled/未知 status、Performance/Selection の入力 snapshot は削除対象外である。cleanup は専用 CLI の小分け transaction で行い、Migration 内で既存データを削除しない。詳細は `docs/phase4-3-1-worker-db-stability.md` を参照する。
+
 - Raw Eventは原則無期限。
 - 認証セッションはAuth.jsの有効期限に従い、期限切れを定期削除する。
 - ログはアプリ外のログ基盤で90日以上保持する。
