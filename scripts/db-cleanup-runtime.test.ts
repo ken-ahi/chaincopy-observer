@@ -50,5 +50,16 @@ describe("database cleanup CLI runtime", () => {
   it("rejects malformed root arguments before database access", () => {
     expect(() => parseCleanupOptions(["--table"])).toThrow("requires a value");
     expect(() => parseCleanupOptions(["--unknown"])).toThrow("Unknown cleanup option");
+    expect(() => parseCleanupOptions(["--dry-run", "--explain"])).toThrow(
+      "cannot be used together",
+    );
+  });
+
+  it("parses explain as a non-delete inspection mode", () => {
+    expect(parseCleanupOptions(["--explain", "--table", "sync_jobs"])).toMatchObject({
+      dryRun: false,
+      explain: true,
+      table: "sync_jobs",
+    });
   });
 });

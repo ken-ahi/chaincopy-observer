@@ -4,6 +4,7 @@ export interface CleanupCliOptions {
   readonly batchSize: number;
   readonly delayMs: number;
   readonly dryRun: boolean;
+  readonly explain: boolean;
   readonly help: boolean;
   readonly status?: string;
   readonly table?: CleanupTable;
@@ -13,6 +14,7 @@ export const cleanupHelp = `Usage: pnpm db:cleanup [options]
 
 Options:
   --dry-run             Count eligible rows without deleting them
+  --explain             Print the batch-selection EXPLAIN plan without deleting
   --table <table>       sync_jobs | raw_events | order_history
   --status <status>     Restrict a table rule to one supported status
   --batch-size <count>  Rows per transaction (default: 1000, max: 10000)
@@ -24,6 +26,7 @@ export function parseCleanupOptions(arguments_: readonly string[]): CleanupCliOp
     "--batch-size",
     "--delay-ms",
     "--dry-run",
+    "--explain",
     "--help",
     "--status",
     "--table",
@@ -47,6 +50,9 @@ export function parseCleanupOptions(arguments_: readonly string[]): CleanupCliOp
   if (!Number.isSafeInteger(delayMs) || delayMs < 0 || delayMs > 60_000) {
     throw new RangeError("--delay-ms must be an integer from 0 to 60000.");
   }
+  if (arguments_.includes("--dry-run") && arguments_.includes("--explain")) {
+    throw new RangeError("--dry-run and --explain cannot be used together.");
+  }
   const tableValue = values.get("--table");
   if (tableValue && !isCleanupTable(tableValue)) {
     throw new RangeError(`Unsupported cleanup table: ${tableValue}`);
@@ -55,6 +61,7 @@ export function parseCleanupOptions(arguments_: readonly string[]): CleanupCliOp
     batchSize,
     delayMs,
     dryRun: arguments_.includes("--dry-run"),
+    explain: arguments_.includes("--explain"),
     help: arguments_.includes("--help"),
     status: values.get("--status"),
     table: tableValue,
