@@ -7,10 +7,39 @@ import { parseCleanupOptions } from "./db-cleanup-options.js";
 
 const execFileAsync = promisify(execFile);
 
+function isDatabaseWorkspaceEntry(resolved: string): boolean {
+  const pathname = new URL(resolved).pathname.replaceAll("\\", "/");
+  return (
+    pathname.endsWith("/packages/database/dist/index.js") ||
+    pathname.endsWith("/node_modules/@chaincopy/database/dist/index.js")
+  );
+}
+
 describe("database cleanup CLI runtime", () => {
-  it("resolves @chaincopy/database through the root workspace dependency", () => {
+  it("resolves @chaincopy/database to its declared workspace package entry", async () => {
     const resolved = import.meta.resolve("@chaincopy/database");
-    expect(resolved.replaceAll("\\", "/")).toContain("/packages/database/dist/index.js");
+    expect(resolved).toMatch(/^file:/);
+    expect(isDatabaseWorkspaceEntry(resolved)).toBe(true);
+
+    const database: unknown = await import("@chaincopy/database");
+    expect(database).toMatchObject({
+      disconnectDatabase: expect.any(Function),
+      prisma: expect.objectContaining({ $disconnect: expect.any(Function) }),
+    });
+  });
+
+  it.each([
+    "file:///home/runner/work/chaincopy-observer/chaincopy-observer/node_modules/@chaincopy/database/dist/index.js",
+    "file:///C:/Git/chaincopy-observer/packages/database/dist/index.js",
+  ])("recognizes the portable workspace package boundary: %s", (resolved) => {
+    expect(isDatabaseWorkspaceEntry(resolved)).toBe(true);
+  });
+
+  it.each([
+    "file:///home/runner/work/repository/node_modules/other/database/dist/index.js",
+    "file:///C:/Git/chaincopy-observer/packages/database/src/index.ts",
+  ])("rejects a resolution outside the built package boundary: %s", (resolved) => {
+    expect(isDatabaseWorkspaceEntry(resolved)).toBe(false);
   });
 
   it("parses root CLI arguments without crossing the database package boundary", () => {
