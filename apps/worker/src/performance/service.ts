@@ -193,6 +193,10 @@ interface TradeLaneResult {
   readonly warnings: readonly CalculationWarning[];
 }
 
+function appendAll<T>(target: T[], values: readonly T[]): void {
+  for (const value of values) target.push(value);
+}
+
 function calculateTradeLane(
   input: PerformanceCalculationInput,
   job: PerformanceJobData,
@@ -210,8 +214,8 @@ function calculateTradeLane(
       coverage,
     );
     if (result.ok) {
-      cycles.push(...result.value);
-      warnings.push(...result.warnings);
+      appendAll(cycles, result.value);
+      appendAll(warnings, result.warnings);
     } else {
       warnings.push(asWarning(result));
     }
@@ -229,7 +233,7 @@ function calculateTradeLane(
     return { cycles, metrics, warnings };
   }
 
-  warnings.push(...tradeStatistics.warnings);
+  appendAll(warnings, tradeStatistics.warnings);
   const completed = cycles.filter(
     (cycle): cycle is PositionCycle & { readonly closedAt: string } =>
       cycle.status === "CLOSED" && cycle.closedAt !== null,
@@ -287,7 +291,7 @@ function calculateReturnLane(
   const warnings: CalculationWarning[] = [];
   const metrics: PersistedMetric[] = [];
   const window = selectReturnWindow(input.navSnapshots, job, completeness);
-  warnings.push(...window.warnings);
+  appendAll(warnings, window.warnings);
   if (window.snapshots.length === 0 || !window.coverage) {
     return { dailyNav: [], metrics, warnings };
   }
@@ -297,7 +301,7 @@ function calculateReturnLane(
     warnings.push(asWarning(dailyNav));
     return { dailyNav: [], metrics, warnings };
   }
-  warnings.push(...dailyNav.warnings);
+  appendAll(warnings, dailyNav.warnings);
   const period = metricPeriod(
     dailyNav.value.map((point) => point.occurredAt),
     dailyNav.value.map((point) => point.occurredAt),
@@ -319,7 +323,7 @@ function calculateReturnLane(
     warnings.push(asWarning(normalizedCashFlows));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
-  warnings.push(...normalizedCashFlows.warnings);
+  appendAll(warnings, normalizedCashFlows.warnings);
   if (normalizedCashFlows.value.some((cashFlow) => cashFlow.isExternal === null)) {
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
@@ -337,7 +341,7 @@ function calculateReturnLane(
     warnings.push(asWarning(returnPeriods));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
-  warnings.push(...returnPeriods.warnings);
+  appendAll(warnings, returnPeriods.warnings);
 
   const wealthIndex = buildTwrWealthIndex(returnPeriods.value, window.coverage);
   const twr = calculateTwr(returnPeriods.value, window.coverage);
@@ -351,7 +355,8 @@ function calculateReturnLane(
     warnings.push(asWarning(maxDrawdown));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
-  warnings.push(...twr.warnings, ...maxDrawdown.warnings);
+  appendAll(warnings, twr.warnings);
+  appendAll(warnings, maxDrawdown.warnings);
   const returnWarnings = uniqueWarnings(warnings);
   const firstReturnPeriod = returnPeriods.value[0];
   const lastReturnPeriod = returnPeriods.value.at(-1);
@@ -458,7 +463,7 @@ function calculateExposureLane(
       laneCoverage(accountPeriod.from.toISOString(), accountPeriod.to.toISOString(), completeness),
     );
     if (leverage.ok) {
-      warnings.push(...leverage.warnings);
+      appendAll(warnings, leverage.warnings);
       metrics.push(
         metric("medianLeverage", leverage.value.medianLeverage, leverage.warnings, accountPeriod),
         metric(
@@ -483,7 +488,7 @@ function calculateExposureLane(
   if (positionPeriod) {
     const concentration = calculateCoinConcentration(latestPositions);
     if (concentration.ok) {
-      warnings.push(...concentration.warnings);
+      appendAll(warnings, concentration.warnings);
       metrics.push(
         metric(
           "largestCoinShare",
@@ -734,7 +739,7 @@ function captureMetric<T>(
   period: MetricPeriod,
 ): void {
   if (result.ok) {
-    warnings.push(...result.warnings);
+    appendAll(warnings, result.warnings);
     metrics.push(metric(key, value(result.value), result.warnings, period));
     return;
   }
@@ -833,9 +838,10 @@ function latestPositionSnapshot(
   if (positions.length === 0) {
     return [];
   }
-  const latestTimestamp = Math.max(
-    ...positions.map((position) => new Date(position.occurredAt).getTime()),
-  );
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  for (const position of positions) {
+    latestTimestamp = Math.max(latestTimestamp, new Date(position.occurredAt).getTime());
+  }
   return positions.filter(
     (position) => new Date(position.occurredAt).getTime() === latestTimestamp,
   );

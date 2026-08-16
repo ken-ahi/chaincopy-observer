@@ -53,7 +53,7 @@ describe.sequential("Phase 3 candidate persistence integration", { timeout: 15_0
     await database.discoveryTrade.deleteMany({ where: { sourceId } });
     await database.dataSource.deleteMany({ where: { id: sourceId } });
     await database.$disconnect();
-  });
+  }, 30_000);
 
   it("upserts buyer and seller once and aggregates exact notionals across coins", async () => {
     const first = marketTrade({
