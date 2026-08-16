@@ -18,6 +18,23 @@
 
 Scheduler は再起動時に各周期の現在 bucket だけを投入し、過去 bucket の無制限 catch-up はしない。同じ wallet/job の active・waiting・delayed・prioritized job があれば投入しない。Queue backlog が `HYPERLIQUID_QUEUE_BACKLOG_LIMIT`（default 500）以上なら、その tick の新規投入を止める。
 
+### BullMQ backlog maintenance
+
+`hyperliquid-sync` の古い backlog は、worker と scheduler を停止してから maintenance CLI で除去する。CLI は BullMQ API のみを使用し、Redis key に対する `DEL` / `ZREM` は使用しない。最初に必ず dry-run し、JSON Lines の `inventory`（state/name 別件数）と `summary`（削除前後件数・対象数）を保存して確認する。
+
+```bash
+pnpm queue:cleanup --dry-run --queue hyperliquid-sync --before 2026-08-01T00:00:00Z
+pnpm queue:cleanup --queue hyperliquid-sync --before 2026-08-01T00:00:00Z --batch-size 1000
+pnpm queue:cleanup --dry-run --queue hyperliquid-discovery --before 2026-08-01T00:00:00Z
+pnpm queue:cleanup --dry-run --queue hyperliquid-candidate-enrichment --before 2026-08-01T00:00:00Z
+```
+
+対象 state は `prioritized`、`waiting`、`delayed`、`failed`。`requestedAt` が cutoff と同時刻または過去の Job だけが候補になる。`active` Job、日時が不正な Job、job name と wallet ごとの最新 `requestedAt` bucket は削除しない。削除済み Job は再実行時に列挙されないため retry safe である。実行中に Job が active へ遷移した場合も再確認して保護する。負荷を抑える必要がある場合は `--batch-size` を小さくする。
+
+`HYPERLIQUID_DISCOVERY_ENABLED=false` の場合、worker process は discovery scheduler、market discovery WebSocket、`hyperliquid-discovery` consumer、`hyperliquid-candidate-enrichment` consumer を生成・起動しない。したがって既存 backlog は設定を有効化するか maintenance CLI を明示実行するまで処理されない。
+
+Shutdown は BullMQ の強制終了を行わず、active Job の完了を待つ。各 worker の待機開始と全 shutdown step の `durationMs` を JSON log に出すため、数十秒の停止時間が in-flight Job 由来かを component 単位で判別できる。
+
 ## Retention
 
 - `sync_jobs`: `SUCCEEDED` は 7 日、`FAILED` は 30 日。`QUEUED` / `RUNNING` は削除しない。

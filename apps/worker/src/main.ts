@@ -19,6 +19,7 @@ import { startHealthServer } from "./health-server.js";
 import { CandidateEnrichmentService } from "./hyperliquid/discovery/enrichment-service.js";
 import { HyperliquidDiscoveryJobProcessor } from "./hyperliquid/discovery/processor.js";
 import { HyperliquidDiscoveryRepository } from "./hyperliquid/discovery/repository.js";
+import { createDiscoveryRuntimePolicy } from "./hyperliquid/discovery/runtime-policy.js";
 import { HyperliquidDiscoveryScheduler } from "./hyperliquid/discovery/scheduler.js";
 import { HyperliquidDiscoveryWebSocketSupervisor } from "./hyperliquid/discovery/websocket-supervisor.js";
 import { KeyedSerialExecutor } from "./hyperliquid/keyed-serial-executor.js";
@@ -41,6 +42,7 @@ import {
 loadRootEnvironment();
 
 const env = readWorkerEnv();
+const discoveryRuntime = createDiscoveryRuntimePolicy(env.HYPERLIQUID_DISCOVERY_ENABLED);
 const logger = createLogger("worker", env.LOG_LEVEL);
 const redis = new Redis(env.REDIS_URL, {
   enableReadyCheck: true,
@@ -324,63 +326,71 @@ hyperliquidWorker.on("error", (error) => {
   logger.error({ error: errorDetails(error) }, "Hyperliquid BullMQ worker error");
 });
 
-const discoveryWorker = new Worker<HyperliquidDiscoveryJobData>(
-  hyperliquidDiscoveryQueueName,
-  (job) => discoveryProcessor.process(job),
-  {
-    connection: redis,
-    concurrency: env.HYPERLIQUID_DISCOVERY_WORKER_CONCURRENCY,
-  },
-);
+const discoveryWorker = discoveryRuntime.discoveryConsumer
+  ? new Worker<HyperliquidDiscoveryJobData>(
+      hyperliquidDiscoveryQueueName,
+      (job) => discoveryProcessor.process(job),
+      {
+        connection: redis,
+        concurrency: env.HYPERLIQUID_DISCOVERY_WORKER_CONCURRENCY,
+      },
+    )
+  : null;
 
-discoveryWorker.on("failed", (job, error) => {
-  const attempts = job?.opts.attempts ?? 1;
-  const attemptsMade = job?.attemptsMade ?? attempts;
-  logger.error(
-    {
-      attempts,
-      attemptsMade,
-      error: errorDetails(error),
-      jobId: job?.id,
-      jobName: job?.name,
-      retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
-    },
-    "Hyperliquid discovery BullMQ job failed",
-  );
-  recoverInterruptedCandidateEnrichment(job, error);
-});
-discoveryWorker.on("error", (error) => {
-  logger.error({ error: errorDetails(error) }, "Hyperliquid discovery BullMQ worker error");
-});
+if (discoveryWorker) {
+  discoveryWorker.on("failed", (job, error) => {
+    const attempts = job?.opts.attempts ?? 1;
+    const attemptsMade = job?.attemptsMade ?? attempts;
+    logger.error(
+      {
+        attempts,
+        attemptsMade,
+        error: errorDetails(error),
+        jobId: job?.id,
+        jobName: job?.name,
+        retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
+      },
+      "Hyperliquid discovery BullMQ job failed",
+    );
+    recoverInterruptedCandidateEnrichment(job, error);
+  });
+  discoveryWorker.on("error", (error) => {
+    logger.error({ error: errorDetails(error) }, "Hyperliquid discovery BullMQ worker error");
+  });
+}
 
-const candidateWorker = new Worker<HyperliquidDiscoveryJobData>(
-  hyperliquidCandidateQueueName,
-  (job) => discoveryProcessor.process(job, hyperliquidCandidateQueueName),
-  {
-    connection: redis,
-    concurrency: env.HYPERLIQUID_DISCOVERY_ENRICHMENT_CONCURRENCY,
-  },
-);
+const candidateWorker = discoveryRuntime.candidateConsumer
+  ? new Worker<HyperliquidDiscoveryJobData>(
+      hyperliquidCandidateQueueName,
+      (job) => discoveryProcessor.process(job, hyperliquidCandidateQueueName),
+      {
+        connection: redis,
+        concurrency: env.HYPERLIQUID_DISCOVERY_ENRICHMENT_CONCURRENCY,
+      },
+    )
+  : null;
 
-candidateWorker.on("failed", (job, error) => {
-  const attempts = job?.opts.attempts ?? 1;
-  const attemptsMade = job?.attemptsMade ?? attempts;
-  logger.error(
-    {
-      attempts,
-      attemptsMade,
-      error: errorDetails(error),
-      jobId: job?.id,
-      jobName: job?.name,
-      retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
-    },
-    "Hyperliquid candidate BullMQ job failed",
-  );
-  recoverInterruptedCandidateEnrichment(job, error);
-});
-candidateWorker.on("error", (error) => {
-  logger.error({ error: errorDetails(error) }, "Hyperliquid candidate BullMQ worker error");
-});
+if (candidateWorker) {
+  candidateWorker.on("failed", (job, error) => {
+    const attempts = job?.opts.attempts ?? 1;
+    const attemptsMade = job?.attemptsMade ?? attempts;
+    logger.error(
+      {
+        attempts,
+        attemptsMade,
+        error: errorDetails(error),
+        jobId: job?.id,
+        jobName: job?.name,
+        retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
+      },
+      "Hyperliquid candidate BullMQ job failed",
+    );
+    recoverInterruptedCandidateEnrichment(job, error);
+  });
+  candidateWorker.on("error", (error) => {
+    logger.error({ error: errorDetails(error) }, "Hyperliquid candidate BullMQ worker error");
+  });
+}
 
 const performanceWorker = new Worker<PerformanceJobData>(
   performanceQueueName,
@@ -460,7 +470,16 @@ const healthServer = await startHealthServer({
 
 const queuedJobId = await enqueueSampleHealthJob(systemQueue);
 await scheduler.start();
-await discoveryScheduler.start();
+if (discoveryRuntime.scheduler && discoveryRuntime.marketWebSocket) {
+  await discoveryScheduler.start();
+} else {
+  logger.info(
+    {
+      queues: [hyperliquidDiscoveryQueueName, hyperliquidCandidateQueueName],
+    },
+    "Hyperliquid discovery runtime disabled; scheduler, WebSocket, and consumers not started",
+  );
+}
 logger.info(
   {
     healthPort: env.WORKER_HEALTH_PORT,
@@ -468,8 +487,9 @@ logger.info(
     queues: [
       systemQueueName,
       hyperliquidQueueName,
-      hyperliquidDiscoveryQueueName,
-      hyperliquidCandidateQueueName,
+      ...(discoveryRuntime.discoveryConsumer && discoveryRuntime.candidateConsumer
+        ? [hyperliquidDiscoveryQueueName, hyperliquidCandidateQueueName]
+        : []),
       performanceQueueName,
     ],
     sourceKey,
@@ -487,9 +507,21 @@ async function shutdown(signal: string): Promise<void> {
   logger.info({ signal }, "Stopping worker");
 
   let shutdownFailed = false;
-  const close = async (component: string, operation: () => Promise<unknown>): Promise<void> => {
+  const close = async (
+    component: string,
+    operation: () => Promise<unknown>,
+    waitsForInFlightJobs = false,
+  ): Promise<void> => {
+    const startedAt = Date.now();
+    if (waitsForInFlightJobs) {
+      logger.info({ component }, "Closing BullMQ worker; waiting for in-flight jobs to finish");
+    }
     try {
       await operation();
+      logger.info(
+        { component, durationMs: Date.now() - startedAt, waitsForInFlightJobs },
+        "Worker shutdown step completed",
+      );
     } catch (error) {
       shutdownFailed = true;
       logger.error({ component, error: errorDetails(error) }, "Worker shutdown step failed");
@@ -498,12 +530,18 @@ async function shutdown(signal: string): Promise<void> {
 
   await close("health-server", () => closeServer());
   await close("hyperliquid-scheduler", () => scheduler.stop());
-  await close("hyperliquid-discovery-scheduler", () => discoveryScheduler.stop());
-  await close("hyperliquid-worker", () => hyperliquidWorker.close());
-  await close("hyperliquid-discovery-worker", () => discoveryWorker.close());
-  await close("hyperliquid-candidate-worker", () => candidateWorker.close());
-  await close("performance-worker", () => performanceWorker.close());
-  await close("system-worker", () => systemWorker.close());
+  if (discoveryRuntime.scheduler) {
+    await close("hyperliquid-discovery-scheduler", () => discoveryScheduler.stop());
+  }
+  await close("hyperliquid-worker", () => hyperliquidWorker.close(), true);
+  if (discoveryWorker) {
+    await close("hyperliquid-discovery-worker", () => discoveryWorker.close(), true);
+  }
+  if (candidateWorker) {
+    await close("hyperliquid-candidate-worker", () => candidateWorker.close(), true);
+  }
+  await close("performance-worker", () => performanceWorker.close(), true);
+  await close("system-worker", () => systemWorker.close(), true);
   await close("performance-queue", () => performanceQueue.close());
   await close("hyperliquid-candidate-queue", () => candidateQueue.close());
   await close("hyperliquid-discovery-queue", () => discoveryQueue.close());

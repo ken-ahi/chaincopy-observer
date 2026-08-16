@@ -615,20 +615,24 @@ interface MetricPeriod {
   readonly to: Date;
 }
 
-function metricPeriod(
+export function metricPeriod(
   fromValues: readonly string[],
   toValues: readonly string[],
 ): MetricPeriod | null {
-  const from = fromValues
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()));
-  const to = toValues
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()));
-  if (from.length === 0 || to.length === 0) return null;
+  let minimum = Number.POSITIVE_INFINITY;
+  let maximum = Number.NEGATIVE_INFINITY;
+  for (const value of fromValues) {
+    const timestamp = new Date(value).getTime();
+    if (Number.isFinite(timestamp) && timestamp < minimum) minimum = timestamp;
+  }
+  for (const value of toValues) {
+    const timestamp = new Date(value).getTime();
+    if (Number.isFinite(timestamp) && timestamp > maximum) maximum = timestamp;
+  }
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) return null;
   return {
-    from: new Date(Math.min(...from.map((value) => value.getTime()))),
-    to: new Date(Math.max(...to.map((value) => value.getTime()))),
+    from: new Date(minimum),
+    to: new Date(maximum),
   };
 }
 

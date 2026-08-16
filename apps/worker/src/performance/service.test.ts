@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PERFORMANCE_CALCULATION_VERSION } from "./constants.js";
 import type { PerformanceRepositoryPort } from "./repository.js";
-import { PerformanceCalculationService } from "./service.js";
+import { metricPeriod, PerformanceCalculationService } from "./service.js";
 import type {
   CreateRunInput,
   PerformanceCalculationInput,
@@ -205,6 +205,17 @@ function createJob(input: PerformanceCalculationInput): PerformanceJobData {
 }
 
 describe("PerformanceCalculationService", () => {
+  it("calculates metric periods without argument spreading for very large histories", () => {
+    const timestamps = Array.from({ length: 200_000 }, (_, index) =>
+      new Date(Date.UTC(2024, 0, 1) + index * 1_000).toISOString(),
+    );
+
+    expect(metricPeriod(timestamps, timestamps)).toEqual({
+      from: new Date("2024-01-01T00:00:00.000Z"),
+      to: new Date(Date.UTC(2024, 0, 1) + 199_999 * 1_000),
+    });
+  });
+
   it("persists Daily NAV, Position Cycles, metrics, warnings, and precision", async () => {
     const input = createInput(fixtureAddresses[0]);
     const repository = new FakePerformanceRepository(input);
