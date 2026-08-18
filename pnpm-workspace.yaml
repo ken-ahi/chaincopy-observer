@@ -15,6 +15,7 @@ catalogMode: strict
 
 overrides:
   brace-expansion: 5.0.9
+  deepmerge-ts: 8.0.0
   esbuild: 0.28.1
   postcss: 8.5.23
   sharp: 0.35.3

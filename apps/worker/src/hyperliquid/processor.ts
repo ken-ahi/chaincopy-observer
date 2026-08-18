@@ -6,11 +6,11 @@ import {
   type HyperliquidJobName,
 } from "@chaincopy/domain";
 import { type PrismaClient } from "@chaincopy/database";
-import { type Job, type Queue } from "bullmq";
+import { type Job, type Queue, UnrecoverableError } from "bullmq";
 import { type Redis } from "ioredis";
 import { type Logger } from "pino";
 
-import { withRedisLock } from "./lock.js";
+import { SyncLockUnavailableError, withRedisLock } from "./lock.js";
 import { enqueueWalletBackfillChildren } from "./queue.js";
 import type { HyperliquidSyncService } from "./sync-service.js";
 import type { HyperliquidWebSocketSupervisor } from "./websocket-supervisor.js";
@@ -146,6 +146,9 @@ export class HyperliquidJobProcessor {
         },
         "Hyperliquid job attempt failed",
       );
+      if (error instanceof SyncLockUnavailableError) {
+        throw suppressImmediateLockRetry(error);
+      }
       throw error;
     }
   }
@@ -202,4 +205,10 @@ export class HyperliquidJobProcessor {
     );
     return { listening: true };
   }
+}
+
+export function suppressImmediateLockRetry(error: SyncLockUnavailableError): UnrecoverableError {
+  return new UnrecoverableError(
+    `${error.message} Immediate BullMQ retries are suppressed; a later scheduler tick may enqueue fresh work.`,
+  );
 }

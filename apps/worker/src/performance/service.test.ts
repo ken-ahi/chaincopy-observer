@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PERFORMANCE_CALCULATION_VERSION } from "./constants.js";
 import type { PerformanceRepositoryPort } from "./repository.js";
-import { PerformanceCalculationService } from "./service.js";
+import { metricPeriod, PerformanceCalculationService } from "./service.js";
 import type {
   CreateRunInput,
   PerformanceCalculationInput,
@@ -205,6 +205,123 @@ function createJob(input: PerformanceCalculationInput): PerformanceJobData {
 }
 
 describe("PerformanceCalculationService", () => {
+  it("logs bounded input counts and each calculation lane before execution", async () => {
+    const input = createInput(fixtureAddresses[0]);
+    const repository = new FakePerformanceRepository(input);
+    const info = vi.fn();
+
+    await new PerformanceCalculationService(repository, { info } as never).process(
+      createJob(input),
+    );
+
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "address_performance_input_loaded",
+        fills: input.fills.length,
+        portfolioSnapshots: input.navSnapshots.length,
+        positionEvents: input.positionSnapshots.length,
+        walletAddressId: input.walletAddressId,
+      }),
+      "Address performance input loaded",
+    );
+    expect(
+      info.mock.calls
+        .map(([context]) => context as { event?: string; lane?: string })
+        .filter((context) => context.event === "address_performance_lane_started")
+        .map((context) => context.lane),
+    ).toEqual(["trade", "return", "exposure"]);
+  });
+
+  it("calculates metric periods without argument spreading for very large histories", () => {
+    const timestamps = Array.from({ length: 200_000 }, (_, index) =>
+      new Date(Date.UTC(2024, 0, 1) + index * 1_000).toISOString(),
+    );
+
+    expect(metricPeriod(timestamps, timestamps)).toEqual({
+      from: new Date("2024-01-01T00:00:00.000Z"),
+      to: new Date(Date.UTC(2024, 0, 1) + 199_999 * 1_000),
+    });
+  });
+
+  it("processes 200,000 position cycles for one coin without exceeding the argument limit", async () => {
+    const input = createInput(fixtureAddresses[0], {
+      fills: [createInput(fixtureAddresses[0]).fills[0]!],
+    });
+    const baseTime = Date.parse("2024-01-01T00:00:00.000Z");
+    const cycleCount = 200_000;
+    const sharedFills = [
+      {
+        closedPnl: "0",
+        entryPriceForPnl: null,
+        externalId: "large-open",
+        fee: "0",
+        occurredAt: "2024-01-01T00:00:00.000Z",
+        price: "100",
+        role: "OPEN" as const,
+        side: "BUY" as const,
+        size: "1",
+      },
+      {
+        closedPnl: "1",
+        entryPriceForPnl: "100",
+        externalId: "large-close",
+        fee: "0",
+        occurredAt: "2024-01-01T00:00:00.001Z",
+        price: "101",
+        role: "CLOSE" as const,
+        side: "SELL" as const,
+        size: "1",
+      },
+    ];
+    const cycles: analytics.PositionCycle[] = Array.from({ length: cycleCount }, (_, index) => {
+      const openedAt = new Date(baseTime + index * 10).toISOString();
+      return {
+        averageEntryPrice: "100",
+        closedAt: new Date(baseTime + index * 10 + 1).toISOString(),
+        coin: "BTC",
+        completeness: "COMPLETE",
+        fills: sharedFills,
+        fundingEvents: [],
+        id: `BTC:${String(index).padStart(6, "0")}`,
+        openedAt,
+        pnl: {
+          fee: "0",
+          fillRecomputedPnl: index % 2 === 0 ? "1" : "-1",
+          funding: "0",
+          grossRealizedPnl: index % 2 === 0 ? "1" : "-1",
+          hyperliquidClosedPnl: index % 2 === 0 ? "1" : "-1",
+          netRealizedPnl: index % 2 === 0 ? "1" : "-1",
+        },
+        side: "LONG",
+        status: "CLOSED",
+        warnings: [],
+      };
+    });
+    const cycleSpy = vi.spyOn(analytics, "buildPositionCycles").mockReturnValue({
+      calculationFrom: "2024-01-01T00:00:00.000Z",
+      calculationTo: "2024-01-31T23:59:59.999Z",
+      completeness: "COMPLETE",
+      ok: true,
+      precision: "DERIVED",
+      value: cycles,
+      warnings: [],
+    });
+    const repository = new FakePerformanceRepository(input);
+
+    try {
+      const result = await new PerformanceCalculationService(repository).process(createJob(input));
+
+      expect(result.status).toBe("SUCCEEDED");
+      const persisted = repository.saved[0]?.result.cycles;
+      expect(persisted).toHaveLength(cycleCount);
+      expect(persisted?.[0]?.openedAt).toEqual(new Date(baseTime));
+      expect(persisted?.[100_000]?.openedAt).toEqual(new Date(baseTime + 1_000_000));
+      expect(persisted?.at(-1)?.openedAt).toEqual(new Date(baseTime + (cycleCount - 1) * 10));
+    } finally {
+      cycleSpy.mockRestore();
+    }
+  }, 60_000);
+
   it("persists Daily NAV, Position Cycles, metrics, warnings, and precision", async () => {
     const input = createInput(fixtureAddresses[0]);
     const repository = new FakePerformanceRepository(input);

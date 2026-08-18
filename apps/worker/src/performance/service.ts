@@ -26,6 +26,7 @@ import {
   type PositionCycle,
 } from "@chaincopy/analytics";
 import type { PerformanceJobData } from "@chaincopy/domain";
+import type { Logger } from "pino";
 
 import { PERFORMANCE_CALCULATION_VERSION } from "./constants.js";
 import { createPerformanceInputFingerprint } from "./fingerprint.js";
@@ -41,7 +42,10 @@ import type {
 } from "./types.js";
 
 export class PerformanceCalculationService {
-  public constructor(private readonly repository: PerformanceRepositoryPort) {}
+  public constructor(
+    private readonly repository: PerformanceRepositoryPort,
+    private readonly logger?: Logger,
+  ) {}
 
   public async process(job: PerformanceJobData): Promise<PerformanceProcessResult> {
     validateJob(job);
@@ -51,6 +55,24 @@ export class PerformanceCalculationService {
       job.walletAddressId,
       calculationFrom,
       calculationTo,
+    );
+    const inputCounts = {
+      accountSnapshots: input.accountSnapshots.length,
+      cashFlows: input.cashFlows.length,
+      fills: input.fills.length,
+      funding: input.funding.length,
+      portfolioSnapshots: input.navSnapshots.length,
+      positionEvents: input.positionSnapshots.length,
+    };
+    this.logger?.info(
+      {
+        calculationFrom: job.calculationFrom,
+        calculationTo: job.calculationTo,
+        event: "address_performance_input_loaded",
+        ...inputCounts,
+        walletAddressId: job.walletAddressId,
+      },
+      "Address performance input loaded",
     );
     const completeness = assessHistoryCompleteness(input, job.calculationFrom);
     const inputFingerprint = createPerformanceInputFingerprint({
@@ -96,7 +118,17 @@ export class PerformanceCalculationService {
 
     await this.repository.markRunning(run.id);
     try {
-      const calculated = calculatePerformance(input, job, completeness);
+      const calculated = calculatePerformance(input, job, completeness, (lane) => {
+        this.logger?.info(
+          {
+            event: "address_performance_lane_started",
+            lane,
+            ...inputCounts,
+            walletAddressId: job.walletAddressId,
+          },
+          "Address performance calculation lane started",
+        );
+      });
       if (!calculated.ok) {
         await this.repository.markInsufficient(
           run,
@@ -153,9 +185,13 @@ function calculatePerformance(
   input: PerformanceCalculationInput,
   job: PerformanceJobData,
   completeness: DataCompleteness,
+  onLaneStart: (lane: "exposure" | "return" | "trade") => void = () => undefined,
 ): PerformanceCalculationOutcome {
+  onLaneStart("trade");
   const trade = calculateTradeLane(input, job, completeness);
+  onLaneStart("return");
   const returns = calculateReturnLane(input, job, completeness);
+  onLaneStart("exposure");
   const exposure = calculateExposureLane(input, job, completeness);
   const metrics = [...trade.metrics, ...returns.metrics, ...exposure.metrics];
   const warnings = [...trade.warnings, ...returns.warnings, ...exposure.warnings];
@@ -193,6 +229,10 @@ interface TradeLaneResult {
   readonly warnings: readonly CalculationWarning[];
 }
 
+function appendAll<T>(target: T[], values: readonly T[]): void {
+  for (const value of values) target.push(value);
+}
+
 function calculateTradeLane(
   input: PerformanceCalculationInput,
   job: PerformanceJobData,
@@ -202,16 +242,28 @@ function calculateTradeLane(
   const cycles: PositionCycle[] = [];
   const warnings: CalculationWarning[] = [];
 
-  const coins = [...new Set(input.fills.map((fill) => fill.coin))].sort();
+  const fillsByCoin = new Map<string, Array<PerformanceCalculationInput["fills"][number]>>();
+  for (const fill of input.fills) {
+    const coinFills = fillsByCoin.get(fill.coin) ?? [];
+    coinFills.push(fill);
+    fillsByCoin.set(fill.coin, coinFills);
+  }
+  const fundingByCoin = new Map<string, Array<PerformanceCalculationInput["funding"][number]>>();
+  for (const payment of input.funding) {
+    const coinFunding = fundingByCoin.get(payment.coin) ?? [];
+    coinFunding.push(payment);
+    fundingByCoin.set(payment.coin, coinFunding);
+  }
+  const coins = [...fillsByCoin.keys()].sort();
   for (const coin of coins) {
     const result = buildPositionCycles(
-      input.fills.filter((fill) => fill.coin === coin),
-      input.funding.filter((item) => item.coin === coin),
+      fillsByCoin.get(coin) ?? [],
+      fundingByCoin.get(coin) ?? [],
       coverage,
     );
     if (result.ok) {
-      cycles.push(...result.value);
-      warnings.push(...result.warnings);
+      appendAll(cycles, result.value);
+      appendAll(warnings, result.warnings);
     } else {
       warnings.push(asWarning(result));
     }
@@ -229,7 +281,7 @@ function calculateTradeLane(
     return { cycles, metrics, warnings };
   }
 
-  warnings.push(...tradeStatistics.warnings);
+  appendAll(warnings, tradeStatistics.warnings);
   const completed = cycles.filter(
     (cycle): cycle is PositionCycle & { readonly closedAt: string } =>
       cycle.status === "CLOSED" && cycle.closedAt !== null,
@@ -287,7 +339,7 @@ function calculateReturnLane(
   const warnings: CalculationWarning[] = [];
   const metrics: PersistedMetric[] = [];
   const window = selectReturnWindow(input.navSnapshots, job, completeness);
-  warnings.push(...window.warnings);
+  appendAll(warnings, window.warnings);
   if (window.snapshots.length === 0 || !window.coverage) {
     return { dailyNav: [], metrics, warnings };
   }
@@ -297,7 +349,7 @@ function calculateReturnLane(
     warnings.push(asWarning(dailyNav));
     return { dailyNav: [], metrics, warnings };
   }
-  warnings.push(...dailyNav.warnings);
+  appendAll(warnings, dailyNav.warnings);
   const period = metricPeriod(
     dailyNav.value.map((point) => point.occurredAt),
     dailyNav.value.map((point) => point.occurredAt),
@@ -319,7 +371,7 @@ function calculateReturnLane(
     warnings.push(asWarning(normalizedCashFlows));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
-  warnings.push(...normalizedCashFlows.warnings);
+  appendAll(warnings, normalizedCashFlows.warnings);
   if (normalizedCashFlows.value.some((cashFlow) => cashFlow.isExternal === null)) {
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
@@ -337,7 +389,7 @@ function calculateReturnLane(
     warnings.push(asWarning(returnPeriods));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
-  warnings.push(...returnPeriods.warnings);
+  appendAll(warnings, returnPeriods.warnings);
 
   const wealthIndex = buildTwrWealthIndex(returnPeriods.value, window.coverage);
   const twr = calculateTwr(returnPeriods.value, window.coverage);
@@ -351,7 +403,8 @@ function calculateReturnLane(
     warnings.push(asWarning(maxDrawdown));
     return { dailyNav: dailyNav.value, metrics, warnings };
   }
-  warnings.push(...twr.warnings, ...maxDrawdown.warnings);
+  appendAll(warnings, twr.warnings);
+  appendAll(warnings, maxDrawdown.warnings);
   const returnWarnings = uniqueWarnings(warnings);
   const firstReturnPeriod = returnPeriods.value[0];
   const lastReturnPeriod = returnPeriods.value.at(-1);
@@ -458,7 +511,7 @@ function calculateExposureLane(
       laneCoverage(accountPeriod.from.toISOString(), accountPeriod.to.toISOString(), completeness),
     );
     if (leverage.ok) {
-      warnings.push(...leverage.warnings);
+      appendAll(warnings, leverage.warnings);
       metrics.push(
         metric("medianLeverage", leverage.value.medianLeverage, leverage.warnings, accountPeriod),
         metric(
@@ -483,7 +536,7 @@ function calculateExposureLane(
   if (positionPeriod) {
     const concentration = calculateCoinConcentration(latestPositions);
     if (concentration.ok) {
-      warnings.push(...concentration.warnings);
+      appendAll(warnings, concentration.warnings);
       metrics.push(
         metric(
           "largestCoinShare",
@@ -615,20 +668,24 @@ interface MetricPeriod {
   readonly to: Date;
 }
 
-function metricPeriod(
+export function metricPeriod(
   fromValues: readonly string[],
   toValues: readonly string[],
 ): MetricPeriod | null {
-  const from = fromValues
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()));
-  const to = toValues
-    .map((value) => new Date(value))
-    .filter((value) => !Number.isNaN(value.getTime()));
-  if (from.length === 0 || to.length === 0) return null;
+  let minimum = Number.POSITIVE_INFINITY;
+  let maximum = Number.NEGATIVE_INFINITY;
+  for (const value of fromValues) {
+    const timestamp = new Date(value).getTime();
+    if (Number.isFinite(timestamp) && timestamp < minimum) minimum = timestamp;
+  }
+  for (const value of toValues) {
+    const timestamp = new Date(value).getTime();
+    if (Number.isFinite(timestamp) && timestamp > maximum) maximum = timestamp;
+  }
+  if (!Number.isFinite(minimum) || !Number.isFinite(maximum)) return null;
   return {
-    from: new Date(Math.min(...from.map((value) => value.getTime()))),
-    to: new Date(Math.max(...to.map((value) => value.getTime()))),
+    from: new Date(minimum),
+    to: new Date(maximum),
   };
 }
 
@@ -730,7 +787,7 @@ function captureMetric<T>(
   period: MetricPeriod,
 ): void {
   if (result.ok) {
-    warnings.push(...result.warnings);
+    appendAll(warnings, result.warnings);
     metrics.push(metric(key, value(result.value), result.warnings, period));
     return;
   }
@@ -829,9 +886,10 @@ function latestPositionSnapshot(
   if (positions.length === 0) {
     return [];
   }
-  const latestTimestamp = Math.max(
-    ...positions.map((position) => new Date(position.occurredAt).getTime()),
-  );
+  let latestTimestamp = Number.NEGATIVE_INFINITY;
+  for (const position of positions) {
+    latestTimestamp = Math.max(latestTimestamp, new Date(position.occurredAt).getTime());
+  }
   return positions.filter(
     (position) => new Date(position.occurredAt).getTime() === latestTimestamp,
   );

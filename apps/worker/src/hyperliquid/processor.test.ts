@@ -5,7 +5,8 @@ import { type Redis } from "ioredis";
 import pino from "pino";
 import { describe, expect, it, vi } from "vitest";
 
-import { HyperliquidJobProcessor } from "./processor.js";
+import { SyncLockUnavailableError } from "./lock.js";
+import { HyperliquidJobProcessor, suppressImmediateLockRetry } from "./processor.js";
 
 const jobData: HyperliquidJobData = {
   requestedAt: "2026-07-25T12:00:00.000Z",
@@ -43,6 +44,13 @@ function createProcessor(
 }
 
 describe("HyperliquidJobProcessor", () => {
+  it("marks lock contention unrecoverable for the current BullMQ job", () => {
+    const error = suppressImmediateLockRetry(new SyncLockUnavailableError("wallet-lock"));
+
+    expect(error.name).toBe("UnrecoverableError");
+    expect(error.message).toContain("later scheduler tick");
+  });
+
   it("skips a BullMQ redelivery already committed as successful", async () => {
     const upsert = vi.fn(async () => undefined);
     const database = {
