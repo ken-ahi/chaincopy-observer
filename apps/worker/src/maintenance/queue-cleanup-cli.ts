@@ -1,4 +1,3 @@
-import { loadRootEnvironment } from "@chaincopy/config";
 import { Queue } from "bullmq";
 import { Redis } from "ioredis";
 
@@ -11,6 +10,7 @@ async function main(): Promise<void> {
     console.info(queueCleanupHelp);
     return;
   }
+  const { loadRootEnvironment } = await import("@chaincopy/config");
   loadRootEnvironment();
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl?.startsWith("redis://")) throw new Error("REDIS_URL must be a redis:// URL.");

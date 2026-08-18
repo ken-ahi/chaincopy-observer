@@ -1,8 +1,6 @@
-import {
-  hyperliquidCandidateQueueName,
-  hyperliquidDiscoveryQueueName,
-  hyperliquidQueueName,
-} from "@chaincopy/domain";
+const hyperliquidQueueName = "hyperliquid-sync";
+const hyperliquidDiscoveryQueueName = "hyperliquid-discovery";
+const hyperliquidCandidateQueueName = "hyperliquid-candidate-enrichment";
 
 export const cleanupQueueNames = [
   hyperliquidQueueName,
