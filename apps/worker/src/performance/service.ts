@@ -26,6 +26,7 @@ import {
   type PositionCycle,
 } from "@chaincopy/analytics";
 import type { PerformanceJobData } from "@chaincopy/domain";
+import type { Logger } from "pino";
 
 import { PERFORMANCE_CALCULATION_VERSION } from "./constants.js";
 import { createPerformanceInputFingerprint } from "./fingerprint.js";
@@ -41,7 +42,10 @@ import type {
 } from "./types.js";
 
 export class PerformanceCalculationService {
-  public constructor(private readonly repository: PerformanceRepositoryPort) {}
+  public constructor(
+    private readonly repository: PerformanceRepositoryPort,
+    private readonly logger?: Logger,
+  ) {}
 
   public async process(job: PerformanceJobData): Promise<PerformanceProcessResult> {
     validateJob(job);
@@ -51,6 +55,24 @@ export class PerformanceCalculationService {
       job.walletAddressId,
       calculationFrom,
       calculationTo,
+    );
+    const inputCounts = {
+      accountSnapshots: input.accountSnapshots.length,
+      cashFlows: input.cashFlows.length,
+      fills: input.fills.length,
+      funding: input.funding.length,
+      portfolioSnapshots: input.navSnapshots.length,
+      positionEvents: input.positionSnapshots.length,
+    };
+    this.logger?.info(
+      {
+        calculationFrom: job.calculationFrom,
+        calculationTo: job.calculationTo,
+        event: "address_performance_input_loaded",
+        ...inputCounts,
+        walletAddressId: job.walletAddressId,
+      },
+      "Address performance input loaded",
     );
     const completeness = assessHistoryCompleteness(input, job.calculationFrom);
     const inputFingerprint = createPerformanceInputFingerprint({
@@ -96,7 +118,17 @@ export class PerformanceCalculationService {
 
     await this.repository.markRunning(run.id);
     try {
-      const calculated = calculatePerformance(input, job, completeness);
+      const calculated = calculatePerformance(input, job, completeness, (lane) => {
+        this.logger?.info(
+          {
+            event: "address_performance_lane_started",
+            lane,
+            ...inputCounts,
+            walletAddressId: job.walletAddressId,
+          },
+          "Address performance calculation lane started",
+        );
+      });
       if (!calculated.ok) {
         await this.repository.markInsufficient(
           run,
@@ -153,9 +185,13 @@ function calculatePerformance(
   input: PerformanceCalculationInput,
   job: PerformanceJobData,
   completeness: DataCompleteness,
+  onLaneStart: (lane: "exposure" | "return" | "trade") => void = () => undefined,
 ): PerformanceCalculationOutcome {
+  onLaneStart("trade");
   const trade = calculateTradeLane(input, job, completeness);
+  onLaneStart("return");
   const returns = calculateReturnLane(input, job, completeness);
+  onLaneStart("exposure");
   const exposure = calculateExposureLane(input, job, completeness);
   const metrics = [...trade.metrics, ...returns.metrics, ...exposure.metrics];
   const warnings = [...trade.warnings, ...returns.warnings, ...exposure.warnings];
@@ -206,11 +242,23 @@ function calculateTradeLane(
   const cycles: PositionCycle[] = [];
   const warnings: CalculationWarning[] = [];
 
-  const coins = [...new Set(input.fills.map((fill) => fill.coin))].sort();
+  const fillsByCoin = new Map<string, Array<PerformanceCalculationInput["fills"][number]>>();
+  for (const fill of input.fills) {
+    const coinFills = fillsByCoin.get(fill.coin) ?? [];
+    coinFills.push(fill);
+    fillsByCoin.set(fill.coin, coinFills);
+  }
+  const fundingByCoin = new Map<string, Array<PerformanceCalculationInput["funding"][number]>>();
+  for (const payment of input.funding) {
+    const coinFunding = fundingByCoin.get(payment.coin) ?? [];
+    coinFunding.push(payment);
+    fundingByCoin.set(payment.coin, coinFunding);
+  }
+  const coins = [...fillsByCoin.keys()].sort();
   for (const coin of coins) {
     const result = buildPositionCycles(
-      input.fills.filter((fill) => fill.coin === coin),
-      input.funding.filter((item) => item.coin === coin),
+      fillsByCoin.get(coin) ?? [],
+      fundingByCoin.get(coin) ?? [],
       coverage,
     );
     if (result.ok) {

@@ -12,6 +12,25 @@ import type {
   SuccessfulPerformanceResult,
 } from "./types.js";
 
+const inputPageSize = 5_000;
+const maximumPositionSnapshotSize = 1_000;
+const resultWriteBatchSize = 1_000;
+
+async function loadMappedPages<Row extends { readonly id: string }, Output>(
+  load: (cursor: string | undefined) => Promise<readonly Row[]>,
+  map: (row: Row) => Output,
+): Promise<Output[]> {
+  const output: Output[] = [];
+  let cursor: string | undefined;
+  while (true) {
+    const rows = await load(cursor);
+    for (const row of rows) output.push(map(row));
+    if (rows.length < inputPageSize) return output;
+    cursor = rows.at(-1)?.id;
+    if (!cursor) throw new Error("Performance input pagination did not return a cursor.");
+  }
+}
+
 export interface PerformanceRepositoryPort {
   loadInput(
     walletAddressId: string,
@@ -50,39 +69,74 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
     calculationTo: Date,
   ): Promise<PerformanceCalculationInput> {
     const range = { gte: calculationFrom, lte: calculationTo };
-    const [wallet, fills, funding, cashFlows, snapshots, positions, cursors, issues] =
-      await Promise.all([
-        this.database.walletAddress.findUnique({
-          select: { address: true, id: true },
-          where: { id: walletAddressId },
-        }),
+    const wallet = await this.database.walletAddress.findUnique({
+      select: { address: true, id: true },
+      where: { id: walletAddressId },
+    });
+
+    if (!wallet) {
+      throw new Error(`Wallet address ${walletAddressId} was not found.`);
+    }
+
+    const fills = await loadMappedPages(
+      (cursor) =>
         this.database.normalizedTrade.findMany({
-          orderBy: [{ occurredAt: "asc" }, { externalTradeId: "asc" }],
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
           select: {
             closedPnl: true,
             coin: true,
             externalTradeId: true,
             fee: true,
+            id: true,
             occurredAt: true,
             price: true,
             side: true,
             size: true,
             startPosition: true,
           },
+          take: inputPageSize,
           where: { occurredAt: range, walletAddressId },
         }),
+      (fill) => ({
+        closedPnl: fill.closedPnl.toString(),
+        coin: fill.coin,
+        externalId: fill.externalTradeId,
+        fee: fill.fee.toString(),
+        occurredAt: fill.occurredAt.toISOString(),
+        price: fill.price.toString(),
+        side: fill.side,
+        size: fill.size.toString(),
+        startPosition: fill.startPosition.toString(),
+      }),
+    );
+    const funding = await loadMappedPages(
+      (cursor) =>
         this.database.fundingPayment.findMany({
-          orderBy: [{ occurredAt: "asc" }, { externalPaymentId: "asc" }],
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
           select: {
             amount: true,
             coin: true,
             externalPaymentId: true,
+            id: true,
             occurredAt: true,
           },
+          take: inputPageSize,
           where: { occurredAt: range, walletAddressId },
         }),
+      (payment) => ({
+        amount: payment.amount.toString(),
+        coin: payment.coin,
+        externalId: payment.externalPaymentId,
+        occurredAt: payment.occurredAt.toISOString(),
+      }),
+    );
+    const cashFlows = await loadMappedPages(
+      (cursor) =>
         this.database.cashFlow.findMany({
-          orderBy: [{ occurredAt: "asc" }, { externalFlowId: "asc" }],
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
           select: {
             amount: true,
             asset: true,
@@ -90,49 +144,96 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
             externalFlowId: true,
             fee: true,
             flowType: true,
+            id: true,
             occurredAt: true,
             rawPayload: true,
             usdValue: true,
           },
+          take: inputPageSize,
           where: { occurredAt: range, walletAddressId },
         }),
+      (cashFlow) => {
+        const classification = classifyStoredCashFlowInput({
+          amount: cashFlow.usdValue?.toString() ?? cashFlow.amount?.toString() ?? null,
+          rawPayload: cashFlow.rawPayload,
+          type: cashFlow.flowType,
+          walletAddress: wallet.address,
+        });
+        return {
+          amount: classification.amount,
+          asset: cashFlow.asset,
+          boundary: classification.boundary,
+          counterparty: cashFlow.counterparty,
+          externalId: cashFlow.externalFlowId,
+          fee: cashFlow.fee?.toString() ?? null,
+          occurredAt: cashFlow.occurredAt.toISOString(),
+          rawPayload: cashFlow.rawPayload,
+          type: cashFlow.flowType,
+        };
+      },
+    );
+    const snapshots = await loadMappedPages(
+      (cursor) =>
         this.database.portfolioSnapshot.findMany({
-          orderBy: [{ capturedAt: "asc" }, { fingerprint: "asc" }],
+          ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+          orderBy: [{ capturedAt: "asc" }, { id: "asc" }],
           select: {
             accountValue: true,
             capturedAt: true,
             fingerprint: true,
+            id: true,
             totalNotionalPosition: true,
           },
+          take: inputPageSize,
           where: {
             accountValue: { not: null },
             capturedAt: range,
             walletAddressId,
           },
         }),
-        this.database.perpPositionEvent.findMany({
-          orderBy: [{ occurredAt: "asc" }, { fingerprint: "asc" }],
+      (snapshot) => snapshot,
+    );
+    const latestPositionInWindow = await this.database.perpPositionEvent.findFirst({
+      orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+      select: { occurredAt: true },
+      where: { occurredAt: range, walletAddressId },
+    });
+    const boundaryPosition = latestPositionInWindow
+      ? null
+      : await this.database.perpPositionEvent.findFirst({
+          orderBy: [{ occurredAt: "desc" }, { id: "desc" }],
+          select: { occurredAt: true },
+          where: { occurredAt: { lt: calculationFrom }, walletAddressId },
+        });
+    const positionTimestamp = latestPositionInWindow?.occurredAt ?? boundaryPosition?.occurredAt;
+    const positions = positionTimestamp
+      ? await this.database.perpPositionEvent.findMany({
+          orderBy: [{ coin: "asc" }, { fingerprint: "asc" }],
           select: {
             coin: true,
             fingerprint: true,
             occurredAt: true,
             positionValue: true,
           },
-          where: { occurredAt: range, walletAddressId },
-        }),
-        this.database.syncCursor.findMany({
-          select: { status: true },
-          where: { walletAddressId },
-        }),
-        this.database.dataQualityIssue.findMany({
-          select: { issueType: true },
-          where: { status: "OPEN", walletAddressId },
-        }),
-      ]);
-
-    if (!wallet) {
-      throw new Error(`Wallet address ${walletAddressId} was not found.`);
+          take: maximumPositionSnapshotSize + 1,
+          where: { occurredAt: positionTimestamp, walletAddressId },
+        })
+      : [];
+    if (positions.length > maximumPositionSnapshotSize) {
+      throw new RangeError(
+        `Position snapshot exceeds the supported ${maximumPositionSnapshotSize} rows.`,
+      );
     }
+    const [cursors, issues] = await Promise.all([
+      this.database.syncCursor.findMany({
+        select: { status: true },
+        where: { walletAddressId },
+      }),
+      this.database.dataQualityIssue.findMany({
+        select: { issueType: true },
+        where: { status: "OPEN", walletAddressId },
+      }),
+    ]);
 
     return {
       accountSnapshots: snapshots
@@ -150,44 +251,9 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
           grossNotional: snapshot.totalNotionalPosition.toString(),
           occurredAt: snapshot.capturedAt.toISOString(),
         })),
-      cashFlows: cashFlows.map((cashFlow) => {
-        const classification = classifyStoredCashFlowInput({
-          amount: cashFlow.usdValue?.toString() ?? cashFlow.amount?.toString() ?? null,
-          rawPayload: cashFlow.rawPayload,
-          type: cashFlow.flowType,
-          walletAddress: wallet.address,
-        });
-        return {
-          amount: classification.amount,
-          asset: cashFlow.asset,
-          boundary: classification.boundary,
-          counterparty: cashFlow.counterparty,
-          externalId: cashFlow.externalFlowId,
-          // Ledger fees are intentionally not included in Performance cash flow math because
-          // authoritative Fill fees already feed trade PnL and counting both would double charge.
-          fee: cashFlow.fee?.toString() ?? null,
-          occurredAt: cashFlow.occurredAt.toISOString(),
-          rawPayload: cashFlow.rawPayload,
-          type: cashFlow.flowType,
-        };
-      }),
-      fills: fills.map((fill) => ({
-        closedPnl: fill.closedPnl.toString(),
-        coin: fill.coin,
-        externalId: fill.externalTradeId,
-        fee: fill.fee.toString(),
-        occurredAt: fill.occurredAt.toISOString(),
-        price: fill.price.toString(),
-        side: fill.side,
-        size: fill.size.toString(),
-        startPosition: fill.startPosition.toString(),
-      })),
-      funding: funding.map((payment) => ({
-        amount: payment.amount.toString(),
-        coin: payment.coin,
-        externalId: payment.externalPaymentId,
-        occurredAt: payment.occurredAt.toISOString(),
-      })),
+      cashFlows,
+      fills,
+      funding,
       navSnapshots: snapshots
         .filter(
           (
@@ -322,13 +388,21 @@ export class PerformanceRepository implements PerformanceRepositoryPort {
         });
       }
       if (result.cycles.length > 0) {
-        await transaction.positionCycle.createMany({
-          data: result.cycles.map((cycle) => ({
-            ...cycle,
-            calculationRunId: run.id,
-            walletAddressId: run.walletAddressId,
-          })),
-        });
+        for (let start = 0; start < result.cycles.length; start += resultWriteBatchSize) {
+          const data = [];
+          const end = Math.min(start + resultWriteBatchSize, result.cycles.length);
+          for (let index = start; index < end; index += 1) {
+            const cycle = result.cycles[index];
+            if (cycle) {
+              data.push({
+                ...cycle,
+                calculationRunId: run.id,
+                walletAddressId: run.walletAddressId,
+              });
+            }
+          }
+          await transaction.positionCycle.createMany({ data });
+        }
       }
       if (result.metrics.length > 0) {
         await transaction.addressPerformanceMetric.createMany({

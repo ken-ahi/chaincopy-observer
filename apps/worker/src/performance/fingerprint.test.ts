@@ -54,6 +54,25 @@ const base = {
 };
 
 describe("performance input fingerprint", () => {
+  it("preserves the performance-v3 canonical fingerprint contract", () => {
+    const legacyCanonical = {
+      accountSnapshots: [...baseInput.accountSnapshots].sort(compareExternalIds),
+      calculationFrom: base.calculationFrom,
+      calculationTo: base.calculationTo,
+      calculationVersion: base.calculationVersion,
+      cashFlows: [...baseInput.cashFlows].sort(compareExternalIds),
+      fills: [...baseInput.fills].sort(compareExternalIds),
+      funding: [...baseInput.funding].sort(compareExternalIds),
+      historyCompleteness: base.historyCompleteness,
+      navSnapshots: [...baseInput.navSnapshots].sort(compareExternalIds),
+      positionSnapshots: [...baseInput.positionSnapshots].sort(compareExternalIds),
+      walletAddress: baseInput.walletAddress.toLowerCase(),
+    };
+    const legacy = createHash("sha256").update(JSON.stringify(legacyCanonical)).digest("hex");
+
+    expect(createPerformanceInputFingerprint({ ...base, input: baseInput })).toBe(legacy);
+  });
+
   it("is independent of input array order", () => {
     const first = createPerformanceInputFingerprint({ ...base, input: baseInput });
     const second = createPerformanceInputFingerprint({
@@ -117,3 +136,11 @@ describe("performance input fingerprint", () => {
     expect(changed).not.toBe(original);
   });
 });
+
+function compareExternalIds(
+  left: { readonly externalId: string },
+  right: { readonly externalId: string },
+): number {
+  return left.externalId.localeCompare(right.externalId);
+}
+import { createHash } from "node:crypto";

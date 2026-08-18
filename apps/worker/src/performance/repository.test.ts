@@ -78,6 +78,116 @@ const successfulResult: SuccessfulPerformanceResult = {
 };
 
 describe("PerformanceRepository", () => {
+  it("pushes every time-series range into bounded repository queries", async () => {
+    const calculationFrom = new Date("2024-01-01T00:00:00.000Z");
+    const calculationTo = new Date("2024-01-31T23:59:59.999Z");
+    const normalizedTradeFindMany = vi.fn(async () => []);
+    const fundingFindMany = vi.fn(async () => []);
+    const cashFlowFindMany = vi.fn(async () => []);
+    const portfolioFindMany = vi.fn(async () => []);
+    const positionFindFirst = vi.fn(async () => ({
+      occurredAt: new Date("2024-01-31T23:00:00.000Z"),
+    }));
+    const positionFindMany = vi.fn(async () => []);
+    const repository = new PerformanceRepository({
+      cashFlow: { findMany: cashFlowFindMany },
+      dataQualityIssue: { findMany: vi.fn(async () => []) },
+      fundingPayment: { findMany: fundingFindMany },
+      normalizedTrade: { findMany: normalizedTradeFindMany },
+      perpPositionEvent: { findFirst: positionFindFirst, findMany: positionFindMany },
+      portfolioSnapshot: { findMany: portfolioFindMany },
+      syncCursor: { findMany: vi.fn(async () => []) },
+      walletAddress: {
+        findUnique: vi.fn(async () => ({
+          address: "0x1111111111111111111111111111111111111111",
+          id: "wallet-1",
+        })),
+      },
+    } as unknown as PrismaClient);
+
+    await repository.loadInput("wallet-1", calculationFrom, calculationTo);
+
+    const range = { gte: calculationFrom, lte: calculationTo };
+    expect(normalizedTradeFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 5_000,
+        where: { occurredAt: range, walletAddressId: "wallet-1" },
+      }),
+    );
+    expect(fundingFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 5_000,
+        where: { occurredAt: range, walletAddressId: "wallet-1" },
+      }),
+    );
+    expect(cashFlowFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 5_000,
+        where: { occurredAt: range, walletAddressId: "wallet-1" },
+      }),
+    );
+    expect(portfolioFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 5_000,
+        where: expect.objectContaining({ capturedAt: range, walletAddressId: "wallet-1" }),
+      }),
+    );
+    expect(positionFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { occurredAt: range, walletAddressId: "wallet-1" } }),
+    );
+    expect(positionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 1_001,
+        where: {
+          occurredAt: new Date("2024-01-31T23:00:00.000Z"),
+          walletAddressId: "wallet-1",
+        },
+      }),
+    );
+  });
+
+  it("loads only one bounded position boundary snapshot when the window has no events", async () => {
+    const calculationFrom = new Date("2024-01-01T00:00:00.000Z");
+    const calculationTo = new Date("2024-01-31T23:59:59.999Z");
+    const boundary = new Date("2023-12-31T23:59:00.000Z");
+    const positionFindFirst = vi
+      .fn()
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ occurredAt: boundary });
+    const positionFindMany = vi.fn(async () => []);
+    const emptyFindMany = vi.fn(async () => []);
+    const repository = new PerformanceRepository({
+      cashFlow: { findMany: emptyFindMany },
+      dataQualityIssue: { findMany: emptyFindMany },
+      fundingPayment: { findMany: emptyFindMany },
+      normalizedTrade: { findMany: emptyFindMany },
+      perpPositionEvent: { findFirst: positionFindFirst, findMany: positionFindMany },
+      portfolioSnapshot: { findMany: emptyFindMany },
+      syncCursor: { findMany: emptyFindMany },
+      walletAddress: {
+        findUnique: vi.fn(async () => ({
+          address: "0x1111111111111111111111111111111111111111",
+          id: "wallet-1",
+        })),
+      },
+    } as unknown as PrismaClient);
+
+    await repository.loadInput("wallet-1", calculationFrom, calculationTo);
+
+    expect(positionFindFirst).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: { occurredAt: { lt: calculationFrom }, walletAddressId: "wallet-1" },
+      }),
+    );
+    expect(positionFindMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        take: 1_001,
+        where: { occurredAt: boundary, walletAddressId: "wallet-1" },
+      }),
+    );
+  });
+
   it("creates or resumes a PENDING run by its stable deduplication key", async () => {
     const upsert = vi.fn(async () => ({ ...run, status: "PENDING" as const }));
     const repository = new PerformanceRepository({

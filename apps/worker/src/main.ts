@@ -195,7 +195,7 @@ const discoveryProcessor = new HyperliquidDiscoveryJobProcessor(
   logger,
 );
 const performanceRepository = new PerformanceRepository(prisma);
-const performanceService = new PerformanceCalculationService(performanceRepository);
+const performanceService = new PerformanceCalculationService(performanceRepository, logger);
 const performanceProcessor = new PerformanceJobProcessor(performanceService, logger);
 
 const systemWorker = new Worker<SampleHealthJobData>(

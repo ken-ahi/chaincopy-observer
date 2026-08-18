@@ -205,6 +205,33 @@ function createJob(input: PerformanceCalculationInput): PerformanceJobData {
 }
 
 describe("PerformanceCalculationService", () => {
+  it("logs bounded input counts and each calculation lane before execution", async () => {
+    const input = createInput(fixtureAddresses[0]);
+    const repository = new FakePerformanceRepository(input);
+    const info = vi.fn();
+
+    await new PerformanceCalculationService(repository, { info } as never).process(
+      createJob(input),
+    );
+
+    expect(info).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event: "address_performance_input_loaded",
+        fills: input.fills.length,
+        portfolioSnapshots: input.navSnapshots.length,
+        positionEvents: input.positionSnapshots.length,
+        walletAddressId: input.walletAddressId,
+      }),
+      "Address performance input loaded",
+    );
+    expect(
+      info.mock.calls
+        .map(([context]) => context as { event?: string; lane?: string })
+        .filter((context) => context.event === "address_performance_lane_started")
+        .map((context) => context.lane),
+    ).toEqual(["trade", "return", "exposure"]);
+  });
+
   it("calculates metric periods without argument spreading for very large histories", () => {
     const timestamps = Array.from({ length: 200_000 }, (_, index) =>
       new Date(Date.UTC(2024, 0, 1) + index * 1_000).toISOString(),

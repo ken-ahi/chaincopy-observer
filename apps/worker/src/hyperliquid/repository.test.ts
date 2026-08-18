@@ -9,6 +9,37 @@ interface CursorUpsertInput {
 }
 
 describe("HyperliquidRepository cursors", () => {
+  it("uses a batched transaction instead of a long interactive position transaction", async () => {
+    const transaction = vi.fn(async (operations: readonly Promise<unknown>[]) =>
+      Promise.all(operations),
+    );
+    const database = {
+      $transaction: transaction,
+      dataSource: { upsert: vi.fn(async () => ({ id: "source-1" })) },
+      perpPosition: {
+        deleteMany: vi.fn(async () => ({ count: 0 })),
+        findFirst: vi.fn(async () => null),
+        upsert: vi.fn(async () => undefined),
+      },
+      perpPositionEvent: { createMany: vi.fn(async () => ({ count: 0 })) },
+    } as unknown as PrismaClient;
+    const repository = new HyperliquidRepository(
+      database,
+      "hyperliquid-mainnet",
+      "Hyperliquid Mainnet",
+    );
+
+    await repository.savePositions(
+      "wallet-1",
+      "0x1111111111111111111111111111111111111111",
+      { assetPositions: [] } as unknown as HyperliquidClearinghouseState,
+      new Date("2026-07-25T12:05:00.000Z"),
+    );
+
+    expect(transaction).toHaveBeenCalledWith(expect.any(Array));
+    expect(typeof transaction.mock.calls[0]?.[0]).not.toBe("function");
+  });
+
   it("preserves the durable cursor when a successful HTTP page is empty", async () => {
     const syncCursorUpsert = vi.fn(async (_input: unknown) => undefined);
     const database = {

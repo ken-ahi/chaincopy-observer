@@ -352,16 +352,16 @@ export class HyperliquidRepository {
       });
       return;
     }
-    await this.database.$transaction(async (transaction) => {
-      const activeCoins = positions.map((position) => position.coin);
-      await transaction.perpPosition.deleteMany({
+    const activeCoins = positions.map((position) => position.coin);
+    await this.database.$transaction([
+      this.database.perpPosition.deleteMany({
         where: {
           walletAddressId,
           ...(activeCoins.length > 0 ? { coin: { notIn: activeCoins } } : {}),
         },
-      });
-      for (const position of positions) {
-        await transaction.perpPosition.upsert({
+      }),
+      ...positions.map((position) =>
+        this.database.perpPosition.upsert({
           create: {
             coin: position.coin,
             entryPrice: position.entryPrice,
@@ -399,9 +399,9 @@ export class HyperliquidRepository {
               walletAddressId,
             },
           },
-        });
-      }
-      await transaction.perpPositionEvent.createMany({
+        }),
+      ),
+      this.database.perpPositionEvent.createMany({
         data: positions.map((position) => ({
           coin: position.coin,
           entryPrice: position.entryPrice,
@@ -415,8 +415,8 @@ export class HyperliquidRepository {
           walletAddressId,
         })),
         skipDuplicates: true,
-      });
-    });
+      }),
+    ]);
   }
 
   public async saveClearinghouseSnapshot(

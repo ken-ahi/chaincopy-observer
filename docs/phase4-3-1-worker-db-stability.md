@@ -35,6 +35,14 @@ pnpm queue:cleanup --dry-run --queue hyperliquid-candidate-enrichment --before 2
 
 Shutdown は BullMQ の強制終了を行わず、active Job の完了を待つ。各 worker の待機開始と全 shutdown step の `durationMs` を JSON log に出すため、数十秒の停止時間が in-flight Job 由来かを component 単位で判別できる。
 
+### Performance input memory safety
+
+performance-v3 の入力は `calculationFrom` / `calculationTo` を各DB queryへ適用し、5,000行単位で取得・変換する。Position exposure は期間内の最新snapshotだけを取得し、期間内に存在しない場合のみ開始直前のboundary snapshotを使う。snapshotはHyperliquidのmarket上限に合わせて1,000行を上限とし、超過時は黙って切り捨てず失敗させる。Portfolio snapshotはDaily NAVとleverage契約を維持するため期間内全点を使うが、一括 `findMany` は行わない。
+
+入力fingerprintは従来と同じcanonical JSON hashをincrementalに更新し、巨大なJSON文字列をheap上に生成しない。Position Cycleの保存も1,000行単位で行う。`address_performance_input_loaded` と `address_performance_lane_started` のJSON logで、walletごとの入力件数とlane開始を確認できる。
+
+`SyncLockUnavailableError` は同じ古いBullMQ Jobを即時retryしない。schedulerの次回tickによる新しい同期機会は維持する。Position current-state保存は5秒制限のinteractive transactionではなく、Prismaのbatched transactionを使用する。
+
 ## Retention
 
 - `sync_jobs`: `SUCCEEDED` は 7 日、`FAILED` は 30 日。`QUEUED` / `RUNNING` は削除しない。
