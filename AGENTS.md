@@ -50,6 +50,27 @@ pnpm build
 
 失敗した場合は、原因を修正してから完了報告する。
 
+## AI開発ワークフロー
+
+ChatGPT / Codex / GitHub Issue / Pull Request を使う作業では `docs/ai-development-workflow.md` を作業手順の正とする。
+
+GitHub Issue が作業契約として与えられた場合は、実装開始前に Issue の `Context / SSoT`、`In scope`、`Out of scope`、`Acceptance criteria`、`Safety / prohibited operations` を確認する。
+
+Issue と既存の正式仕様が矛盾する場合は、既存仕様を推測で変更せず作業を BLOCKED として報告する。
+
+Owner の明示承認なしに以下を実行してはならない。
+
+* `main` への merge または直接 push
+* 実DBの DELETE / UPDATE / TRUNCATE / `VACUUM FULL`
+* 大規模 CREATE INDEX / REINDEX
+* migration の実DB適用
+* Redis queue / key の削除
+* Docker volume の削除
+* production secret の変更
+* 実注文、署名、資金移動に関する実装
+
+feature branch 上での実装、テスト、commit、push、PR作成、CI failure修正は Issue の範囲内で実行してよい。
+
 ## 作業開始時
 
 作業を始める前に、以下を簡潔に提示する。
@@ -70,6 +91,13 @@ pnpm build
 * テスト結果
 * 残課題
 * 次に実施すべきフェーズ
+
+AI開発Issueの場合は追加で以下を報告する。
+
+* 設計判断
+* 未実施検証と理由
+* destructive operation の有無
+* commit / push / PR の状態
 
 ## Git運用
 
