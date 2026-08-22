@@ -16,6 +16,7 @@ import {
 
 export interface NormalizedFill {
   readonly externalTradeId: string;
+  readonly sourceTradeId: string;
   readonly fingerprint: string;
   readonly coin: string;
   readonly side: "BUY" | "SELL";
@@ -101,6 +102,7 @@ export function mapFill(walletAddress: string, fill: HyperliquidFill): Normalize
   const externalTradeId = `${fill.time}:${fill.coin}:${fill.tid}`;
   return {
     externalTradeId,
+    sourceTradeId: fill.tid,
     fingerprint: createEventFingerprint("fill", walletAddress, {
       externalTradeId,
       hash: fill.hash,

@@ -16,21 +16,21 @@ assignees: []
 
 - `AGENTS.md`
 - `docs/SPEC.md`
-- 
+-
 
 ## In scope
 
-- [ ] 
+- [ ]
 
 ## Out of scope
 
-- 
+-
 
 ## Required design decisions
 
 <!-- 実装前に確定が必要な事項。確定済みなら決定内容を書く -->
 
-- 
+-
 
 ## Acceptance criteria
 
@@ -56,7 +56,7 @@ assignees: []
 
 追加の Phase 固有検証:
 
-- [ ] 
+- [ ]
 
 ## Safety / prohibited operations
 

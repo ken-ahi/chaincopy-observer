@@ -59,33 +59,33 @@ Phase 5.0は売買戦略を決めない。個々のwalletについて「position
 
 ### 3.3 field契約
 
-| field | 型候補 | NULL | 契約 |
-| --- | --- | --- | --- |
-| `id` | text/UUID | 不可 | 内部主キー。意味を持たせない |
-| `sourceId` | text | 不可 | Hyperliquid DataSourceへのFK |
-| `walletAddressId` | text | 不可 | `WalletAddress.id`へのFK |
-| `coin` | text | 不可 | source Fillの正規化済みcoin。空文字禁止 |
-| `eventType` | enum | 不可 | 4種類のposition event |
-| `direction` | enum | 不可 | Eventが作用するposition legのLONG/SHORT |
-| `occurredAt` | timestamp(3) UTC | 不可 | source Fillの取引時刻 |
-| `beforePosition` | numeric(38,18) | 不可 | このEvent leg直前のsigned position |
-| `afterPosition` | numeric(38,18) | 不可 | このEvent leg直後のsigned position |
-| `quantityDelta` | numeric(38,18) | 不可 | `afterPosition - beforePosition`。signed |
-| `priceUsd` | numeric(38,18) | 不可 | source Fillの約定価格 |
-| `notionalDeltaUsd` | numeric(38,18) | 不可 | `abs(quantityDelta) * priceUsd * contractMultiplier` |
-| `quoteAsset` | text | 不可 | USD相当と確認したquote/collateral asset |
-| `contractMultiplier` | numeric(38,18) | 不可 | 初期標準marketは`1` |
-| `marketDefinitionVersion` | text | 不可 | notional契約のmarket metadata version |
-| `sourceType` | enum | 不可 | 初期値`NORMALIZED_FILL` |
-| `sourceEventId` | text | 不可 | 正規化Fillの内部IDまたは不変な一意ID |
-| `sourceExternalId` | text | 不可 | Hyperliquid transport共通の正規化external ID |
-| `sourceTradeId` | text | 不可 | Hyperliquid `tid`のexact integer string。identity・trace用でありcausal sequenceではない |
-| `sourceFingerprint` | text | 不可 | source Fillの既存fingerprint |
-| `sourceOrdinal` | smallint | 不可 | 通常0、flipのCLOSE=0、OPEN=1 |
-| `behaviorFingerprint` | text | 不可 | 本仕様8章のSHA-256 |
-| `behaviorVersion` | text | 不可 | 初期値`behavior-v1` |
-| `createdByNormalizationRunId` | text | 不可 | 最初にEventを生成した正規化Run。generation provenanceでありidentityではない |
-| `createdAt` | timestamp(3) | 不可 | DB作成時刻。計算順序には使わない |
+| field                         | 型候補           | NULL | 契約                                                                                    |
+| ----------------------------- | ---------------- | ---- | --------------------------------------------------------------------------------------- |
+| `id`                          | text/UUID        | 不可 | 内部主キー。意味を持たせない                                                            |
+| `sourceId`                    | text             | 不可 | Hyperliquid DataSourceへのFK                                                            |
+| `walletAddressId`             | text             | 不可 | `WalletAddress.id`へのFK                                                                |
+| `coin`                        | text             | 不可 | source Fillの正規化済みcoin。空文字禁止                                                 |
+| `eventType`                   | enum             | 不可 | 4種類のposition event                                                                   |
+| `direction`                   | enum             | 不可 | Eventが作用するposition legのLONG/SHORT                                                 |
+| `occurredAt`                  | timestamp(3) UTC | 不可 | source Fillの取引時刻                                                                   |
+| `beforePosition`              | numeric(38,18)   | 不可 | このEvent leg直前のsigned position                                                      |
+| `afterPosition`               | numeric(38,18)   | 不可 | このEvent leg直後のsigned position                                                      |
+| `quantityDelta`               | numeric(38,18)   | 不可 | `afterPosition - beforePosition`。signed                                                |
+| `priceUsd`                    | numeric(38,18)   | 不可 | source Fillの約定価格                                                                   |
+| `notionalDeltaUsd`            | numeric(38,18)   | 不可 | `abs(quantityDelta) * priceUsd * contractMultiplier`                                    |
+| `quoteAsset`                  | text             | 不可 | USD相当と確認したquote/collateral asset                                                 |
+| `contractMultiplier`          | numeric(38,18)   | 不可 | 初期標準marketは`1`                                                                     |
+| `marketDefinitionVersion`     | text             | 不可 | notional契約のmarket metadata version                                                   |
+| `sourceType`                  | enum             | 不可 | 初期値`NORMALIZED_FILL`                                                                 |
+| `sourceEventId`               | text             | 不可 | 正規化Fillの内部IDまたは不変な一意ID                                                    |
+| `sourceExternalId`            | text             | 不可 | Hyperliquid transport共通の正規化external ID                                            |
+| `sourceTradeId`               | text             | 不可 | Hyperliquid `tid`のexact integer string。identity・trace用でありcausal sequenceではない |
+| `sourceFingerprint`           | text             | 不可 | source Fillの既存fingerprint                                                            |
+| `sourceOrdinal`               | smallint         | 不可 | 通常0、flipのCLOSE=0、OPEN=1                                                            |
+| `behaviorFingerprint`         | text             | 不可 | 本仕様8章のSHA-256                                                                      |
+| `behaviorVersion`             | text             | 不可 | 初期値`behavior-v1`                                                                     |
+| `createdByNormalizationRunId` | text             | 不可 | 最初にEventを生成した正規化Run。generation provenanceでありidentityではない             |
+| `createdAt`                   | timestamp(3)     | 不可 | DB作成時刻。計算順序には使わない                                                        |
 
 `SelectedWalletBehaviorEvent`本体に`selectionRunId`と`performanceRunId`を置かない。市場行動identity、正規化実行、Selection membershipを分離し、Selection情報は`BehaviorSelectionScope`で保持する。同じsource Fill由来EventをSelection Runごとに複製しない。
 
@@ -107,18 +107,18 @@ sourceAfter  = sourceBefore + signedFillDelta
 
 ### 4.2 全遷移表
 
-| sourceBefore | sourceAfter | 条件 | 生成Event | direction | Event before -> after |
-| --- | --- | --- | --- | --- | --- |
-| FLAT | LONG | `0 < after` | `POSITION_OPEN` | LONG | `0 -> after` |
-| LONG | LONG | `after > before > 0` | `POSITION_INCREASE` | LONG | `before -> after` |
-| LONG | LONG | `0 < after < before` | `POSITION_REDUCE` | LONG | `before -> after` |
-| LONG | FLAT | `before > 0, after = 0` | `POSITION_CLOSE` | LONG | `before -> 0` |
-| FLAT | SHORT | `after < 0` | `POSITION_OPEN` | SHORT | `0 -> after` |
-| SHORT | SHORT | `after < before < 0` | `POSITION_INCREASE` | SHORT | `before -> after` |
-| SHORT | SHORT | `before < after < 0` | `POSITION_REDUCE` | SHORT | `before -> after` |
-| SHORT | FLAT | `before < 0, after = 0` | `POSITION_CLOSE` | SHORT | `before -> 0` |
-| LONG | SHORT | `before > 0, after < 0` | CLOSE + OPEN | LONG, SHORT | `before -> 0`, `0 -> after` |
-| SHORT | LONG | `before < 0, after > 0` | CLOSE + OPEN | SHORT, LONG | `before -> 0`, `0 -> after` |
+| sourceBefore | sourceAfter | 条件                    | 生成Event           | direction   | Event before -> after       |
+| ------------ | ----------- | ----------------------- | ------------------- | ----------- | --------------------------- |
+| FLAT         | LONG        | `0 < after`             | `POSITION_OPEN`     | LONG        | `0 -> after`                |
+| LONG         | LONG        | `after > before > 0`    | `POSITION_INCREASE` | LONG        | `before -> after`           |
+| LONG         | LONG        | `0 < after < before`    | `POSITION_REDUCE`   | LONG        | `before -> after`           |
+| LONG         | FLAT        | `before > 0, after = 0` | `POSITION_CLOSE`    | LONG        | `before -> 0`               |
+| FLAT         | SHORT       | `after < 0`             | `POSITION_OPEN`     | SHORT       | `0 -> after`                |
+| SHORT        | SHORT       | `after < before < 0`    | `POSITION_INCREASE` | SHORT       | `before -> after`           |
+| SHORT        | SHORT       | `before < after < 0`    | `POSITION_REDUCE`   | SHORT       | `before -> after`           |
+| SHORT        | FLAT        | `before < 0, after = 0` | `POSITION_CLOSE`    | SHORT       | `before -> 0`               |
+| LONG         | SHORT       | `before > 0, after < 0` | CLOSE + OPEN        | LONG, SHORT | `before -> 0`, `0 -> after` |
+| SHORT        | LONG        | `before < 0, after > 0` | CLOSE + OPEN        | SHORT, LONG | `before -> 0`, `0 -> after` |
 
 `sourceBefore = sourceAfter`となるzero-size Fillは無効であり、Eventを生成せずData Quality Issueとする。
 
@@ -344,20 +344,20 @@ late Fillを検知した場合、そのFillを含むtimestamp group以降を再�
 
 ## 10. Fail ClosedとData Quality
 
-| 条件 | code | 処理 |
-| --- | --- | --- |
-| boundary position不明 | `MISSING_BOUNDARY` | trusted FLAT boundaryまでskipし、該当prefixはEvent化しない |
-| open gap / API打切り | `HISTORY_GAP` | wallet・coinのgap以降または不完全範囲を停止 |
-| API打切り | `HISTORY_TRUNCATED` | 完全boundary外を停止 |
-| timestamp不正 | `INVALID_TIMESTAMP` | sourceをpoison扱いにし停止 |
-| Decimal不正・精度超過 | `INVALID_DECIMAL` | sourceをpoison扱いにし停止 |
-| 完全chainが複数 | `ORDERING_AMBIGUOUS` | timestamp group以降を停止 |
-| timestamp group取得不完全 | `INCOMPLETE_TIMESTAMP_GROUP` | groupを処理せずcursorを手前に保持 |
-| source identity衝突 | `SOURCE_INCONSISTENT` | 自動上書きせず停止 |
-| chainが0件、position不連続、zero遷移 | `IMPOSSIBLE_TRANSITION` | group以降を停止 |
-| quote provenance不足 | `UNSUPPORTED_QUOTE` | Eventを作らず停止 |
-| Fill価格欠損・非正 | `MISSING_OR_INVALID_FILL_PRICE` | Eventを作らず停止 |
-| 同一timestamp pagination停止 | `PAGINATION_STALLED` | cursorを進めず停止 |
+| 条件                                 | code                            | 処理                                                       |
+| ------------------------------------ | ------------------------------- | ---------------------------------------------------------- |
+| boundary position不明                | `MISSING_BOUNDARY`              | trusted FLAT boundaryまでskipし、該当prefixはEvent化しない |
+| open gap / API打切り                 | `HISTORY_GAP`                   | wallet・coinのgap以降または不完全範囲を停止                |
+| API打切り                            | `HISTORY_TRUNCATED`             | 完全boundary外を停止                                       |
+| timestamp不正                        | `INVALID_TIMESTAMP`             | sourceをpoison扱いにし停止                                 |
+| Decimal不正・精度超過                | `INVALID_DECIMAL`               | sourceをpoison扱いにし停止                                 |
+| 完全chainが複数                      | `ORDERING_AMBIGUOUS`            | timestamp group以降を停止                                  |
+| timestamp group取得不完全            | `INCOMPLETE_TIMESTAMP_GROUP`    | groupを処理せずcursorを手前に保持                          |
+| source identity衝突                  | `SOURCE_INCONSISTENT`           | 自動上書きせず停止                                         |
+| chainが0件、position不連続、zero遷移 | `IMPOSSIBLE_TRANSITION`         | group以降を停止                                            |
+| quote provenance不足                 | `UNSUPPORTED_QUOTE`             | Eventを作らず停止                                          |
+| Fill価格欠損・非正                   | `MISSING_OR_INVALID_FILL_PRICE` | Eventを作らず停止                                          |
+| 同一timestamp pagination停止         | `PAGINATION_STALLED`            | cursorを進めず停止                                         |
 
 Behavior専用の`BehaviorDataQualityIssue`を正式採用する。最低限の正式reasonは`MISSING_BOUNDARY`、`ORDERING_AMBIGUOUS`、`INVALID_DECIMAL`、`SOURCE_INCONSISTENT`、`IMPOSSIBLE_TRANSITION`、`HISTORY_GAP`、`UNSUPPORTED_QUOTE`、`INCOMPLETE_TIMESTAMP_GROUP`とする。補助reasonを追加しても、この8 reasonの意味を変更しない。
 
@@ -448,9 +448,9 @@ Behavior EventはPhase 5.1以降の分析正本かつ再現性根拠なので初
 - backfill job名: `backfill-selected-wallet-behavior`
 - incremental job名: `normalize-selected-wallet-behavior`
 - repair job名: `rebuild-wallet-coin-behavior-segment`
-- concurrency: 初期値`1`
-- DB読込batch: 最大5,000 Fill
-- DB書込batch: 最大1,000 Event
+- `concurrency = 1`
+- `read batch = 5,000` Fill
+- `write batch = 1,000` Event
 - priority: 通常同期、Gap Recovery、手動同期、候補Enrichmentより低い`20`を推奨。既存Performanceの`15`よりも低くする
 - attempts: 最大3回、指数backoff。poison eventは自動retryしない
 - backlog limit: 専用設定、初期値500。上限時は新規incremental投入を止める
@@ -490,32 +490,32 @@ transaction commit前にcursorを進めない。複数wallet・coinを1 transact
 
 共通条件: wallet=`wallet-1`、coin=`BTC`、price=`"100"`、`behaviorVersion="behavior-v1"`。各caseは独立し、sideとsizeからsigned deltaを作る。表のposition、delta、notionalはcanonical Decimal文字列である。
 
-| # | case / input | 期待Behavior Event |
-| --: | --- | --- |
-| 1 | LONG open: before `"0"`, BUY size `"0.5"` | OPEN LONG, `0 -> 0.5`, delta `"0.5"`, notional `"50"`, ordinal 0 |
-| 2 | LONG increase: before `"0.5"`, BUY `"0.2"` | INCREASE LONG, `0.5 -> 0.7`, delta `"0.2"`, notional `"20"` |
-| 3 | LONG partial reduce: before `"0.7"`, SELL `"0.3"` | REDUCE LONG, `0.7 -> 0.4`, delta `"-0.3"`, notional `"30"` |
-| 4 | LONG close: before `"0.4"`, SELL `"0.4"` | CLOSE LONG, `0.4 -> 0`, delta `"-0.4"`, notional `"40"` |
-| 5 | SHORT open: before `"0"`, SELL `"0.5"` | OPEN SHORT, `0 -> -0.5`, delta `"-0.5"`, notional `"50"` |
-| 6 | SHORT increase: before `"-0.5"`, SELL `"0.2"` | INCREASE SHORT, `-0.5 -> -0.7`, delta `"-0.2"`, notional `"20"` |
-| 7 | SHORT reduce: before `"-0.7"`, BUY `"0.3"` | REDUCE SHORT, `-0.7 -> -0.4`, delta `"0.3"`, notional `"30"` |
-| 8 | SHORT close: before `"-0.4"`, BUY `"0.4"` | CLOSE SHORT, `-0.4 -> 0`, delta `"0.4"`, notional `"40"` |
-| 9 | LONG -> SHORT: before `"0.5"`, SELL `"0.8"` | ordinal 0 CLOSE LONG `0.5 -> 0`, delta `"-0.5"`, notional `"50"`; ordinal 1 OPEN SHORT `0 -> -0.3`, delta `"-0.3"`, notional `"30"` |
-| 10 | SHORT -> LONG: before `"-0.5"`, BUY `"0.8"` | ordinal 0 CLOSE SHORT `-0.5 -> 0`, delta `"0.5"`, notional `"50"`; ordinal 1 OPEN LONG `0 -> 0.3`, delta `"0.3"`, notional `"30"` |
-| 11 | duplicate: 同一external ID、fingerprintのcase 1を2回入力 | Eventは1件。2回目はunique keyでno-op、Issueなし |
-| 12 | same timestamp unique chain: Fill A before `0.2` BUY `0.3`、Fill B before `0` BUY `0.2`をA,Bの到着順で入力 | ID/tid/到着順でなくtransition接続によりB,Aの一意chain。OPEN LONG `0 -> 0.2`、INCREASE LONG `0.2 -> 0.5` |
-| 13 | same timestamp ambiguous chain: identityの異なるA/Bがともに`0 -> 0.2`、C/Dがともに`0.2 -> 0` | A-C-B-D、B-C-A-D等が成立。`ORDERING_AMBIGUOUS`、group Eventなし、cursor不進行 |
-| 14 | same timestamp > batch: 5,001 Fillが各`i * 0.001 -> (i+1) * 0.001`の一意chain | read 5,000で分割せず5,001件groupを追加取得し、1 chainとして処理。writeはgroup単位transaction |
-| 15 | tid numeric order != causal: tid `"100"`が`0 -> 0.2`、tid `"2"`が`0.2 -> 0.5` | tid 2を先にせずtid 100、2のtransition chain。sourceTradeIdはEventへ保持 |
-| 16 | missing boundary: 履歴最初のFillがbefore `"1"`, SELL `"0.2"` | `MISSING_BOUNDARY`。このreduce Eventを作らず、次のtrusted FLAT boundaryまでskip |
-| 17 | gap detected: before `"0"`のOPEN後、coverageにopen gap、後続before `"0.5"` SELL `"0.5"` | gap前のOPENだけ保存可。後続CLOSEは作らず`HISTORY_GAP`、cursorはgap前まで |
-| 18 | late Fill rebuild: 保存済み`0 -> 0.5 -> 0`の間へ同時刻groupを完成させるlate Fillが到着 | 直近trusted FLAT boundaryからbounded rebuildし、影響Eventを置換。無関係な前segmentは不変 |
-| 19 | no Selection Run | current Selection Runなしでbackfill起動 | `NOOP`、scope/Event/job追加なし。watched wallet fallbackなし |
-| 20 | Selection Run変更 | Run Aで生成済みEventのwalletがRun Bでもselected | Event行・fingerprintは増えず、Run Bの`BehaviorSelectionScope`だけ追加 |
-| 21 | unsupported quote | custom marketでquote/collateral provenanceなし | `UNSUPPORTED_QUOTE`、Eventなし、Issue OPEN |
-| 22 | source Fill lifecycle | Event参照中のNormalizedTradeまたはWallet削除を試行 | Restrict FKで拒否され、Eventとsource snapshotが残る |
-| 23 | incomplete timestamp group | page末尾groupの追加取得が失敗 | `INCOMPLETE_TIMESTAMP_GROUP`、group Eventなし、cursorはgroup手前 |
-| 24 | source identity conflict | 同じsource IDでfingerprintまたはsnapshot値が異なる | `SOURCE_INCONSISTENT`、既存Eventを上書きしない |
+|   # | case / input                                                                                               | 期待Behavior Event                                                                                                                  |
+| --: | ---------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | LONG open: before `"0"`, BUY size `"0.5"`                                                                  | OPEN LONG, `0 -> 0.5`, delta `"0.5"`, notional `"50"`, ordinal 0                                                                    |
+|   2 | LONG increase: before `"0.5"`, BUY `"0.2"`                                                                 | INCREASE LONG, `0.5 -> 0.7`, delta `"0.2"`, notional `"20"`                                                                         |
+|   3 | LONG partial reduce: before `"0.7"`, SELL `"0.3"`                                                          | REDUCE LONG, `0.7 -> 0.4`, delta `"-0.3"`, notional `"30"`                                                                          |
+|   4 | LONG close: before `"0.4"`, SELL `"0.4"`                                                                   | CLOSE LONG, `0.4 -> 0`, delta `"-0.4"`, notional `"40"`                                                                             |
+|   5 | SHORT open: before `"0"`, SELL `"0.5"`                                                                     | OPEN SHORT, `0 -> -0.5`, delta `"-0.5"`, notional `"50"`                                                                            |
+|   6 | SHORT increase: before `"-0.5"`, SELL `"0.2"`                                                              | INCREASE SHORT, `-0.5 -> -0.7`, delta `"-0.2"`, notional `"20"`                                                                     |
+|   7 | SHORT reduce: before `"-0.7"`, BUY `"0.3"`                                                                 | REDUCE SHORT, `-0.7 -> -0.4`, delta `"0.3"`, notional `"30"`                                                                        |
+|   8 | SHORT close: before `"-0.4"`, BUY `"0.4"`                                                                  | CLOSE SHORT, `-0.4 -> 0`, delta `"0.4"`, notional `"40"`                                                                            |
+|   9 | LONG -> SHORT: before `"0.5"`, SELL `"0.8"`                                                                | ordinal 0 CLOSE LONG `0.5 -> 0`, delta `"-0.5"`, notional `"50"`; ordinal 1 OPEN SHORT `0 -> -0.3`, delta `"-0.3"`, notional `"30"` |
+|  10 | SHORT -> LONG: before `"-0.5"`, BUY `"0.8"`                                                                | ordinal 0 CLOSE SHORT `-0.5 -> 0`, delta `"0.5"`, notional `"50"`; ordinal 1 OPEN LONG `0 -> 0.3`, delta `"0.3"`, notional `"30"`   |
+|  11 | duplicate: 同一external ID、fingerprintのcase 1を2回入力                                                   | Eventは1件。2回目はunique keyでno-op、Issueなし                                                                                     |
+|  12 | same timestamp unique chain: Fill A before `0.2` BUY `0.3`、Fill B before `0` BUY `0.2`をA,Bの到着順で入力 | ID/tid/到着順でなくtransition接続によりB,Aの一意chain。OPEN LONG `0 -> 0.2`、INCREASE LONG `0.2 -> 0.5`                             |
+|  13 | same timestamp ambiguous chain: identityの異なるA/Bがともに`0 -> 0.2`、C/Dがともに`0.2 -> 0`               | A-C-B-D、B-C-A-D等が成立。`ORDERING_AMBIGUOUS`、group Eventなし、cursor不進行                                                       |
+|  14 | same timestamp > batch: 5,001 Fillが各`i * 0.001 -> (i+1) * 0.001`の一意chain                              | read 5,000で分割せず5,001件groupを追加取得し、1 chainとして処理。writeはgroup単位transaction                                        |
+|  15 | tid numeric order != causal: tid `"100"`が`0 -> 0.2`、tid `"2"`が`0.2 -> 0.5`                              | tid 2を先にせずtid 100、2のtransition chain。sourceTradeIdはEventへ保持                                                             |
+|  16 | missing boundary: 履歴最初のFillがbefore `"1"`, SELL `"0.2"`                                               | `MISSING_BOUNDARY`。このreduce Eventを作らず、次のtrusted FLAT boundaryまでskip                                                     |
+|  17 | gap detected: before `"0"`のOPEN後、coverageにopen gap、後続before `"0.5"` SELL `"0.5"`                    | gap前のOPENだけ保存可。後続CLOSEは作らず`HISTORY_GAP`、cursorはgap前まで                                                            |
+|  18 | late Fill rebuild: 保存済み`0 -> 0.5 -> 0`の間へ同時刻groupを完成させるlate Fillが到着                     | 直近trusted FLAT boundaryからbounded rebuildし、影響Eventを置換。無関係な前segmentは不変                                            |
+|  19 | no Selection Run                                                                                           | current Selection Runなしでbackfill起動                                                                                             | `NOOP`、scope/Event/job追加なし。watched wallet fallbackなし          |
+|  20 | Selection Run変更                                                                                          | Run Aで生成済みEventのwalletがRun Bでもselected                                                                                     | Event行・fingerprintは増えず、Run Bの`BehaviorSelectionScope`だけ追加 |
+|  21 | unsupported quote                                                                                          | custom marketでquote/collateral provenanceなし                                                                                      | `UNSUPPORTED_QUOTE`、Eventなし、Issue OPEN                            |
+|  22 | source Fill lifecycle                                                                                      | Event参照中のNormalizedTradeまたはWallet削除を試行                                                                                  | Restrict FKで拒否され、Eventとsource snapshotが残る                   |
+|  23 | incomplete timestamp group                                                                                 | page末尾groupの追加取得が失敗                                                                                                       | `INCOMPLETE_TIMESTAMP_GROUP`、group Eventなし、cursorはgroup手前      |
+|  24 | source identity conflict                                                                                   | 同じsource IDでfingerprintまたはsnapshot値が異なる                                                                                  | `SOURCE_INCONSISTENT`、既存Eventを上書きしない                        |
 
 追加必須testとして、`"+01.2300" -> "1.23"`、`"-0.000" -> "0"`、38桁超過、非正price、flip retry、group-safe resume、continuation重複、batch途中rollback、複数Selection Scopeから同一Eventを参照する再計算も実装する。
 
@@ -582,11 +582,13 @@ transaction commit前にcursorを進めない。複数wallet・coinを1 transact
 8. 50,000 Fill / 30日のlate Fill探索上限でtrusted boundaryを取得できない実データ比率。
 9. migrationに日本語table/column commentを付け、新table indexだけが通常migrationに含まれること。
 
-## 19. BLOCKEDからREADYへの移行条件
+## 19. 実装READYと運用backfill開始条件
 
-本仕様改訂によりordering、provenance分離、unsupported quoteのfail-closed方針、Behavior専用Data Quality、FK基本方針、index/Worker方針は設計上確定した。ただし、文書確定だけで実DB backfillを開始しない。
+本仕様改訂によりordering、provenance分離、unsupported quoteのfail-closed方針、Behavior専用Data Quality、FK基本方針、index/Worker方針は設計上確定した。実装READYと実DB backfillの運用開始は別の判定とする。
 
-Phase 5.0をREADYと判定する最低条件は次のすべてである。
+### 19.1 実装READY条件
+
+Phase 5.0のschema / migration / pure normalization / Worker実装Issueへ進む最低条件は次のすべてである。
 
 1. 本仕様の一意transition chain規則がreview承認されている。
 2. Event identity / Normalization Run / Selection Scopeの分離schemaがreview承認されている。
@@ -594,8 +596,20 @@ Phase 5.0をREADYと判定する最低条件は次のすべてである。
 4. Event、source Fill、Wallet、Normalization Run、Selection Run、Performance RunのFK lifecycleがmigration reviewで確定している。
 5. `BehaviorDataQualityIssue`のreason、scope、再評価lifecycleが確定している。
 6. 既存Fill indexの`CREATE INDEX CONCURRENTLY` maintenance手順と新table indexが確定している。
-7. current Selection Runが実DBに存在し、`listEffectiveSelectedWallets()`を実データで検証できる。
+7. current Selection Runなしを正常no-opとし、watched walletへfallbackせず、Phase 5実装がSelection Runを作らない契約が固定されている。
 8. 14章の追加test vectorをpure設計testへ落とせることがreviewされている。
-9. Phase 5.0仕様レビューが完了し、未解決のBLOCKERが0件である。
+9. Phase 5.0仕様レビューが完了し、未解決の設計BLOCKERが0件である。
 
-条件未達時は`BLOCKED`を維持する。特にcurrent Selection Runがない場合、実装済みWorkerは正常no-opできるが、Phase 5.0全体をREADYまたは完了とは判定しない。
+current Selection Runが0件であることは実装BLOCKERではない。no-op、scope/Event/job非生成をtestするための正式な入力状態である。
+
+### 19.2 実DB backfill運用開始条件
+
+実装・migration review・CI完了後も、実DB backfillは次を満たすまで開始しない。
+
+1. Phase 4.3の正式evaluate手順によりcurrent Selection Runが作成されている。
+2. `listEffectiveSelectedWallets()`を実データで検証している。
+3. 既存Fill複合indexのCONCURRENTLY作成と`EXPLAIN`確認がOwner承認下で完了している。
+4. market metadata、quote provenance、Data Quality、Worker負荷のoperational validationが完了している。
+5. migrationの実DB適用とbackfill起動についてOwnerが明示承認している。
+
+実装READY条件未達は`BLOCKED`、実装READY後に運用条件だけが未達の場合は「implementation READY / operational backfill BLOCKED」と報告する。

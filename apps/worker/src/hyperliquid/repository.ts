@@ -29,6 +29,7 @@ export interface CursorPosition {
 
 export class HyperliquidRepository {
   private sourceIdPromise: Promise<string> | null = null;
+  private sourceTradeIdColumnPromise: Promise<boolean> | null = null;
 
   public constructor(
     private readonly database: PrismaClient,
@@ -249,6 +250,7 @@ export class HyperliquidRepository {
     fills: ReadonlyArray<HyperliquidFill>,
   ): Promise<number> {
     const sourceId = await this.sourceId();
+    const storesSourceTradeId = await this.hasSourceTradeIdColumn();
     const normalized = fills.map((fill) => mapFill(walletAddress, fill));
     const result = await this.database.normalizedTrade.createMany({
       data: normalized.map((fill) => ({
@@ -266,6 +268,7 @@ export class HyperliquidRepository {
         side: fill.side,
         size: fill.size,
         sourceId,
+        ...(storesSourceTradeId ? { sourceTradeId: fill.sourceTradeId } : {}),
         startPosition: fill.startPosition,
         transactionHash: fill.transactionHash,
         walletAddressId,
@@ -273,6 +276,19 @@ export class HyperliquidRepository {
       skipDuplicates: true,
     });
     return result.count;
+  }
+
+  private hasSourceTradeIdColumn(): Promise<boolean> {
+    this.sourceTradeIdColumnPromise ??= this.database.$queryRaw<Array<{ exists: boolean }>>`
+        SELECT EXISTS (
+          SELECT 1
+          FROM information_schema.columns
+          WHERE table_schema = current_schema()
+            AND table_name = 'normalized_trades'
+            AND column_name = 'source_trade_id'
+        ) AS "exists"
+      `.then((rows) => rows[0]?.exists === true);
+    return this.sourceTradeIdColumnPromise;
   }
 
   public async saveFunding(

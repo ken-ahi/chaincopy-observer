@@ -1,5 +1,13 @@
 # Phase 1–3 運用設計
 
+## Phase 5.0 Behavior worker（2026-08-23）
+
+専用 queue `behavior-normalization` は concurrency 1、read batch 5,000、write batch 1,000、低 priority、backlog 上限 1,000 で開始する。同一 timestamp group は read/write batch 境界で分割せず、20,000件を超える異常群は `INCOMPLETE_TIMESTAMP_GROUP` として cursor を進めない。各 page は continuation job へ引き継ぎ、wallet 全履歴を JS heap に保持しない。
+
+Worker 起動時の control job は current Selection Run がない場合に正常 no-op となり、watched wallet fallback や Selection Run 作成を行わない。実 migration、concurrent index、初回 backfill の本番実行は Owner 承認後に行う。
+
+既存 Fill table の index maintenance は `scripts/maintenance/create-phase5-behavior-indexes-concurrently.sql` を参照する。実行前後に代表 keyset query の `EXPLAIN (ANALYZE, BUFFERS)` を保存し、空き容量、WAL、replication lag、lock、`pg_stat_progress_create_index` を監視する。失敗時は invalid index の有無を確認し、再実行・削除は別途承認を得る。
+
 最終更新: 2026-07-26
 
 ## 1. ローカルサービス

@@ -8,6 +8,8 @@ export const hyperliquidQueueName = "hyperliquid-sync";
 export const hyperliquidDiscoveryQueueName = "hyperliquid-discovery";
 export const hyperliquidCandidateQueueName = "hyperliquid-candidate-enrichment";
 export const performanceQueueName = "address-performance";
+export const behaviorQueueName = "behavior-normalization";
+export const behaviorVersion = "behavior-v1";
 export const performanceCalculationVersion = "performance-v3";
 
 export const hyperliquidJobNames = {
@@ -95,7 +97,32 @@ export const hyperliquidJobPriorities = {
   candidateEnrichment: 10,
   addressPerformance: 15,
   candidateRecheck: 20,
+  behaviorNormalization: 25,
 } as const;
+
+export const behaviorJobNames = {
+  backfillSelected: "behavior-backfill-selected",
+  normalizeWalletCoin: "behavior-normalize-wallet-coin",
+  rebuildWalletCoin: "behavior-rebuild-wallet-coin",
+} as const;
+
+export type BehaviorJobName = (typeof behaviorJobNames)[keyof typeof behaviorJobNames];
+
+export interface BehaviorControlJobData {
+  readonly kind: "control";
+  readonly requestedAt: string;
+}
+
+export interface BehaviorWalletCoinJobData {
+  readonly kind: "wallet-coin";
+  readonly requestedAt: string;
+  readonly walletAddressId: string;
+  readonly coin: string;
+  readonly continuationAfter?: string;
+  readonly rebuildFrom?: string;
+}
+
+export type BehaviorJobData = BehaviorControlJobData | BehaviorWalletCoinJobData;
 
 export const performanceJobNames = {
   calculate: "calculate-address-performance",
