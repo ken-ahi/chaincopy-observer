@@ -4,6 +4,7 @@ import type { Queue } from "bullmq";
 import type { BehaviorJobData } from "@chaincopy/domain";
 
 import type { BehaviorRepository } from "./repository.js";
+import type { BehaviorSelectionSource } from "./selection-source.js";
 import { BehaviorNormalizationService } from "./service.js";
 
 const selected = {
@@ -20,7 +21,6 @@ function repository(overrides: Record<string, unknown> = {}) {
     createRun: vi.fn().mockResolvedValue({ id: "run-1" }),
     hasHistoryGap: vi.fn().mockResolvedValue(false),
     listCoins: vi.fn().mockResolvedValue(["BTC"]),
-    listEffectiveSelectedWallets: vi.fn().mockResolvedValue([selected]),
     loadCursor: vi.fn().mockResolvedValue(null),
     loadFillPage: vi.fn().mockResolvedValue({
       fills: [
@@ -45,6 +45,12 @@ function repository(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function selectionSource(wallets = [selected]) {
+  return {
+    listEffectiveSelectedWallets: vi.fn().mockResolvedValue(wallets),
+  } as unknown as BehaviorSelectionSource;
+}
+
 function queue() {
   return {
     add: vi.fn().mockResolvedValue({ id: "job-1" }),
@@ -54,9 +60,10 @@ function queue() {
 
 describe("BehaviorNormalizationService", () => {
   it("is a normal no-op when no current Selection Run exists", async () => {
-    const repo = repository({ listEffectiveSelectedWallets: vi.fn().mockResolvedValue([]) });
+    const repo = repository();
     const result = await new BehaviorNormalizationService(
       repo as unknown as BehaviorRepository,
+      selectionSource([]),
       queue(),
     ).processControl("2026-08-23T00:00:00Z");
     expect(result).toEqual({ outcome: "no-op", processedEvents: 0 });
@@ -67,6 +74,7 @@ describe("BehaviorNormalizationService", () => {
     const repo = repository();
     const service = new BehaviorNormalizationService(
       repo as unknown as BehaviorRepository,
+      selectionSource(),
       queue(),
     );
     await service.processWalletCoin({
@@ -101,6 +109,7 @@ describe("BehaviorNormalizationService", () => {
     });
     const result = await new BehaviorNormalizationService(
       repo as unknown as BehaviorRepository,
+      selectionSource(),
       queue(),
     ).processWalletCoin({
       coin: "BTC",
@@ -116,6 +125,7 @@ describe("BehaviorNormalizationService", () => {
     const repo = repository();
     await new BehaviorNormalizationService(
       repo as unknown as BehaviorRepository,
+      selectionSource(),
       queue(),
     ).processWalletCoin({
       coin: "BTC",

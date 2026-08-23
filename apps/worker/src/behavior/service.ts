@@ -11,6 +11,7 @@ import { type Queue } from "bullmq";
 
 import { enqueueBehaviorJob } from "./queue.js";
 import type { BehaviorFillRow, BehaviorRepository } from "./repository.js";
+import type { BehaviorSelectionSource } from "./selection-source.js";
 
 export interface BehaviorProcessResult {
   readonly outcome: "completed" | "continued" | "no-op" | "blocked";
@@ -20,11 +21,12 @@ export interface BehaviorProcessResult {
 export class BehaviorNormalizationService {
   public constructor(
     private readonly repository: BehaviorRepository,
+    private readonly selectionSource: BehaviorSelectionSource,
     private readonly queue: Queue<BehaviorJobData>,
   ) {}
 
   public async processControl(requestedAt: string): Promise<BehaviorProcessResult> {
-    const wallets = await this.repository.listEffectiveSelectedWallets();
+    const wallets = await this.selectionSource.listEffectiveSelectedWallets();
     if (wallets.length === 0) return { outcome: "no-op", processedEvents: 0 };
     for (const wallet of wallets) {
       for (const coin of await this.repository.listCoins(wallet.walletAddressId)) {
@@ -40,7 +42,7 @@ export class BehaviorNormalizationService {
   }
 
   public async processWalletCoin(data: BehaviorWalletCoinJobData): Promise<BehaviorProcessResult> {
-    const wallet = (await this.repository.listEffectiveSelectedWallets()).find(
+    const wallet = (await this.selectionSource.listEffectiveSelectedWallets()).find(
       (candidate) => candidate.walletAddressId === data.walletAddressId,
     );
     if (!wallet) return { outcome: "no-op", processedEvents: 0 };

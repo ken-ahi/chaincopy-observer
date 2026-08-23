@@ -1,23 +1,15 @@
 import { createHash } from "node:crypto";
 
-import {
-  effectiveWalletSelectionStatus,
-  type SelectedWalletBehaviorEventValue,
-} from "@chaincopy/analytics";
+import type { SelectedWalletBehaviorEventValue } from "@chaincopy/analytics";
 import type { BehaviorDataQualityReason, Prisma, PrismaClient } from "@chaincopy/database";
+
+import type { EffectiveBehaviorWallet } from "./selection-source.js";
 
 export const BEHAVIOR_READ_BATCH_SIZE = 5_000;
 export const BEHAVIOR_WRITE_BATCH_SIZE = 1_000;
 export const MAX_TIMESTAMP_GROUP_SIZE = 20_000;
 export const MAX_LATE_REBUILD_EVENTS = 50_000;
 export const MAX_LATE_REBUILD_MILLISECONDS = 30 * 24 * 60 * 60 * 1_000;
-
-export interface EffectiveBehaviorWallet {
-  readonly performanceRunId: string | null;
-  readonly selectionRunId: string;
-  readonly evaluatedAt: Date;
-  readonly walletAddressId: string;
-}
 
 export interface BehaviorFillRow {
   readonly id: string;
@@ -41,45 +33,6 @@ export class BehaviorRepository {
     private readonly database: PrismaClient,
     private readonly sourceId: string,
   ) {}
-
-  /** Consumes the persisted current Selection Run; never creates one and never falls back to watched wallets. */
-  public async listEffectiveSelectedWallets(): Promise<readonly EffectiveBehaviorWallet[]> {
-    const settings = await this.database.walletSelectionSettings.findUnique({
-      select: { currentSelectionRunId: true },
-      where: { sourceId: this.sourceId },
-    });
-    if (!settings?.currentSelectionRunId) return [];
-    const run = await this.database.walletSelectionRun.findFirst({
-      select: {
-        evaluatedAt: true,
-        id: true,
-        results: {
-          select: {
-            automaticStatus: true,
-            performanceRunId: true,
-            walletAddressId: true,
-            walletAddress: { select: { walletSelectionOverride: { select: { decision: true } } } },
-          },
-        },
-      },
-      where: { id: settings.currentSelectionRunId, sourceId: this.sourceId },
-    });
-    if (!run) return [];
-    return run.results
-      .filter(
-        (result) =>
-          effectiveWalletSelectionStatus(
-            result.automaticStatus,
-            result.walletAddress.walletSelectionOverride?.decision ?? "AUTO",
-          ) === "SELECTED",
-      )
-      .map((result) => ({
-        evaluatedAt: run.evaluatedAt,
-        performanceRunId: result.performanceRunId,
-        selectionRunId: run.id,
-        walletAddressId: result.walletAddressId,
-      }));
-  }
 
   public async listCoins(walletAddressId: string): Promise<readonly string[]> {
     const rows = await this.database.normalizedTrade.findMany({

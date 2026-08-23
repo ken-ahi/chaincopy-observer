@@ -17,10 +17,12 @@ import {
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 
+import { PrismaWalletSelectionService } from "../../api/src/wallet-selection-service.js";
 import { startHealthServer } from "./health-server.js";
 import { BehaviorJobProcessor } from "./behavior/processor.js";
 import { enqueueBehaviorJob } from "./behavior/queue.js";
 import { BehaviorRepository } from "./behavior/repository.js";
+import { WalletSelectionBehaviorSource } from "./behavior/selection-source.js";
 import { BehaviorNormalizationService } from "./behavior/service.js";
 import { CandidateEnrichmentService } from "./hyperliquid/discovery/enrichment-service.js";
 import { HyperliquidDiscoveryJobProcessor } from "./hyperliquid/discovery/processor.js";
@@ -205,7 +207,14 @@ const performanceRepository = new PerformanceRepository(prisma);
 const performanceService = new PerformanceCalculationService(performanceRepository, logger);
 const performanceProcessor = new PerformanceJobProcessor(performanceService, logger);
 const behaviorRepository = new BehaviorRepository(prisma, sourceId);
-const behaviorService = new BehaviorNormalizationService(behaviorRepository, behaviorQueue);
+const behaviorSelectionSource = new WalletSelectionBehaviorSource(
+  new PrismaWalletSelectionService(prisma),
+);
+const behaviorService = new BehaviorNormalizationService(
+  behaviorRepository,
+  behaviorSelectionSource,
+  behaviorQueue,
+);
 const behaviorProcessor = new BehaviorJobProcessor(behaviorService, logger);
 
 const systemWorker = new Worker<SampleHealthJobData>(
