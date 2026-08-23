@@ -15,7 +15,7 @@ function queue(count = 0) {
 }
 
 describe("behavior queue", () => {
-  it("uses stable deduplication for one request but permits a later continuation", async () => {
+  it("uses BullMQ-compatible stable IDs while distinguishing continuation and rebuild jobs", async () => {
     const target = queue();
     const first = {
       coin: "BTC",
@@ -30,9 +30,20 @@ describe("behavior queue", () => {
       continuationAfter: "2026-08-23T00:01:00Z",
       requestedAt: "2026-08-23T00:01:01Z",
     });
+    await enqueueBehaviorJob(target, {
+      ...first,
+      rebuildFrom: "2026-08-22T00:00:00Z",
+      requestedAt: "2026-08-23T00:02:00Z",
+    });
     const ids = (target.add as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[2].jobId);
     expect(ids[0]).toBe(ids[1]);
     expect(ids[2]).not.toBe(ids[0]);
+    expect(ids[3]).not.toBe(ids[0]);
+    expect(ids).toHaveLength(4);
+    for (const id of ids) {
+      expect(id).toMatch(/^behavior-[a-f0-9]{64}$/);
+      expect(id).not.toContain(":");
+    }
   });
 
   it("suppresses enqueue when the bounded backlog is full", async () => {

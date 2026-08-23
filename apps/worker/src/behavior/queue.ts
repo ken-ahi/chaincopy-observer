@@ -22,7 +22,7 @@ export async function enqueueBehaviorJob(
       : data.rebuildFrom
         ? behaviorJobNames.rebuildWalletCoin
         : behaviorJobNames.normalizeWalletCoin;
-  const jobId = `behavior:${createHash("sha256").update(JSON.stringify(data)).digest("hex")}`;
+  const jobId = `behavior-${createHash("sha256").update(JSON.stringify(data)).digest("hex")}`;
   const job = await queue.add(name, data, {
     attempts: 5,
     backoff: { delay: 5_000, type: "exponential" },
