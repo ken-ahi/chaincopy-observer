@@ -1,5 +1,14 @@
 # Architecture Decision Log
 
+## ADR-034: Phase 5.0 behavior-v1 の identity、ordering、quote 境界を固定する
+
+- 状態: 採用
+- 決定: Behavior Event identity、normalization execution provenance、Selection membership provenance を別 model に分離し、Selection Run が変わっても Event を複製しない。
+- 決定: 同一 timestamp の Fill は `tid` / external ID で因果順序を決めず、`startPosition + signed sizeDelta` の完全な chain が一意な場合だけ生成する。複数解、欠損、探索上限超過は fail closed とする。
+- 決定: Hyperliquid 標準 perpetual の USDC quote だけ `price * abs(quantity)` を USD notional とする。DEX prefix を持つ custom market は quote provenance が永続化されるまで `UNSUPPORTED_QUOTE` とする。
+- 決定: `NormalizedTrade.sourceTradeId` は nullable で Hyperliquid `tid` を新規 ingest から保存する。identity／trace 専用であり causal sequence ではない。既存行を `externalTradeId` から推測して backfill しない。
+- 運用: 大規模既存 table の複合 index は Prisma migration に含めず、Owner 承認済みの `CREATE INDEX CONCURRENTLY` maintenance として分離する。
+
 ## ADR-033: 分析データと運用・監査データで同期頻度と保持期間を分ける
 
 - 状態: 採用
@@ -291,3 +300,15 @@
 - 手動指定: INCLUDE / EXCLUDE / AUTOは有効状態だけを変え、自動判定、順位、理由を消さない。Phase 5へ自動状態と手動指定を別項目で渡す。
 - 延期: 重み付き総合スコア、勝率・Profit Factorによる除外、Performance完了後の自動再評価、schedulerは実装しない。重み付けはPhase 5.2で正式に設計する。
 - 非変更: `performance-v3`、Discovery処理、Worker、注文・署名・秘密鍵処理は変更しない。
+
+## ADR-034: Phase 5.0は一意transition chainとprovenance分離を実装契約とする
+
+- 状態: 採用
+- 背景: 実DBでは同一wallet・coin・millisecondのFill衝突が大量に存在し、Hyperliquid `tid`やexternal IDの順序はposition causalityを保証しない。また、Behavior Event本体へSelection Runを保存すると、市場Event identityとSelection membershipが混在する。
+- Ordering: 同一timestamp groupは`startPosition -> afterPosition`の完全chainが一意な場合だけ処理する。chainが0件または複数、group取得不完全、gap、source競合はfail closedとする。`sourceTradeId`はidentity・trace用でありcausal sequenceには使用しない。
+- Provenance: `SelectedWalletBehaviorEvent`、`BehaviorNormalizationRun`、`BehaviorSelectionScope`を分離する。Event fingerprintへSelection / Performance / Normalization Runを含めず、flipはCLOSE / OPENのdeterministic ordinalで区別する。
+- Notional / Data Quality: USD相当quote provenanceを証明できないmarketは`UNSUPPORTED_QUOTE`でEvent全体を停止する。Behavior固有のIssue modelでwallet、coin、source group、normalization run、reason、解消・再評価を追跡する。
+- Lifecycle / runtime: 監査正本のsilent cascade deleteを避けるためEventの主要FKはRestrictを基本とする。late Fillはtrusted FLAT boundaryからbounded rebuildする。concurrency 1、read 5,000、write 1,000、timestamp group非分割、continuation job、backlog 500を初期契約とする。
+- Index / approval: 新規Behavior table indexはmigration候補とし、既存大規模`normalized_trades`のindexは`CREATE INDEX CONCURRENTLY` maintenanceへ分離する。実DB migration適用、index作成、backfillはOwner承認を必要とする。
+- Selection prerequisite: current Selection Runなしは正常no-opであり、watched walletへfallbackせずPhase 5側でSelection Runを作らない。これはimplementation BLOCKERではないが、実DB backfill前にPhase 4.3の正式evaluateが必要である。
+- 判定: Phase 5.0の設計はimplementation READY。実DB migration / index / backfillは運用前提とOwner承認までBLOCKEDとする。

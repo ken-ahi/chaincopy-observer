@@ -2,6 +2,8 @@
 
 監査日: 2026-08-22
 
+> 再評価: 2026-08-22。初回監査の`BLOCKED`判定は、`docs/phase5-0-behavior-event-spec.md`監査反映版と本書19章の再評価により、**Phase 5.0 implementation READY**へ更新した。実DB backfillは別のOwner承認・運用条件を満たすまでBLOCKEDとする。
+
 ## 1. 結論
 
 **判定: Phase 5.0のmigration・実装開始は不可。設計修正と入力契約の補強が必要である。**
@@ -33,39 +35,39 @@ pure normalization関数とfixture作成の準備は開始できるが、現在�
 
 監査時の実DB事実:
 
-| 項目 | 値 |
-| --- | ---: |
-| `normalized_trades` | 1,339,748行 |
-| Fillを持つwallet | 14 |
-| table + index size | 1,160,642,560 bytes、約1.08 GiB |
-| 最大wallet Fill数 | 1,187,606 |
-| wallet別中央値 | 5,079 |
-| Fill期間 | 2024-12-06 21:58:22.299〜2026-08-18 14:36:26.339 |
-| millisecond未満のtimestamp | 0件 |
-| 同一wallet・coin・timestamp衝突group | 230,659 |
-| 衝突group内Fill | 744,222行 |
-| 最大同時刻group | 153行 |
-| `perp_position_events` | 3,356,798行 |
-| Data Quality Issue | 697件 |
-| Performance Run | 21,031件 |
-| Selection Run | 0件 |
+| 項目                                 |                                               値 |
+| ------------------------------------ | -----------------------------------------------: |
+| `normalized_trades`                  |                                      1,339,748行 |
+| Fillを持つwallet                     |                                               14 |
+| table + index size                   |                  1,160,642,560 bytes、約1.08 GiB |
+| 最大wallet Fill数                    |                                        1,187,606 |
+| wallet別中央値                       |                                            5,079 |
+| Fill期間                             | 2024-12-06 21:58:22.299〜2026-08-18 14:36:26.339 |
+| millisecond未満のtimestamp           |                                              0件 |
+| 同一wallet・coin・timestamp衝突group |                                          230,659 |
+| 衝突group内Fill                      |                                        744,222行 |
+| 最大同時刻group                      |                                            153行 |
+| `perp_position_events`               |                                      3,356,798行 |
+| Data Quality Issue                   |                                            697件 |
+| Performance Run                      |                                         21,031件 |
+| Selection Run                        |                                              0件 |
 
 ## 3. PASS / BLOCKER / NEEDS_DECISION一覧
 
-| # | 監査項目 | 判定 | 要旨 |
-| --: | --- | --- | --- |
-| 1 | Normalized Fill model | PASS | 必須position復元値は保存済み。ただしsource sequence欠如は項目3のBLOCKER |
-| 2 | `startPosition` | PASS | 公式fieldを文字列のままmapperからDecimal列へ保存。通常遷移とflipを復元可能 |
-| 3 | Canonical ordering | BLOCKER | 同時刻衝突が大量にあり、`tid`専用列なし。external ID fallbackは意味順序を保証しない |
-| 4 | USD notional | NEEDS_DECISION | `price * size`契約は既存コードと整合するが、custom DEX coinを含む全coinのUSD quote provenanceが保存されない |
-| 5 | Timestamp | PASS | APIは安全な整数millisecond、DBは`timestamp(3)`相当。精度損失はないが衝突は常態 |
-| 6 | Decimal | PASS | 既存・候補とも`numeric(38,18)`。実値域と全Fillの積は収まる |
-| 7 | Data Quality | NEEDS_DECISION | 汎用modelでcode/detailsは表現可能だがcoin/version/run/sourceの構造化参照がない |
-| 8 | FK / lifecycle | BLOCKER | Wallet、Selection Result、Performance等のCascadeと監査正本保持が衝突 |
-| 9 | Selection provenance | BLOCKER | Event非複製とEvent上の必須`selectionRunId`が複数Run membershipを表せない |
-| 10 | Late Fill / backfill | BLOCKER | Fillは残るが、同時刻ordering未解決のためtrusted segmentを安全に再構築できない |
-| 11 | Index | NEEDS_DECISION | 新table indexは通常migration可。1.08 GiB既存Fill tableへの複合indexはCONCURRENTLY分離が必要 |
-| 12 | Worker負荷 | PASS（条件付き） | read 5,000 / write 1,000 / concurrency 1は安全な初期値。keyset streaming必須 |
+|   # | 監査項目              | 判定             | 要旨                                                                                                        |
+| --: | --------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------- |
+|   1 | Normalized Fill model | PASS             | 必須position復元値は保存済み。ただしsource sequence欠如は項目3のBLOCKER                                     |
+|   2 | `startPosition`       | PASS             | 公式fieldを文字列のままmapperからDecimal列へ保存。通常遷移とflipを復元可能                                  |
+|   3 | Canonical ordering    | BLOCKER          | 同時刻衝突が大量にあり、`tid`専用列なし。external ID fallbackは意味順序を保証しない                         |
+|   4 | USD notional          | NEEDS_DECISION   | `price * size`契約は既存コードと整合するが、custom DEX coinを含む全coinのUSD quote provenanceが保存されない |
+|   5 | Timestamp             | PASS             | APIは安全な整数millisecond、DBは`timestamp(3)`相当。精度損失はないが衝突は常態                              |
+|   6 | Decimal               | PASS             | 既存・候補とも`numeric(38,18)`。実値域と全Fillの積は収まる                                                  |
+|   7 | Data Quality          | NEEDS_DECISION   | 汎用modelでcode/detailsは表現可能だがcoin/version/run/sourceの構造化参照がない                              |
+|   8 | FK / lifecycle        | BLOCKER          | Wallet、Selection Result、Performance等のCascadeと監査正本保持が衝突                                        |
+|   9 | Selection provenance  | BLOCKER          | Event非複製とEvent上の必須`selectionRunId`が複数Run membershipを表せない                                    |
+|  10 | Late Fill / backfill  | BLOCKER          | Fillは残るが、同時刻ordering未解決のためtrusted segmentを安全に再構築できない                               |
+|  11 | Index                 | NEEDS_DECISION   | 新table indexは通常migration可。1.08 GiB既存Fill tableへの複合indexはCONCURRENTLY分離が必要                 |
+|  12 | Worker負荷            | PASS（条件付き） | read 5,000 / write 1,000 / concurrency 1は安全な初期値。keyset streaming必須                                |
 
 ## 4. Normalized Fillの実schema・保存契約
 
@@ -73,23 +75,23 @@ pure normalization関数とfixture作成の準備は開始できるが、現在�
 
 実model名は`NormalizedTrade`、物理tableは`normalized_trades`である。
 
-| 要求項目 | 実装 |
-| --- | --- |
-| PK | `id String @id @default(cuid())` |
-| external/source ID | `externalTradeId = ${time}:${coin}:${tid}` |
-| fingerprint | wallet、external ID、hash、oidから生成 |
-| unique | `(sourceId, externalTradeId)`、`(sourceId, fingerprint)` |
-| wallet | `walletAddressId String` |
-| coin | `coin String` |
-| side | `TradeSide`、API `B -> BUY`、`A -> SELL` |
-| quantity | `size Decimal(38,18)` |
-| price | `price Decimal(38,18)`、API `px` |
-| startPosition | `startPosition Decimal(38,18)`、API同名field |
-| occurredAt | `DateTime`、API millisecond epochから`Date`へ変換 |
-| source sequence | 専用列なし。`tid`はexternal ID文字列へ埋込み |
-| DataSource FK | `sourceId`、`onDelete: Restrict` |
-| Wallet FK | `walletAddressId`、`onDelete: Cascade` |
-| index | `(walletAddressId, occurredAt)`、`(coin, occurredAt)` |
+| 要求項目           | 実装                                                     |
+| ------------------ | -------------------------------------------------------- |
+| PK                 | `id String @id @default(cuid())`                         |
+| external/source ID | `externalTradeId = ${time}:${coin}:${tid}`               |
+| fingerprint        | wallet、external ID、hash、oidから生成                   |
+| unique             | `(sourceId, externalTradeId)`、`(sourceId, fingerprint)` |
+| wallet             | `walletAddressId String`                                 |
+| coin               | `coin String`                                            |
+| side               | `TradeSide`、API `B -> BUY`、`A -> SELL`                 |
+| quantity           | `size Decimal(38,18)`                                    |
+| price              | `price Decimal(38,18)`、API `px`                         |
+| startPosition      | `startPosition Decimal(38,18)`、API同名field             |
+| occurredAt         | `DateTime`、API millisecond epochから`Date`へ変換        |
+| source sequence    | 専用列なし。`tid`はexternal ID文字列へ埋込み             |
+| DataSource FK      | `sourceId`、`onDelete: Restrict`                         |
+| Wallet FK          | `walletAddressId`、`onDelete: Cascade`                   |
+| index              | `(walletAddressId, occurredAt)`、`(coin, occurredAt)`    |
 
 `saveFills()`は`mapFill()`の全fieldを`createMany({ skipDuplicates: true })`で保存する。HTTP / WebSocket duplicateはDB uniqueで抑止される。identityが同じでpayloadが異なる場合、`skipDuplicates`により差異が明示されず既存行が残るため、Phase 5.0読込時のsource inconsistency検知だけでは過去の競合payloadを復元できない。この点はData Quality監査の追加候補である。
 
@@ -185,12 +187,12 @@ API schemaは`time`をsafe integerのmillisecond epochとして受け、JavaScri
 
 実DB最大値:
 
-| 値 | 最大絶対値 |
-| --- | ---: |
-| price | `123782.000000000000000000` |
-| size | `27525913.800000000700000000` |
-| startPosition | `27525913.890900000900000000` |
-| price × size | `441490.000000000000000000000000000000000000` |
+| 値            |                                    最大絶対値 |
+| ------------- | --------------------------------------------: |
+| price         |                   `123782.000000000000000000` |
+| size          |                 `27525913.800000000700000000` |
+| startPosition |                 `27525913.890900000900000000` |
+| price × size  | `441490.000000000000000000000000000000000000` |
 
 全1,339,748 Fillについて`price * size`を小数18桁へroundした際に値が変わる行は0件、整数20桁を超える行も0件だった。現データに`numeric(38,18)`は十分である。
 
@@ -224,17 +226,17 @@ API schemaは`time`をsafe integerのmillisecond epochとして受け、JavaScri
 
 現行の主な削除規則:
 
-| 親 | 子 | onDelete |
-| --- | --- | --- |
-| DataSource | NormalizedTrade | Restrict |
-| WalletAddress | NormalizedTrade | Cascade |
-| DataSource | WalletAddress | Restrict |
-| DataSource | WalletSelectionRun | Cascade |
-| WalletSelectionRun | WalletSelectionResult | Cascade |
-| WalletAddress | WalletSelectionResult | Cascade |
-| MetricCalculationRun | WalletSelectionResult | SetNull |
-| WalletAddress | MetricCalculationRun | Cascade |
-| WalletAddress | DataQualityIssue | Cascade |
+| 親                   | 子                    | onDelete |
+| -------------------- | --------------------- | -------- |
+| DataSource           | NormalizedTrade       | Restrict |
+| WalletAddress        | NormalizedTrade       | Cascade  |
+| DataSource           | WalletAddress         | Restrict |
+| DataSource           | WalletSelectionRun    | Cascade  |
+| WalletSelectionRun   | WalletSelectionResult | Cascade  |
+| WalletAddress        | WalletSelectionResult | Cascade  |
+| MetricCalculationRun | WalletSelectionResult | SetNull  |
+| WalletAddress        | MetricCalculationRun  | Cascade  |
+| WalletAddress        | DataQualityIssue      | Cascade  |
 
 Behavior Eventを監査正本として自動削除しない方針と、Wallet / Selection / PerformanceのCascade chainは矛盾する。
 
@@ -265,11 +267,11 @@ Behavior Eventを監査正本として自動削除しない方針と、Wallet / 
 
 ### 12.2 比較
 
-| 案 | 長所 | 問題 |
-| --- | --- | --- |
-| EventをSelection Runごとに複製 | queryが単純 | 市場事実を重複保存し、identity・retention・再計算が肥大化 |
-| Eventに最初の`selectionRunId`だけ保存 | 行数が少ない | 後続Run membershipを表現できない。現仕様の問題 |
-| identity / generation / membership分離 | 市場事実は1件、全Runを再現可能 | join tableとqueryが増える |
+| 案                                     | 長所                           | 問題                                                      |
+| -------------------------------------- | ------------------------------ | --------------------------------------------------------- |
+| EventをSelection Runごとに複製         | queryが単純                    | 市場事実を重複保存し、identity・retention・再計算が肥大化 |
+| Eventに最初の`selectionRunId`だけ保存  | 行数が少ない                   | 後続Run membershipを表現できない。現仕様の問題            |
+| identity / generation / membership分離 | 市場事実は1件、全Runを再現可能 | join tableとqueryが増える                                 |
 
 ### 12.3 推奨案
 
@@ -441,11 +443,11 @@ migration前に次を仕様へ反映する必要がある。
 
 これらは既存仕様を本監査で変更するものではない。次の設計改訂で正式に合意・反映する変更要求である。
 
-## 18. Phase 5.0実装開始可否
+## 18. 初回監査時のPhase 5.0実装開始可否（superseded）
 
-### 現時点
+### 初回監査時点
 
-**BLOCKED**。schema、migration、repository、Worker backfillの実装を開始しない。
+**BLOCKED**。この判定は19章のIssue #12再評価によりsupersededである。
 
 ### 開始条件
 
@@ -457,4 +459,56 @@ migration前に次を仕様へ反映する必要がある。
 6. Phase 4.3で少なくとも1つのcurrent Selection Runを生成し、effective selected契約を実DB検証する。
 7. 改訂仕様の固定test vectorへ同時刻一意chain、複数chain、coin内colon、Selection Run切替を追加する。
 
-以上を満たした後、pure normalization、schema review、migration、bounded backfillの順に実装する。
+これらの初回条件は19章で1件ずつ再評価する。
+
+## 19. Issue #12 再評価結果
+
+### 19.1 初回監査項目の最終判定
+
+`docs/phase5-0-behavior-event-spec.md`監査反映版を正本として、初回監査のPASS / BLOCKER / NEEDS_DECISIONを再評価した。
+
+| 項目                      | 初回             | 最終判定 | 根拠・残作業                                                                                                  |
+| ------------------------- | ---------------- | -------- | ------------------------------------------------------------------------------------------------------------- |
+| Normalized Fill model     | PASS             | RESOLVED | `NormalizedTrade`、source snapshot、source Fill FK契約を仕様化                                                |
+| `startPosition`           | PASS             | RESOLVED | signed transitionの正本として維持                                                                             |
+| Canonical ordering        | BLOCKER          | RESOLVED | external ID / tid順を廃止し、timestamp groupの完全chainが一意な場合だけ処理                                   |
+| USD notional              | NEEDS_DECISION   | RESOLVED | 標準USD相当marketだけ生成。custom marketはquote provenance必須、不明なら`UNSUPPORTED_QUOTE`でEvent全体停止    |
+| Timestamp                 | PASS             | RESOLVED | millisecond group完全取得とgroup-safe resumeを仕様化                                                          |
+| Decimal                   | PASS             | RESOLVED | canonical fingerprintと`numeric(38,18)` exact validationを維持                                                |
+| Behavior Data Quality     | NEEDS_DECISION   | RESOLVED | 専用`BehaviorDataQualityIssue`、8 reason、scope、再検出lifecycleを正式採用                                    |
+| FK / lifecycle            | BLOCKER          | RESOLVED | EventのWallet / source Fill / Normalization RunをRestrict、Selection / PerformanceをEventから分離             |
+| Selection provenance      | BLOCKER          | RESOLVED | Event identity、Normalization Run、Selection Scopeの3責務へ分離                                               |
+| Late Fill / backfill      | BLOCKER          | RESOLVED | 直近trusted FLAT boundaryから50,000 Fillまたは30日のbounded rebuild                                           |
+| Index                     | NEEDS_DECISION   | RESOLVED | 新table indexはmigration、既存大規模Fill indexはCONCURRENTLY maintenanceへ分離                                |
+| Worker負荷                | PASS（条件付き） | RESOLVED | concurrency 1、read 5,000、write 1,000、group非分割、continuation、backlog 500を固定                          |
+| sourceTradeId既存backfill | —                | DEFERRED | implementation Issueでraw/source契約を検証しmigration設計。causal orderingには使わないため設計BLOCKERではない |
+| timestamp group安全上限   | —                | DEFERRED | implementation Issueのlarge dataset testで設定。上限超過はfail closedのため安全性BLOCKERではない              |
+| index最終列順             | —                | DEFERRED | maintenance前の代表query `EXPLAIN`で確定。通常migrationへ大規模indexを含めない                                |
+| current Selection Run 0件 | BLOCKER相当      | RESOLVED | 実装では正常no-op、fallback・自動作成禁止。実DB backfill前にPhase 4.3正式evaluateを行う                       |
+
+`STILL_BLOCKED`の設計項目は0件である。DEFERRED項目はいずれもfail closedまたは運用承認境界を持ち、schema / migration / pure normalization / Workerのimplementation Issueを開始する妨げにはしない。
+
+### 19.2 Acceptance criteria確認
+
+- ordering: 一意transition chain方式で固定済み。
+- provenance: Event identity / Normalization Run / Selection Scopeへ分離済み。
+- Event identity: Selection / Normalization Runをfingerprintへ含めず、flip ordinalを含める。
+- notional: unsupported quoteをEvent全体fail closedに固定済み。
+- Data Quality: 専用model、reason、scope、OPEN / RESOLVED / 再OPENを固定済み。
+- FK lifecycle: silent cascadeを避けるRestrict基本方針とsource snapshotを固定済み。
+- late Fill: bounded trusted-boundary rebuildを固定済み。
+- cursor / paging: wallet・coin・version key、group fingerprint、group完全取得を固定済み。
+- index: migration / CONCURRENTLY maintenanceを分離済み。
+- Worker: concurrency、batch、continuation、backpressure、graceful shutdownを固定済み。
+- Selection Runなし: 正常no-op、watched fallback禁止、自動evaluate禁止を固定済み。
+- 固定test vector: unique/ambiguous chain、group > batch、tid非causal、late Fill、no Selection、Selection変更、unsupported quote、source lifecycleを含む。
+
+### 19.3 最終判定
+
+**Phase 5.0 implementation: READY**
+
+次のimplementation Issueでschema、migration、pure normalization、Worker実装へ進める。ただしIssue #12では進めない。
+
+**実DB migration適用 / concurrent index / backfill: BLOCKED pending Owner approval and operational prerequisites**
+
+実DB backfill前に、current Selection Runの正式evaluate、market metadata validation、CONCURRENTLY index作成と`EXPLAIN`、Worker負荷検証、migration適用・backfill起動のOwner明示承認を必要とする。

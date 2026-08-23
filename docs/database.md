@@ -1,5 +1,13 @@
 # データベース設計
 
+## Phase 5.0 Behavior normalization（2026-08-23）
+
+`SelectedWalletBehaviorEvent` は source Fill／transition に基づく `behavior-v1` の監査正本であり、Selection Run ごとに複製しない。`BehaviorNormalizationRun` は生成実行、`BehaviorSelectionScope` は Selection membership、`BehaviorNormalizationCursor` は timestamp-group 完了境界、`BehaviorDataQualityIssue` は fail-closed 理由をそれぞれ保持する。Event 本体に `selectionRunId` / `performanceRunId` は置かない。
+
+金融値はすべて `numeric(38,18)`、時刻は UTC `timestamp(3)` とする。Wallet、source Fill、Normalization Run、Selection Run、Performance Run への主要 FK は監査履歴の silent cascade を防ぐ `RESTRICT` とする。`NormalizedTrade.sourceTradeId` は nullable で、Hyperliquid `tid` の整数文字列を新規保存時に保持する。既存行は migration で書き換えない。
+
+新規 Behavior table の index は通常 migration に含める。大規模な `normalized_trades` に対する `(wallet_address_id, coin, occurred_at, id)` は、代表 query の `EXPLAIN (ANALYZE, BUFFERS)` と Owner 承認後に `scripts/maintenance/create-phase5-behavior-indexes-concurrently.sql` を transaction 外で実行する。
+
 最終更新: 2026-07-26
 
 ## 1. 基本原則

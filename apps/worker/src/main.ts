@@ -6,16 +6,24 @@ import {
   hyperliquidDiscoveryJobNames,
   hyperliquidDiscoveryQueueName,
   hyperliquidQueueName,
+  behaviorQueueName,
   performanceQueueName,
   systemJobNames,
   type HyperliquidDiscoveryJobData,
   type HyperliquidJobData,
+  type BehaviorJobData,
   type PerformanceJobData,
 } from "@chaincopy/domain";
 import { Queue, Worker, type Job } from "bullmq";
 import { Redis } from "ioredis";
 
+import { PrismaWalletSelectionService } from "../../api/src/wallet-selection-service.js";
 import { startHealthServer } from "./health-server.js";
+import { BehaviorJobProcessor } from "./behavior/processor.js";
+import { enqueueBehaviorJob } from "./behavior/queue.js";
+import { BehaviorRepository } from "./behavior/repository.js";
+import { WalletSelectionBehaviorSource } from "./behavior/selection-source.js";
+import { BehaviorNormalizationService } from "./behavior/service.js";
 import { CandidateEnrichmentService } from "./hyperliquid/discovery/enrichment-service.js";
 import { HyperliquidDiscoveryJobProcessor } from "./hyperliquid/discovery/processor.js";
 import { HyperliquidDiscoveryRepository } from "./hyperliquid/discovery/repository.js";
@@ -73,6 +81,7 @@ const candidateQueue = new Queue<HyperliquidDiscoveryJobData>(hyperliquidCandida
 const performanceQueue = new Queue<PerformanceJobData>(performanceQueueName, {
   connection: redis,
 });
+const behaviorQueue = new Queue<BehaviorJobData>(behaviorQueueName, { connection: redis });
 
 await Promise.all([prisma.$queryRaw`SELECT 1`, redis.ping()]);
 
@@ -197,6 +206,16 @@ const discoveryProcessor = new HyperliquidDiscoveryJobProcessor(
 const performanceRepository = new PerformanceRepository(prisma);
 const performanceService = new PerformanceCalculationService(performanceRepository, logger);
 const performanceProcessor = new PerformanceJobProcessor(performanceService, logger);
+const behaviorRepository = new BehaviorRepository(prisma, sourceId);
+const behaviorSelectionSource = new WalletSelectionBehaviorSource(
+  new PrismaWalletSelectionService(prisma),
+);
+const behaviorService = new BehaviorNormalizationService(
+  behaviorRepository,
+  behaviorSelectionSource,
+  behaviorQueue,
+);
+const behaviorProcessor = new BehaviorJobProcessor(behaviorService, logger);
 
 const systemWorker = new Worker<SampleHealthJobData>(
   systemQueueName,
@@ -420,6 +439,30 @@ performanceWorker.on("error", (error) => {
   logger.error({ error: errorDetails(error) }, "Address performance BullMQ worker error");
 });
 
+const behaviorWorker = new Worker<BehaviorJobData>(
+  behaviorQueueName,
+  (job) => behaviorProcessor.process(job),
+  { connection: redis, concurrency: 1 },
+);
+behaviorWorker.on("failed", (job, error) => {
+  const attempts = job?.opts.attempts ?? 1;
+  const attemptsMade = job?.attemptsMade ?? attempts;
+  logger.error(
+    {
+      attempts,
+      attemptsMade,
+      error: errorDetails(error),
+      jobId: job?.id,
+      jobName: job?.name,
+      retryScheduled: isRetryScheduled(error, attemptsMade, attempts),
+    },
+    "Behavior normalization BullMQ job failed",
+  );
+});
+behaviorWorker.on("error", (error) =>
+  logger.error({ error: errorDetails(error) }, "Behavior normalization BullMQ worker error"),
+);
+
 function recoverInterruptedCandidateEnrichment(
   job: Job<HyperliquidDiscoveryJobData> | undefined,
   error: Error,
@@ -469,6 +512,7 @@ const healthServer = await startHealthServer({
 });
 
 const queuedJobId = await enqueueSampleHealthJob(systemQueue);
+await enqueueBehaviorJob(behaviorQueue, { kind: "control", requestedAt: new Date().toISOString() });
 await scheduler.start();
 if (discoveryRuntime.scheduler && discoveryRuntime.marketWebSocket) {
   await discoveryScheduler.start();
@@ -491,6 +535,7 @@ logger.info(
         ? [hyperliquidDiscoveryQueueName, hyperliquidCandidateQueueName]
         : []),
       performanceQueueName,
+      behaviorQueueName,
     ],
     sourceKey,
   },
@@ -541,8 +586,10 @@ async function shutdown(signal: string): Promise<void> {
     await close("hyperliquid-candidate-worker", () => candidateWorker.close(), true);
   }
   await close("performance-worker", () => performanceWorker.close(), true);
+  await close("behavior-worker", () => behaviorWorker.close(), true);
   await close("system-worker", () => systemWorker.close(), true);
   await close("performance-queue", () => performanceQueue.close());
+  await close("behavior-queue", () => behaviorQueue.close());
   await close("hyperliquid-candidate-queue", () => candidateQueue.close());
   await close("hyperliquid-discovery-queue", () => discoveryQueue.close());
   await close("hyperliquid-queue", () => hyperliquidQueue.close());

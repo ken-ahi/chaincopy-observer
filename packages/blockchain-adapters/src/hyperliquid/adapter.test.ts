@@ -69,6 +69,7 @@ describe("Hyperliquid response mapping", () => {
       price: "123456.123456789012345678",
       side: "BUY",
       size: "0.000000000000000001",
+      sourceTradeId: "9007199254740994",
     });
     expect(first.fingerprint).toBe(second.fingerprint);
   });

@@ -1,5 +1,22 @@
 export const ANALYTICS_IMPLEMENTATION_PHASE = 4 as const;
 
+export {
+  BEHAVIOR_VERSION,
+  behaviorEventFingerprint,
+  canonicalDecimal,
+  normalizeTimestampGroup,
+  signedQuantityDelta,
+} from "./behavior-normalization.js";
+export type {
+  BehaviorDirection,
+  BehaviorEventType,
+  BehaviorFailureReason,
+  BehaviorFillInput,
+  BehaviorGroupResult,
+  BehaviorMarketProvenance,
+  SelectedWalletBehaviorEventValue,
+} from "./behavior-normalization.js";
+
 export { parseDecimalString } from "./core.js";
 export {
   calculateCoinConcentration,

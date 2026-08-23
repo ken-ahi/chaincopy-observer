@@ -1,5 +1,11 @@
 # アーキテクチャ
 
+## Phase 5.0 behavior-v1 pipeline
+
+`NormalizedTrade` → pure timestamp-group normalizer → `SelectedWalletBehaviorEvent` の一方向 pipeline とする。対象 wallet は current Selection Run を読む `listEffectiveSelectedWallets()` だけから取得する。実行履歴は `BehaviorNormalizationRun`、membership は `BehaviorSelectionScope`、再開位置は `BehaviorNormalizationCursor`、fail-closed 状態は `BehaviorDataQualityIssue` に分離する。
+
+専用 BullMQ queue は concurrency 1 の continuation job 方式で動作する。page cursor は完了済み timestamp group の後だけ進み、late Fill は直前の保存済み Event boundary から影響範囲を再構築する。Event fingerprint は source Fill、`behavior-v1`、flip ordinal だけから決まり、Selection／normalization run IDを含まない。
+
 最終更新: 2026-07-26
 
 ## 1. 方針
