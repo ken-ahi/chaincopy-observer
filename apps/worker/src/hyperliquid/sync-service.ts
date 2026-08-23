@@ -104,7 +104,11 @@ export class HyperliquidSyncService {
           walletAddressId: job.walletAddressId,
         });
       }
-      return { fetched: response.items.length, inserted };
+      return {
+        fetched: response.items.length,
+        inserted,
+        reachedHistoryLimit: response.reachedHistoryLimit,
+      };
     } catch (error) {
       await this.fail(job, scope, error);
       throw error;
@@ -150,7 +154,11 @@ export class HyperliquidSyncService {
           walletAddressId: job.walletAddressId,
         });
       }
-      return { fetched: response.items.length, inserted };
+      return {
+        fetched: response.items.length,
+        inserted,
+        reachedHistoryLimit: response.reachedHistoryLimit,
+      };
     } catch (error) {
       await this.fail(job, scope, error);
       throw error;
@@ -168,6 +176,11 @@ export class HyperliquidSyncService {
     const runPart = async (part: string, operation: () => Promise<void>): Promise<void> => {
       try {
         await operation();
+        await this.repository.resolveQualityIssue({
+          details: { part },
+          issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+          walletAddress: job.walletAddress,
+        });
         successes += 1;
       } catch (error) {
         const message = errorDetails(error).message;
@@ -263,6 +276,11 @@ export class HyperliquidSyncService {
       response.rawText,
       capturedAt,
     );
+    await this.repository.resolveQualityIssue({
+      details: { part: "portfolio" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
     return { capturedAt: capturedAt.toISOString() };
   }
 
@@ -276,6 +294,11 @@ export class HyperliquidSyncService {
       job.walletAddress,
       response.data,
     );
+    await this.repository.resolveQualityIssue({
+      details: { part: "historicalOrders" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
     return { fetched: response.data.length, inserted };
   }
 
@@ -303,16 +326,16 @@ export class HyperliquidSyncService {
         this.syncFunding(job),
         this.syncLedger(job),
       ]);
+      if ([fills, funding, ledger].some(reachedHistoryLimit)) {
+        throw new Error(
+          "Hyperliquid gap recovery reached a source history or pagination limit; coverage is not proven.",
+        );
+      }
       const connectionCursorUpdated = await this.repository.completeWebSocketGap(
         job.walletAddressId,
         job.startTime,
         job.endTime,
       );
-      if (!connectionCursorUpdated) {
-        throw new Error(
-          "Hyperliquid gap recovery could not complete the matching WebSocket cursor.",
-        );
-      }
       await this.repository.resolveQualityIssue({
         details: { disconnectedAt: job.startTime },
         issueType: "HYPERLIQUID_WEBSOCKET_GAP",
@@ -373,6 +396,10 @@ export class HyperliquidSyncService {
     await this.repository.failCursor(job.walletAddressId, scope, cursorType, message);
     await this.repository.markSourceFailure(message);
   }
+}
+
+function reachedHistoryLimit(result: Readonly<Record<string, unknown>>): boolean {
+  return result.reachedHistoryLimit === true;
 }
 
 function resolveEndTime(job: HyperliquidJobData): number {

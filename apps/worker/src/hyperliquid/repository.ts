@@ -20,7 +20,9 @@ import {
   type HyperliquidWebSocketFunding,
   type NormalizedFundingPayment,
 } from "@chaincopy/blockchain-adapters";
-import { type PrismaClient, type SyncCursorStatus } from "@chaincopy/database";
+import { Prisma, type PrismaClient, type SyncCursorStatus } from "@chaincopy/database";
+
+const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
 export interface CursorPosition {
   readonly lastExternalId: string | null;
@@ -472,17 +474,42 @@ export class HyperliquidRepository {
     rawPayload: string,
     capturedAt: Date,
   ): Promise<void> {
-    const fingerprint = createEventFingerprint("portfolio-history", walletAddress, portfolio);
+    const points = new Map<number, string>();
+    for (const [periodName, period] of portfolio) {
+      if (periodName !== "perpAllTime") continue;
+      for (const [timestamp, accountValue] of period.accountValueHistory) {
+        const existing = points.get(timestamp);
+        if (existing && !new FinancialDecimal(existing).equals(accountValue)) {
+          throw new Error(
+            `Hyperliquid portfolio contains conflicting account values at ${timestamp}.`,
+          );
+        }
+        points.set(timestamp, new FinancialDecimal(accountValue).toString());
+      }
+    }
+    const sourceId = await this.sourceId();
     await this.database.portfolioSnapshot.createMany({
       data: [
         {
           capturedAt,
-          fingerprint,
+          fingerprint: createEventFingerprint("portfolio-history", walletAddress, portfolio),
           rawPayload,
           snapshotType: "portfolio",
-          sourceId: await this.sourceId(),
+          sourceId,
           walletAddressId,
         },
+        ...[...points.entries()].map(([timestamp, accountValue]) => ({
+          accountValue,
+          capturedAt: new Date(timestamp),
+          fingerprint: createEventFingerprint("portfolio-history-point", walletAddress, {
+            accountValue,
+            timestamp,
+          }),
+          rawPayload: `portfolio-history:${timestamp}`,
+          snapshotType: "portfolio-history",
+          sourceId,
+          walletAddressId,
+        })),
       ],
       skipDuplicates: true,
     });
@@ -591,6 +618,24 @@ export class HyperliquidRepository {
     });
   }
 
+  public async resolveOpenQualityIssuesByType(
+    walletAddressId: string,
+    issueType: string,
+  ): Promise<number> {
+    const result = await this.database.dataQualityIssue.updateMany({
+      data: {
+        resolvedAt: new Date(),
+        status: "RESOLVED",
+      },
+      where: {
+        issueType,
+        status: "OPEN",
+        walletAddressId,
+      },
+    });
+    return result.count;
+  }
+
   public async markSourceSuccess(message: string): Promise<void> {
     await this.database.dataSource.update({
       data: {
@@ -641,6 +686,11 @@ export class HyperliquidRepository {
         walletAddress,
         walletAddressId,
       });
+    } else {
+      await this.resolveOpenQualityIssuesByType(
+        walletAddressId,
+        "HYPERLIQUID_INCOMPLETE_INITIAL_SYNC",
+      );
     }
     const [fills, funding, ledger, positions, openIssues] = await Promise.all([
       this.database.normalizedTrade.count({ where: { walletAddressId } }),
