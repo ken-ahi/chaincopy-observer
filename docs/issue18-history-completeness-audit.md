@@ -31,6 +31,17 @@ The blockers are a mixture of real source boundaries and three concrete lifecycl
 
 Current cursors do not by themselves prove that an old WebSocket interval was recovered. The existing recovery job calls bounded HTTP fill, funding, and ledger endpoints. Before this fix it then required the mutable connection cursor still to point to that old disconnect. A newer successful connection therefore made historical recovery impossible. The revised contract leaves a newer cursor untouched, resolves only the exact gap fingerprint after all three bounded requests succeed, and refuses resolution when any request reports a history/pagination limit.
 
+### Coverage proof contract
+
+HTTP success alone is not coverage proof. Each fill, funding, and ledger lane returns evidence tied to the exact requested millisecond interval:
+
+- `requestedFrom` and `requestedTo` must equal the gap job boundaries;
+- pagination must terminate through an exhaustive short final page, rather than the 10,000-item cap, a non-advancing timestamp, or a cursor reversal;
+- at least one source event must be returned, so a successful empty response is explicitly `UNPROVEN` rather than being treated as evidence of historical availability;
+- the evidence value must be `BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE`.
+
+The gap DQ is resolved only when all three lanes satisfy every condition. If even one lane is empty, truncated, mismatched, or otherwise unproven, the job fails closed before cursor or DQ completion. This is intentionally conservative: a truly event-free lane cannot currently prove source availability and therefore remains OPEN for audit. A newer successful connection cursor is never rewound.
+
 ## Wallet-by-wallet classification
 
 All latest runs below are `performance-v3 / SUCCEEDED`; all current required cursors are `SUCCEEDED`; failed and gap cursor counts are zero.
@@ -72,7 +83,7 @@ Prerequisite: merge and deploy the Issue #18 Worker image with exact commit prov
 
 1. Run one official portfolio snapshot job per wallet (14 jobs, 14 portfolio API calls). Expected normalized NAV upper estimate from the latest stored responses: 1,011 rows plus 14 raw audit snapshots; inserts are idempotent by fingerprint.
 2. Run one official account/data-quality sequence for wallets with stale partial failures (`06438b`, `72d73f`, `831ea8`, `f5d81a`, `f6042d`): 5 account-snapshot jobs, 25 part calls, followed by 14 audit jobs. A part issue resolves only after that exact part succeeds; incomplete-sync issues resolve only when all four required cursors are currently successful.
-3. For each of the 441 OPEN gap fingerprints, derive a bounded end from the first stored WebSocket event after `details.disconnectedAt`, present the generated manifest for review, then enqueue one gap-recovery job. Expected minimum is 441 jobs and 1,323 HTTP endpoint calls (fills/funding/ledger); pagination can increase calls. Never merge intervals for DQ resolution unless every enclosed fingerprint is retained and individually resolved.
+3. For each of the 441 OPEN gap fingerprints, derive a bounded end from the first stored WebSocket event after `details.disconnectedAt`, present the generated manifest for review, then enqueue one gap-recovery job. Expected minimum is 441 jobs and 1,323 HTTP endpoint calls (fills/funding/ledger); pagination can increase calls. Recovery is not assumed: any interval with an empty or otherwise unproven lane remains OPEN. Never merge intervals for DQ resolution unless every enclosed fingerprint is retained and individually resolved.
 4. Stop immediately on any history/pagination limit, API error storm, queue backlog above the configured cap, Worker heap growth, PostgreSQL saturation, or Redis memory pressure. The revised job leaves the issue OPEN when coverage is not proven and is retry-safe through normalized-row fingerprints and exact DQ fingerprints.
 5. Recompute `performance-v3` only after all approved jobs settle, then run `wallet-selection-v1` exactly once. Do not run Behavior Stage 4 or backfill in this issue.
 

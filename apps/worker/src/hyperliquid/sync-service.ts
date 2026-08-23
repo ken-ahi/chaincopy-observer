@@ -55,6 +55,7 @@ export class HyperliquidSyncService {
         });
       }
       return {
+        coverage: response.coverage,
         fetched: response.items.length,
         inserted,
         reachedHistoryLimit: response.reachedHistoryLimit,
@@ -105,6 +106,7 @@ export class HyperliquidSyncService {
         });
       }
       return {
+        coverage: response.coverage,
         fetched: response.items.length,
         inserted,
         reachedHistoryLimit: response.reachedHistoryLimit,
@@ -155,6 +157,7 @@ export class HyperliquidSyncService {
         });
       }
       return {
+        coverage: response.coverage,
         fetched: response.items.length,
         inserted,
         reachedHistoryLimit: response.reachedHistoryLimit,
@@ -306,9 +309,11 @@ export class HyperliquidSyncService {
     if (!job.startTime || !job.endTime) {
       throw new RangeError("Hyperliquid gap recovery requires startTime and endTime.");
     }
+    const startTime = job.startTime;
+    const endTime = job.endTime;
     const logContext = {
-      endTime: job.endTime,
-      startTime: job.startTime,
+      endTime,
+      startTime,
       walletAddress: job.walletAddress,
       walletAddressId: job.walletAddressId,
     };
@@ -326,18 +331,18 @@ export class HyperliquidSyncService {
         this.syncFunding(job),
         this.syncLedger(job),
       ]);
-      if ([fills, funding, ledger].some(reachedHistoryLimit)) {
+      if ([fills, funding, ledger].some((result) => !provesCoverage(result, startTime, endTime))) {
         throw new Error(
-          "Hyperliquid gap recovery reached a source history or pagination limit; coverage is not proven.",
+          "Hyperliquid gap recovery did not prove complete source coverage for every required lane.",
         );
       }
       const connectionCursorUpdated = await this.repository.completeWebSocketGap(
         job.walletAddressId,
-        job.startTime,
-        job.endTime,
+        startTime,
+        endTime,
       );
       await this.repository.resolveQualityIssue({
-        details: { disconnectedAt: job.startTime },
+        details: { disconnectedAt: startTime },
         issueType: "HYPERLIQUID_WEBSOCKET_GAP",
         walletAddress: job.walletAddress,
       });
@@ -398,8 +403,21 @@ export class HyperliquidSyncService {
   }
 }
 
-function reachedHistoryLimit(result: Readonly<Record<string, unknown>>): boolean {
-  return result.reachedHistoryLimit === true;
+function provesCoverage(
+  result: Readonly<Record<string, unknown>>,
+  startTime: string,
+  endTime: string,
+): boolean {
+  const coverage = result.coverage;
+  if (!coverage || typeof coverage !== "object") return false;
+  const evidence = coverage as Readonly<Record<string, unknown>>;
+  return (
+    evidence.evidence === "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" &&
+    evidence.proven === true &&
+    evidence.requestedFrom === parseJobTimestamp(startTime, "startTime") &&
+    evidence.requestedTo === parseJobTimestamp(endTime, "endTime") &&
+    result.reachedHistoryLimit !== true
+  );
 }
 
 function resolveEndTime(job: HyperliquidJobData): number {

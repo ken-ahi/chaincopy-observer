@@ -13,6 +13,22 @@ const job: HyperliquidJobData = {
   walletAddressId: "wallet-1",
 };
 
+const gapStart = "2026-07-25T12:00:00.000Z";
+const gapEnd = "2026-07-25T12:01:00.000Z";
+
+function provenGapCoverage(): Readonly<Record<string, unknown>> {
+  return {
+    coverage: {
+      evidence: "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE",
+      proven: true,
+      requestedFrom: Date.parse(gapStart),
+      requestedTo: Date.parse(gapEnd),
+    },
+    inserted: 1,
+    reachedHistoryLimit: false,
+  };
+}
+
 describe("HyperliquidSyncService", () => {
   it("persists HTTP pages before advancing the successful cursor", async () => {
     const fill = {
@@ -173,13 +189,13 @@ describe("HyperliquidSyncService", () => {
       warn: vi.fn(),
     } as unknown as Logger;
     const service = new HyperliquidSyncService({} as HyperliquidClient, repository, logger);
-    vi.spyOn(service, "syncFills").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncFunding").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncLedger").mockResolvedValue({ inserted: 1 });
+    vi.spyOn(service, "syncFills").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
     const gapJob = {
       ...job,
-      endTime: "2026-07-25T12:01:00.000Z",
-      startTime: "2026-07-25T12:00:00.000Z",
+      endTime: gapEnd,
+      startTime: gapStart,
     };
 
     await expect(service.recoverGap(gapJob)).resolves.toMatchObject({
@@ -209,15 +225,15 @@ describe("HyperliquidSyncService", () => {
       warn: vi.fn(),
     } as unknown as Logger;
     const service = new HyperliquidSyncService({} as HyperliquidClient, repository, logger);
-    vi.spyOn(service, "syncFills").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncFunding").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncLedger").mockResolvedValue({ inserted: 1 });
+    vi.spyOn(service, "syncFills").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
 
     await expect(
       service.recoverGap({
         ...job,
-        endTime: "2026-07-25T12:01:00.000Z",
-        startTime: "2026-07-25T12:00:00.000Z",
+        endTime: gapEnd,
+        startTime: gapStart,
       }),
     ).resolves.toMatchObject({ connectionCursorUpdated: false });
     expect(repository.resolveQualityIssue).toHaveBeenCalledOnce();
@@ -236,17 +252,52 @@ describe("HyperliquidSyncService", () => {
       repository,
       pino({ level: "silent" }),
     );
-    vi.spyOn(service, "syncFills").mockResolvedValue({ reachedHistoryLimit: true });
-    vi.spyOn(service, "syncFunding").mockResolvedValue({ reachedHistoryLimit: false });
-    vi.spyOn(service, "syncLedger").mockResolvedValue({ reachedHistoryLimit: false });
+    vi.spyOn(service, "syncFills").mockResolvedValue({
+      ...provenGapCoverage(),
+      reachedHistoryLimit: true,
+    });
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
 
     await expect(
       service.recoverGap({
         ...job,
-        endTime: "2026-07-25T12:01:00.000Z",
-        startTime: "2026-07-25T12:00:00.000Z",
+        endTime: gapEnd,
+        startTime: gapStart,
       }),
-    ).rejects.toThrow("coverage is not proven");
+    ).rejects.toThrow("did not prove complete source coverage");
+    expect(repository.completeWebSocketGap).not.toHaveBeenCalled();
+    expect(repository.resolveQualityIssue).not.toHaveBeenCalled();
+    expect(repository.markSourceSuccess).not.toHaveBeenCalled();
+  });
+
+  it("keeps a gap open when a successful bounded lane response is empty and unproven", async () => {
+    const repository = {
+      completeWebSocketGap: vi.fn(async () => false),
+      markSourceSuccess: vi.fn(async () => undefined),
+      resolveQualityIssue: vi.fn(async () => undefined),
+    } as unknown as HyperliquidRepository;
+    const service = new HyperliquidSyncService(
+      {} as HyperliquidClient,
+      repository,
+      pino({ level: "silent" }),
+    );
+    vi.spyOn(service, "syncFills").mockResolvedValue({
+      coverage: {
+        evidence: "UNPROVEN",
+        proven: false,
+        requestedFrom: Date.parse(gapStart),
+        requestedTo: Date.parse(gapEnd),
+      },
+      fetched: 0,
+      reachedHistoryLimit: false,
+    });
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
+
+    await expect(
+      service.recoverGap({ ...job, endTime: gapEnd, startTime: gapStart }),
+    ).rejects.toThrow("did not prove complete source coverage");
     expect(repository.completeWebSocketGap).not.toHaveBeenCalled();
     expect(repository.resolveQualityIssue).not.toHaveBeenCalled();
     expect(repository.markSourceSuccess).not.toHaveBeenCalled();
