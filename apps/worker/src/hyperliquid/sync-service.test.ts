@@ -13,6 +13,22 @@ const job: HyperliquidJobData = {
   walletAddressId: "wallet-1",
 };
 
+const gapStart = "2026-07-25T12:00:00.000Z";
+const gapEnd = "2026-07-25T12:01:00.000Z";
+
+function provenGapCoverage(): Readonly<Record<string, unknown>> {
+  return {
+    coverage: {
+      evidence: "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE",
+      proven: true,
+      requestedFrom: Date.parse(gapStart),
+      requestedTo: Date.parse(gapEnd),
+    },
+    inserted: 1,
+    reachedHistoryLimit: false,
+  };
+}
+
 describe("HyperliquidSyncService", () => {
   it("persists HTTP pages before advancing the successful cursor", async () => {
     const fill = {
@@ -94,6 +110,72 @@ describe("HyperliquidSyncService", () => {
     expect(repository.markSourceFailure).toHaveBeenCalledWith("upstream unavailable");
   });
 
+  it("resolves each partial API issue only after that snapshot part succeeds", async () => {
+    const response = (data: unknown) => ({ data, rawText: "{}" });
+    const client = {
+      clearinghouseState: vi.fn(async () =>
+        response({ assetPositions: [], marginSummary: {}, withdrawable: "0" }),
+      ),
+      frontendOpenOrders: vi.fn(async () => response([])),
+      openOrders: vi.fn(async () => response([])),
+      spotClearinghouseState: vi.fn(async () => response({ balances: [] })),
+      userRateLimit: vi.fn(async () => response({ cumVlm: "0", nRequestsUsed: 0 })),
+    } as unknown as HyperliquidClient;
+    const resolveQualityIssue = vi.fn(async () => undefined);
+    const repository = {
+      beginCursor: vi.fn(async () => undefined),
+      completeCursor: vi.fn(async () => undefined),
+      markSourceSuccess: vi.fn(async () => undefined),
+      resolveQualityIssue,
+      saveClearinghouseSnapshot: vi.fn(async () => undefined),
+      saveOpenOrders: vi.fn(async () => 0),
+      savePositions: vi.fn(async () => undefined),
+      saveRawEvent: vi.fn(async () => undefined),
+      saveSpotBalances: vi.fn(async () => 0),
+    } as unknown as HyperliquidRepository;
+    const service = new HyperliquidSyncService(client, repository, pino({ level: "silent" }));
+
+    await expect(service.snapshotPositions(job)).resolves.toMatchObject({
+      failures: [],
+      successes: 5,
+    });
+    expect(resolveQualityIssue).toHaveBeenCalledTimes(5);
+    expect(resolveQualityIssue).toHaveBeenCalledWith({
+      details: { part: "clearinghouseState" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
+  });
+
+  it("resolves standalone portfolio and historical-order failures after persistence succeeds", async () => {
+    const client = {
+      historicalOrders: vi.fn(async () => ({ data: [], rawText: "[]" })),
+      portfolio: vi.fn(async () => ({ data: [], rawText: "[]" })),
+    } as unknown as HyperliquidClient;
+    const resolveQualityIssue = vi.fn(async () => undefined);
+    const repository = {
+      resolveQualityIssue,
+      saveHistoricalOrders: vi.fn(async () => 0),
+      savePortfolioHistory: vi.fn(async () => undefined),
+      saveRawEvent: vi.fn(async () => undefined),
+    } as unknown as HyperliquidRepository;
+    const service = new HyperliquidSyncService(client, repository, pino({ level: "silent" }));
+
+    await service.snapshotPortfolio(job);
+    await service.syncHistoricalOrders(job);
+
+    expect(resolveQualityIssue).toHaveBeenCalledWith({
+      details: { part: "portfolio" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
+    expect(resolveQualityIssue).toHaveBeenCalledWith({
+      details: { part: "historicalOrders" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
+  });
+
   it("logs gap recovery start and success after the matching cursor is completed", async () => {
     const repository = {
       completeWebSocketGap: vi.fn(async () => true),
@@ -107,13 +189,13 @@ describe("HyperliquidSyncService", () => {
       warn: vi.fn(),
     } as unknown as Logger;
     const service = new HyperliquidSyncService({} as HyperliquidClient, repository, logger);
-    vi.spyOn(service, "syncFills").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncFunding").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncLedger").mockResolvedValue({ inserted: 1 });
+    vi.spyOn(service, "syncFills").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
     const gapJob = {
       ...job,
-      endTime: "2026-07-25T12:01:00.000Z",
-      startTime: "2026-07-25T12:00:00.000Z",
+      endTime: gapEnd,
+      startTime: gapStart,
     };
 
     await expect(service.recoverGap(gapJob)).resolves.toMatchObject({
@@ -130,7 +212,7 @@ describe("HyperliquidSyncService", () => {
     expect(repository.markSourceSuccess).toHaveBeenCalledOnce();
   });
 
-  it("logs and throws when gap recovery cannot complete its matching cursor", async () => {
+  it("recovers a historical gap without rewinding a newer connection cursor", async () => {
     const repository = {
       completeWebSocketGap: vi.fn(async () => false),
       markSourceSuccess: vi.fn(async () => undefined),
@@ -143,22 +225,81 @@ describe("HyperliquidSyncService", () => {
       warn: vi.fn(),
     } as unknown as Logger;
     const service = new HyperliquidSyncService({} as HyperliquidClient, repository, logger);
-    vi.spyOn(service, "syncFills").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncFunding").mockResolvedValue({ inserted: 1 });
-    vi.spyOn(service, "syncLedger").mockResolvedValue({ inserted: 1 });
+    vi.spyOn(service, "syncFills").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
 
     await expect(
       service.recoverGap({
         ...job,
-        endTime: "2026-07-25T12:01:00.000Z",
-        startTime: "2026-07-25T12:00:00.000Z",
+        endTime: gapEnd,
+        startTime: gapStart,
       }),
-    ).rejects.toThrow("matching WebSocket cursor");
+    ).resolves.toMatchObject({ connectionCursorUpdated: false });
+    expect(repository.resolveQualityIssue).toHaveBeenCalledOnce();
+    expect(repository.markSourceSuccess).toHaveBeenCalledOnce();
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it("keeps a gap open when bounded HTTP recovery reaches a source limit", async () => {
+    const repository = {
+      completeWebSocketGap: vi.fn(async () => false),
+      markSourceSuccess: vi.fn(async () => undefined),
+      resolveQualityIssue: vi.fn(async () => undefined),
+    } as unknown as HyperliquidRepository;
+    const service = new HyperliquidSyncService(
+      {} as HyperliquidClient,
+      repository,
+      pino({ level: "silent" }),
+    );
+    vi.spyOn(service, "syncFills").mockResolvedValue({
+      ...provenGapCoverage(),
+      reachedHistoryLimit: true,
+    });
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
+
+    await expect(
+      service.recoverGap({
+        ...job,
+        endTime: gapEnd,
+        startTime: gapStart,
+      }),
+    ).rejects.toThrow("did not prove complete source coverage");
+    expect(repository.completeWebSocketGap).not.toHaveBeenCalled();
     expect(repository.resolveQualityIssue).not.toHaveBeenCalled();
     expect(repository.markSourceSuccess).not.toHaveBeenCalled();
-    expect(error).toHaveBeenCalledWith(
-      expect.objectContaining({ event: "hyperliquid_gap_recovery_failed" }),
-      "Hyperliquid gap recovery failed",
+  });
+
+  it("keeps a gap open when a successful bounded lane response is empty and unproven", async () => {
+    const repository = {
+      completeWebSocketGap: vi.fn(async () => false),
+      markSourceSuccess: vi.fn(async () => undefined),
+      resolveQualityIssue: vi.fn(async () => undefined),
+    } as unknown as HyperliquidRepository;
+    const service = new HyperliquidSyncService(
+      {} as HyperliquidClient,
+      repository,
+      pino({ level: "silent" }),
     );
+    vi.spyOn(service, "syncFills").mockResolvedValue({
+      coverage: {
+        evidence: "UNPROVEN",
+        proven: false,
+        requestedFrom: Date.parse(gapStart),
+        requestedTo: Date.parse(gapEnd),
+      },
+      fetched: 0,
+      reachedHistoryLimit: false,
+    });
+    vi.spyOn(service, "syncFunding").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncLedger").mockResolvedValue(provenGapCoverage());
+
+    await expect(
+      service.recoverGap({ ...job, endTime: gapEnd, startTime: gapStart }),
+    ).rejects.toThrow("did not prove complete source coverage");
+    expect(repository.completeWebSocketGap).not.toHaveBeenCalled();
+    expect(repository.resolveQualityIssue).not.toHaveBeenCalled();
+    expect(repository.markSourceSuccess).not.toHaveBeenCalled();
   });
 });

@@ -9,6 +9,136 @@ interface CursorUpsertInput {
 }
 
 describe("HyperliquidRepository cursors", () => {
+  it("persists portfolio account-value history as deterministic NAV inputs", async () => {
+    const createMany = vi.fn(async (_input: unknown) => ({ count: 3 }));
+    const database = {
+      dataSource: { upsert: vi.fn(async () => ({ id: "source-1" })) },
+      portfolioSnapshot: { createMany },
+    } as unknown as PrismaClient;
+    const repository = new HyperliquidRepository(
+      database,
+      "hyperliquid-mainnet",
+      "Hyperliquid Mainnet",
+    );
+
+    await repository.savePortfolioHistory(
+      "wallet-1",
+      "0x1111111111111111111111111111111111111111",
+      [
+        [
+          "perpAllTime",
+          {
+            accountValueHistory: [
+              [1_721_862_400_000, "100.0"],
+              [1_721_948_800_000, "110"],
+            ],
+            pnlHistory: [],
+            vlm: "1",
+          },
+        ],
+        [
+          "perpAllTime",
+          {
+            accountValueHistory: [[1_721_862_400_000, "100.00"]],
+            pnlHistory: [],
+            vlm: "1",
+          },
+        ],
+      ],
+      "[]",
+      new Date("2026-07-25T12:00:00.000Z"),
+    );
+
+    expect(createMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            accountValue: "100",
+            capturedAt: new Date(1_721_862_400_000),
+            snapshotType: "portfolio-history",
+          }),
+          expect.objectContaining({
+            accountValue: "110",
+            capturedAt: new Date(1_721_948_800_000),
+            snapshotType: "portfolio-history",
+          }),
+        ]),
+        skipDuplicates: true,
+      }),
+    );
+  });
+
+  it("rejects conflicting portfolio account values at the same timestamp", async () => {
+    const database = {
+      dataSource: { upsert: vi.fn(async () => ({ id: "source-1" })) },
+      portfolioSnapshot: { createMany: vi.fn(async () => ({ count: 0 })) },
+    } as unknown as PrismaClient;
+    const repository = new HyperliquidRepository(
+      database,
+      "hyperliquid-mainnet",
+      "Hyperliquid Mainnet",
+    );
+    const period = (accountValue: string) => ({
+      accountValueHistory: [[1_721_862_400_000, accountValue] as [number, string]],
+      pnlHistory: [] as [number, string][],
+      vlm: "1",
+    });
+
+    await expect(
+      repository.savePortfolioHistory(
+        "wallet-1",
+        "0x1111111111111111111111111111111111111111",
+        [
+          ["perpAllTime", period("100")],
+          ["perpAllTime", period("101")],
+        ],
+        "[]",
+        new Date("2026-07-25T12:00:00.000Z"),
+      ),
+    ).rejects.toThrow("conflicting account values");
+  });
+
+  it("resolves stale incomplete-initial-sync issues only after all required cursors succeed", async () => {
+    const updateMany = vi.fn(async (_input: unknown) => ({ count: 3 }));
+    const database = {
+      cashFlow: { count: vi.fn(async () => 1) },
+      dataQualityIssue: {
+        count: vi.fn(async () => 0),
+        updateMany,
+      },
+      dataSource: { upsert: vi.fn(async () => ({ id: "source-1" })) },
+      fundingPayment: { count: vi.fn(async () => 1) },
+      normalizedTrade: { count: vi.fn(async () => 1) },
+      perpPosition: { count: vi.fn(async () => 1) },
+      syncCursor: {
+        findMany: vi.fn(async () =>
+          ["fills", "funding", "ledger", "account-snapshot"].map((scope) => ({
+            lastSuccessfulAt: new Date("2026-07-25T12:00:00.000Z"),
+            scope,
+            status: "SUCCEEDED",
+          })),
+        ),
+      },
+    } as unknown as PrismaClient;
+    const repository = new HyperliquidRepository(
+      database,
+      "hyperliquid-mainnet",
+      "Hyperliquid Mainnet",
+    );
+
+    await repository.auditWallet("wallet-1", "0x1111111111111111111111111111111111111111");
+
+    expect(updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          issueType: "HYPERLIQUID_INCOMPLETE_INITIAL_SYNC",
+          status: "OPEN",
+          walletAddressId: "wallet-1",
+        },
+      }),
+    );
+  });
+
   it("uses a batched transaction instead of a long interactive position transaction", async () => {
     const transaction = vi.fn(async (operations: readonly Promise<unknown>[]) =>
       Promise.all(operations),

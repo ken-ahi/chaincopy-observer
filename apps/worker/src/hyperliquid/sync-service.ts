@@ -55,6 +55,7 @@ export class HyperliquidSyncService {
         });
       }
       return {
+        coverage: response.coverage,
         fetched: response.items.length,
         inserted,
         reachedHistoryLimit: response.reachedHistoryLimit,
@@ -104,7 +105,12 @@ export class HyperliquidSyncService {
           walletAddressId: job.walletAddressId,
         });
       }
-      return { fetched: response.items.length, inserted };
+      return {
+        coverage: response.coverage,
+        fetched: response.items.length,
+        inserted,
+        reachedHistoryLimit: response.reachedHistoryLimit,
+      };
     } catch (error) {
       await this.fail(job, scope, error);
       throw error;
@@ -150,7 +156,12 @@ export class HyperliquidSyncService {
           walletAddressId: job.walletAddressId,
         });
       }
-      return { fetched: response.items.length, inserted };
+      return {
+        coverage: response.coverage,
+        fetched: response.items.length,
+        inserted,
+        reachedHistoryLimit: response.reachedHistoryLimit,
+      };
     } catch (error) {
       await this.fail(job, scope, error);
       throw error;
@@ -168,6 +179,11 @@ export class HyperliquidSyncService {
     const runPart = async (part: string, operation: () => Promise<void>): Promise<void> => {
       try {
         await operation();
+        await this.repository.resolveQualityIssue({
+          details: { part },
+          issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+          walletAddress: job.walletAddress,
+        });
         successes += 1;
       } catch (error) {
         const message = errorDetails(error).message;
@@ -263,6 +279,11 @@ export class HyperliquidSyncService {
       response.rawText,
       capturedAt,
     );
+    await this.repository.resolveQualityIssue({
+      details: { part: "portfolio" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
     return { capturedAt: capturedAt.toISOString() };
   }
 
@@ -276,6 +297,11 @@ export class HyperliquidSyncService {
       job.walletAddress,
       response.data,
     );
+    await this.repository.resolveQualityIssue({
+      details: { part: "historicalOrders" },
+      issueType: "HYPERLIQUID_PARTIAL_API_FAILURE",
+      walletAddress: job.walletAddress,
+    });
     return { fetched: response.data.length, inserted };
   }
 
@@ -283,9 +309,11 @@ export class HyperliquidSyncService {
     if (!job.startTime || !job.endTime) {
       throw new RangeError("Hyperliquid gap recovery requires startTime and endTime.");
     }
+    const startTime = job.startTime;
+    const endTime = job.endTime;
     const logContext = {
-      endTime: job.endTime,
-      startTime: job.startTime,
+      endTime,
+      startTime,
       walletAddress: job.walletAddress,
       walletAddressId: job.walletAddressId,
     };
@@ -303,18 +331,18 @@ export class HyperliquidSyncService {
         this.syncFunding(job),
         this.syncLedger(job),
       ]);
-      const connectionCursorUpdated = await this.repository.completeWebSocketGap(
-        job.walletAddressId,
-        job.startTime,
-        job.endTime,
-      );
-      if (!connectionCursorUpdated) {
+      if ([fills, funding, ledger].some((result) => !provesCoverage(result, startTime, endTime))) {
         throw new Error(
-          "Hyperliquid gap recovery could not complete the matching WebSocket cursor.",
+          "Hyperliquid gap recovery did not prove complete source coverage for every required lane.",
         );
       }
+      const connectionCursorUpdated = await this.repository.completeWebSocketGap(
+        job.walletAddressId,
+        startTime,
+        endTime,
+      );
       await this.repository.resolveQualityIssue({
-        details: { disconnectedAt: job.startTime },
+        details: { disconnectedAt: startTime },
         issueType: "HYPERLIQUID_WEBSOCKET_GAP",
         walletAddress: job.walletAddress,
       });
@@ -373,6 +401,23 @@ export class HyperliquidSyncService {
     await this.repository.failCursor(job.walletAddressId, scope, cursorType, message);
     await this.repository.markSourceFailure(message);
   }
+}
+
+function provesCoverage(
+  result: Readonly<Record<string, unknown>>,
+  startTime: string,
+  endTime: string,
+): boolean {
+  const coverage = result.coverage;
+  if (!coverage || typeof coverage !== "object") return false;
+  const evidence = coverage as Readonly<Record<string, unknown>>;
+  return (
+    evidence.evidence === "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" &&
+    evidence.proven === true &&
+    evidence.requestedFrom === parseJobTimestamp(startTime, "startTime") &&
+    evidence.requestedTo === parseJobTimestamp(endTime, "endTime") &&
+    result.reachedHistoryLimit !== true
+  );
 }
 
 function resolveEndTime(job: HyperliquidJobData): number {

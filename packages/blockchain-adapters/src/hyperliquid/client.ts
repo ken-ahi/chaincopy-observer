@@ -13,9 +13,17 @@ import {
 const maximumHistoryItems = 10_000;
 
 export interface HyperliquidPaginatedResponse<T> {
+  readonly coverage: HyperliquidCoverageEvidence;
   readonly items: ReadonlyArray<T>;
   readonly pages: ReadonlyArray<string>;
   readonly reachedHistoryLimit: boolean;
+}
+
+export interface HyperliquidCoverageEvidence {
+  readonly evidence: "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" | "UNPROVEN";
+  readonly proven: boolean;
+  readonly requestedFrom: number;
+  readonly requestedTo: number;
 }
 
 export class HyperliquidClient extends HyperliquidHttpClient {
@@ -34,12 +42,14 @@ export class HyperliquidClient extends HyperliquidHttpClient {
     let cursor = startTime;
     let reachedHistoryLimit = false;
     let retrievedItemCount = 0;
+    let exhaustedRequestedRange = false;
 
     while (cursor <= endTime && items.size < 10_000) {
       const response = await this.userFillsByTime(user, cursor, endTime);
       pages.push(response.rawText);
       retrievedItemCount += response.data.length;
       if (response.data.length === 0) {
+        exhaustedRequestedRange = true;
         break;
       }
 
@@ -52,9 +62,11 @@ export class HyperliquidClient extends HyperliquidHttpClient {
       }
       const lastTimestamp = Math.max(...response.data.map((fill) => fill.time));
       if (lastTimestamp < cursor) {
+        reachedHistoryLimit = true;
         break;
       }
       if (response.data.length < 2_000) {
+        exhaustedRequestedRange = true;
         break;
       }
       if (lastTimestamp === cursor) {
@@ -69,6 +81,13 @@ export class HyperliquidClient extends HyperliquidHttpClient {
     }
 
     return {
+      coverage: coverageEvidence(
+        startTime,
+        endTime,
+        items.size,
+        exhaustedRequestedRange,
+        reachedHistoryLimit,
+      ),
       items: [...items.values()].sort((left, right) => left.time - right.time),
       pages,
       reachedHistoryLimit,
@@ -115,12 +134,14 @@ async function paginateByTime<T extends { readonly time: number }>(
   let cursor = startTime;
   let reachedHistoryLimit = false;
   let retrievedItemCount = 0;
+  let exhaustedRequestedRange = false;
 
   while (cursor <= endTime && retrievedItemCount < maximumHistoryItems) {
     const response = await request(cursor);
     pages.push(response.rawText);
     retrievedItemCount += response.data.length;
     if (response.data.length === 0) {
+      exhaustedRequestedRange = true;
       break;
     }
     for (const item of response.data) {
@@ -131,7 +152,12 @@ async function paginateByTime<T extends { readonly time: number }>(
       break;
     }
     const lastTimestamp = Math.max(...response.data.map((item) => item.time));
-    if (lastTimestamp < cursor || response.data.length < 500) {
+    if (lastTimestamp < cursor) {
+      reachedHistoryLimit = true;
+      break;
+    }
+    if (response.data.length < 500) {
+      exhaustedRequestedRange = true;
       break;
     }
     if (lastTimestamp === cursor) {
@@ -142,9 +168,32 @@ async function paginateByTime<T extends { readonly time: number }>(
   }
 
   return {
+    coverage: coverageEvidence(
+      startTime,
+      endTime,
+      items.size,
+      exhaustedRequestedRange,
+      reachedHistoryLimit,
+    ),
     items: [...items.values()].sort((left, right) => left.time - right.time),
     pages,
     reachedHistoryLimit,
+  };
+}
+
+function coverageEvidence(
+  requestedFrom: number,
+  requestedTo: number,
+  itemCount: number,
+  exhaustedRequestedRange: boolean,
+  reachedHistoryLimit: boolean,
+): HyperliquidCoverageEvidence {
+  const proven = itemCount > 0 && exhaustedRequestedRange && !reachedHistoryLimit;
+  return {
+    evidence: proven ? "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" : "UNPROVEN",
+    proven,
+    requestedFrom,
+    requestedTo,
   };
 }
 

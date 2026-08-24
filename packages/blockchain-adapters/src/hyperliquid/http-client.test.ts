@@ -89,10 +89,34 @@ describe("Hyperliquid history pagination", () => {
     expect(result.items).toHaveLength(501);
     expect(result.items.at(-1)?.time).toBe(501);
     expect(result.pages).toHaveLength(2);
+    expect(result.coverage).toEqual({
+      evidence: "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE",
+      proven: true,
+      requestedFrom: 0,
+      requestedTo: 1_000,
+    });
     const secondBody = JSON.parse(String(fetchImplementation.mock.calls[1]?.[1]?.body)) as {
       startTime: number;
     };
     expect(secondBody.startTime).toBe(500);
+  });
+
+  it("does not claim coverage for a successful empty bounded response", async () => {
+    const client = new HyperliquidClient("https://example.test/info", {
+      fetchImplementation: vi
+        .fn<typeof fetch>()
+        .mockResolvedValue(new Response("[]", { status: 200 })),
+    });
+
+    const result = await client.allUserFillsByTime(address, 100, 200);
+
+    expect(result.coverage).toEqual({
+      evidence: "UNPROVEN",
+      proven: false,
+      requestedFrom: 100,
+      requestedTo: 200,
+    });
+    expect(result.reachedHistoryLimit).toBe(false);
   });
 
   it("marks fill history truncated when a full page cannot advance past one timestamp", async () => {
