@@ -16,8 +16,9 @@ import { Prisma, type PrismaClient } from "@chaincopy/database";
 
 import {
   assertPerformanceRunTrustConsistency,
+  findCurrentTrustedPerformanceRunId,
   performanceRunTrustSelect,
-  trustedPerformanceRunWhere,
+  PerformanceRunTrustInconsistentError,
 } from "./performance-run-trust.js";
 
 const PERFORMANCE_VERSION = "performance-v3";
@@ -391,15 +392,24 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
     }
   }
 
-  private loadUniverse(sourceId: string) {
-    return this.database.walletAddress.findMany({
+  private async loadUniverse(sourceId: string) {
+    const wallets = await this.database.walletAddress.findMany({
       orderBy: { address: "asc" },
       select: {
         address: true,
         id: true,
         lastSyncAt: true,
-        metricCalculationRuns: {
-          orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+      },
+      where: { isWatched: true, sourceId },
+    });
+    return Promise.all(
+      wallets.map(async (wallet) => {
+        const runId = await findCurrentTrustedPerformanceRunId(this.database, {
+          calculationVersion: PERFORMANCE_VERSION,
+          walletAddressId: wallet.id,
+        });
+        if (!runId) return { ...wallet, metricCalculationRuns: [] };
+        const run = await this.database.metricCalculationRun.findUnique({
           select: {
             _count: {
               select: { positionCycles: { where: { status: "CLOSED" } } },
@@ -422,12 +432,16 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
               },
             },
           },
-          take: 1,
-          where: trustedPerformanceRunWhere({ calculationVersion: PERFORMANCE_VERSION }),
-        },
-      },
-      where: { isWatched: true, sourceId },
-    });
+          where: { id: runId },
+        });
+        if (!run) throw new PerformanceRunTrustInconsistentError(runId);
+        assertPerformanceRunTrustConsistency(run.id, run);
+        if (run.trustState !== "TRUSTED") {
+          throw new PerformanceRunTrustInconsistentError(run.id);
+        }
+        return { ...wallet, metricCalculationRuns: [run] };
+      }),
+    );
   }
 
   private findRunById(sourceId: string, id: string): Promise<SelectionRunRow | null> {
