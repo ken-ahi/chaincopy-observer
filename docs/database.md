@@ -970,8 +970,14 @@ Runと全Resultは単一transactionで作成する。同じsource、policy、入
 | `warningCodes`        | `warning_codes`        | 警告コード             | `text[]`                              | 不可     | 配列                           |
 | `errorCode`           | `error_code`           | エラーコード           | `text`                                | 可       | —                              |
 | `errorMessage`        | `error_message`        | エラーメッセージ       | `text`                                | 可       | —                              |
+| `trustState`          | `trust_state`          | 下流利用信頼状態       | `enum PerformanceRunTrustState`       | 不可     | 既定値 `TRUSTED`               |
+| `trustRevision`       | `trust_revision`       | 信頼状態revision       | `integer`                             | 不可     | 0以上                          |
 | `createdAt`           | `created_at`           | 登録日時               | `timestamp(3)`                        | 不可     | —                              |
 | `updatedAt`           | `updated_at`           | 更新日時               | `timestamp(3)`                        | 不可     | —                              |
+
+### PerformanceRunTrustTransition（`performance_run_trust_transitions`）
+
+`MetricCalculationRun`のquarantine / restoreをappend-onlyで監査する。`operation_key`はretry時の冪等性キー、`(performance_run_id, revision)`は状態遷移順序の一意制約である。run参照は`ON DELETE RESTRICT`とし、監査履歴のsilent cascade deleteを禁止する。詳細契約は`docs/performance-run-quarantine.md`を参照する。
 
 ### DailyNav（`daily_navs`）
 

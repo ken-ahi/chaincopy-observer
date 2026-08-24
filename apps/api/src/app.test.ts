@@ -1235,6 +1235,9 @@ function calculationRun(overrides: Partial<CalculationRunDto> = {}): Calculation
     errorMessage: null,
     inputFingerprint: "1234567890abcdef",
     inputFingerprintShort: "1234567890ab",
+    trustRevision: 0,
+    trustState: "TRUSTED",
+    latestTrustTransition: null,
     ...overrides,
   };
 }

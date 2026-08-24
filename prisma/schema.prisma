@@ -162,6 +162,11 @@ enum MetricCalculationStatus {
   FAILED
 }
 
+enum PerformanceRunTrustState {
+  TRUSTED
+  QUARANTINED
+}
+
 enum PerformanceHistoryCompleteness {
   COMPLETE
   PARTIAL
@@ -1321,19 +1326,45 @@ model MetricCalculationRun {
   errorCode               String?                        @map("error_code")
   /// エラーメッセージ
   errorMessage            String?                        @map("error_message") @db.Text
+  /// 下流処理で利用可能な信頼状態（計算成否とは独立）
+  trustState              PerformanceRunTrustState       @default(TRUSTED) @map("trust_state")
+  /// trust transition と整合性を検証する単調増加 revision
+  trustRevision           Int                            @default(0) @map("trust_revision")
   dailyNavs               DailyNav[]
   positionCycles          PositionCycle[]
   performanceMetrics      AddressPerformanceMetric[]
   walletSelectionResults  WalletSelectionResult[]
   behaviorSelectionScopes BehaviorSelectionScope[]
+  trustTransitions        PerformanceRunTrustTransition[]
   /// 登録日時
   createdAt               DateTime                       @default(now()) @map("created_at")
   /// 更新日時
   updatedAt               DateTime                       @updatedAt @map("updated_at")
 
+  @@index([walletAddressId, calculationVersion, status, trustState, requestedAt], map: "metric_runs_trusted_lookup_idx")
   @@index([walletAddressId, status, requestedAt], map: "metric_runs_wallet_status_requested_idx")
   @@index([walletAddressId, calculationVersion, inputFingerprint], map: "metric_runs_input_idx")
   @@map("metric_calculation_runs")
+}
+
+/// Performance run の信頼状態変更履歴（append-only audit log）
+model PerformanceRunTrustTransition {
+  id               String                   @id @default(cuid())
+  performanceRunId String                   @map("performance_run_id")
+  performanceRun   MetricCalculationRun     @relation(fields: [performanceRunId], references: [id], onDelete: Restrict)
+  revision         Int
+  fromState        PerformanceRunTrustState @map("from_state")
+  toState          PerformanceRunTrustState @map("to_state")
+  reasonCode       String                   @map("reason_code")
+  reasonDetail     String?                  @map("reason_detail") @db.Text
+  incidentRef      String?                  @map("incident_ref")
+  actor            String
+  operationKey     String                   @unique(map: "performance_run_trust_operation_key") @map("operation_key")
+  createdAt        DateTime                 @default(now()) @map("created_at")
+
+  @@unique([performanceRunId, revision], map: "performance_run_trust_revision_key")
+  @@index([performanceRunId, createdAt], map: "performance_run_trust_run_created_idx")
+  @@map("performance_run_trust_transitions")
 }
 
 /// 日次純資産額（NAV）

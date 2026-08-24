@@ -4,6 +4,7 @@ import { type Queue } from "bullmq";
 import { describe, expect, it, vi } from "vitest";
 
 import { PerformanceRunNotFoundError, PrismaPerformanceService } from "./performance-service.js";
+import { PerformanceRunTrustInconsistentError } from "./performance-run-trust.js";
 
 interface TestRun {
   readonly calculationVersion: string;
@@ -11,6 +12,12 @@ interface TestRun {
   readonly requestedAt: string;
   readonly status: string;
   readonly walletAddressId: string;
+  readonly trustRevision: number;
+  readonly trustState: "TRUSTED" | "QUARANTINED";
+  readonly trustTransitions: readonly {
+    readonly revision: number;
+    readonly toState: "TRUSTED" | "QUARANTINED";
+  }[];
 }
 
 interface RunQuery {
@@ -19,6 +26,7 @@ interface RunQuery {
     readonly id?: string;
     readonly status?: string;
     readonly walletAddressId?: string;
+    readonly trustState?: string;
   };
 }
 
@@ -34,6 +42,9 @@ function run(
     requestedAt,
     status: "SUCCEEDED",
     walletAddressId,
+    trustRevision: 0,
+    trustState: "TRUSTED",
+    trustTransitions: [],
   };
 }
 
@@ -46,6 +57,8 @@ function createFindFirst(runs: readonly TestRun[]) {
             candidate.calculationVersion === query.where.calculationVersion) &&
           (query.where.id === undefined || candidate.id === query.where.id) &&
           (query.where.status === undefined || candidate.status === query.where.status) &&
+          (query.where.trustState === undefined ||
+            candidate.trustState === query.where.trustState) &&
           (query.where.walletAddressId === undefined ||
             candidate.walletAddressId === query.where.walletAddressId),
       )
@@ -122,6 +135,40 @@ describe("performance calculation-version selection", () => {
 
       expect(result).toBe(currentV3);
       expect(findFirst).toHaveBeenCalledTimes(1);
+    });
+
+    it("excludes a quarantined latest run and falls back to an older trusted run", async () => {
+      const quarantined = {
+        ...run("run-quarantined", "performance-v3", "2026-07-03T00:00:00.000Z"),
+        trustRevision: 1,
+        trustState: "QUARANTINED" as const,
+        trustTransitions: [{ revision: 1, toState: "QUARANTINED" as const }],
+      };
+      const findFirst = createFindFirst([quarantined, currentV3]);
+
+      const result = await findLatestSuccessful(serviceWithFindFirst(findFirst));
+
+      expect(result).toBe(currentV3);
+      expect(findFirst.mock.calls[0]?.[0].where).toMatchObject({ trustState: "TRUSTED" });
+    });
+
+    it("automatically selects a newer trusted successor", async () => {
+      const successor = run("run-successor", "performance-v3", "2026-07-04T00:00:00.000Z");
+      const result = await findLatestSuccessful(
+        serviceWithFindFirst(createFindFirst([currentV3, successor])),
+      );
+      expect(result).toBe(successor);
+    });
+
+    it("fails closed when the selected trusted run has inconsistent provenance", async () => {
+      const inconsistent = {
+        ...currentV3,
+        trustRevision: 1,
+        trustTransitions: [],
+      };
+      await expect(
+        findLatestSuccessful(serviceWithFindFirst(createFindFirst([inconsistent]))),
+      ).rejects.toBeInstanceOf(PerformanceRunTrustInconsistentError);
     });
 
     it("selects v2 even when a v1 run is newer", async () => {
