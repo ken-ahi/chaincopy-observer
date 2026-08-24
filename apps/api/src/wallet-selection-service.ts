@@ -14,6 +14,12 @@ import {
 } from "@chaincopy/analytics";
 import { Prisma, type PrismaClient } from "@chaincopy/database";
 
+import {
+  assertPerformanceRunTrustConsistency,
+  performanceRunTrustSelect,
+  trustedPerformanceRunWhere,
+} from "./performance-run-trust.js";
+
 const PERFORMANCE_VERSION = "performance-v3";
 const METRIC_KEYS = [
   "annualizedReturn",
@@ -48,6 +54,7 @@ export interface WalletSelectionItemDto {
   readonly rank: number | null;
   readonly reasonCodes: readonly WalletSelectionReasonCode[];
   readonly performanceRunId: string | null;
+  readonly performanceRunTrustState: "TRUSTED" | "QUARANTINED" | null;
   readonly lastSyncAt: string | null;
   readonly historyCompleteness: string | null;
   readonly trustedClosedCycleCount: number;
@@ -107,6 +114,7 @@ const selectionResultInclude = {
     select: {
       _count: { select: { positionCycles: { where: { status: "CLOSED" as const } } } },
       historyCompleteness: true,
+      ...performanceRunTrustSelect,
       performanceMetrics: {
         orderBy: { metricKey: "asc" as const },
         select: {
@@ -210,6 +218,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
 
     const inputs = wallets.map((wallet) => {
       const performance = wallet.metricCalculationRuns[0] ?? null;
+      if (performance) assertPerformanceRunTrustConsistency(performance.id, performance);
       const metrics = metricMap(performance?.performanceMetrics ?? []);
       const annualizedReturnMetric = performance?.performanceMetrics.find(
         (metric) => metric.metricKey === "annualizedReturn",
@@ -326,6 +335,11 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
     if (!current) return [];
     return current.results
       .filter((result) => {
+        if (result.performanceRunId) {
+          if (!result.performanceRun) return false;
+          assertPerformanceRunTrustConsistency(result.performanceRunId, result.performanceRun);
+          if (result.performanceRun.trustState !== "TRUSTED") return false;
+        }
         const decision = result.walletAddress.walletSelectionOverride?.decision ?? "AUTO";
         return effectiveWalletSelectionStatus(result.automaticStatus, decision) === "SELECTED";
       })
@@ -393,6 +407,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
             calculationVersion: true,
             historyCompleteness: true,
             id: true,
+            ...performanceRunTrustSelect,
             performanceMetrics: {
               orderBy: { metricKey: "asc" },
               select: {
@@ -408,7 +423,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
             },
           },
           take: 1,
-          where: { calculationVersion: PERFORMANCE_VERSION, status: "SUCCEEDED" },
+          where: trustedPerformanceRunWhere({ calculationVersion: PERFORMANCE_VERSION }),
         },
       },
       where: { isWatched: true, sourceId },
@@ -502,6 +517,7 @@ function toItemDto(row: SelectionResultRow): WalletSelectionItemDto {
     metrics: metricMap(row.performanceRun?.performanceMetrics ?? []),
     overrideNote: row.walletAddress.walletSelectionOverride?.note ?? null,
     performanceRunId: row.performanceRunId,
+    performanceRunTrustState: row.performanceRun?.trustState ?? null,
     rank: row.rank,
     reasonCodes: row.reasonCodes as WalletSelectionReasonCode[],
     trustedClosedCycleCount: row.performanceRun?._count.positionCycles ?? 0,

@@ -25,6 +25,12 @@ interface PerformanceFixture {
   readonly historyCompleteness: string;
   readonly id: string;
   readonly performanceMetrics: readonly MetricFixture[];
+  readonly trustRevision: number;
+  readonly trustState: "TRUSTED" | "QUARANTINED";
+  readonly trustTransitions: readonly {
+    readonly revision: number;
+    readonly toState: "TRUSTED" | "QUARANTINED";
+  }[];
 }
 
 interface WalletFixture {
@@ -100,6 +106,9 @@ function performanceFixture(
       metric("maxDrawdown", "-0.1"),
       metric("topTradeContribution", "0.2"),
     ],
+    trustRevision: 0,
+    trustState: "TRUSTED",
+    trustTransitions: [],
   };
 }
 
@@ -242,7 +251,19 @@ function createHarness(
     },
     walletAddress: {
       findFirst: async () => ({ id: "wallet-1" }),
-      findMany: async () => wallets,
+      findMany: async (input: {
+        readonly select?: {
+          readonly metricCalculationRuns?: { readonly where?: { readonly trustState?: string } };
+        };
+      }) =>
+        wallets.map((wallet) => ({
+          ...wallet,
+          metricCalculationRuns: wallet.metricCalculationRuns.filter(
+            (run) =>
+              input.select?.metricCalculationRuns?.where?.trustState === undefined ||
+              run.trustState === input.select.metricCalculationRuns.where.trustState,
+          ),
+        })),
     },
     walletSelectionOverride: {
       upsert: async (input: {
@@ -328,6 +349,26 @@ function createHarness(
 }
 
 describe("PrismaWalletSelectionService evaluation period", () => {
+  it("never consumes a quarantined SUCCEEDED run", async () => {
+    const trusted = performanceFixture(
+      new Date("2026-05-03T00:00:00.000Z"),
+      new Date("2026-08-01T00:00:00.000Z"),
+    );
+    const harness = createHarness({
+      ...trusted,
+      trustRevision: 1,
+      trustState: "QUARANTINED",
+      trustTransitions: [{ revision: 1, toState: "QUARANTINED" }],
+    });
+
+    const evaluated = await harness.service.evaluate();
+
+    expect(evaluated.items[0]).toMatchObject({
+      performanceRunId: null,
+    });
+    expect(evaluated.items[0]?.automaticStatus).not.toBe("SELECTED");
+  });
+
   it("reviews a 365-day run when the annualized-return metric covers only 60 days", async () => {
     const harness = createHarness(
       performanceFixture(

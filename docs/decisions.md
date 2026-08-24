@@ -312,3 +312,12 @@
 - Index / approval: 新規Behavior table indexはmigration候補とし、既存大規模`normalized_trades`のindexは`CREATE INDEX CONCURRENTLY` maintenanceへ分離する。実DB migration適用、index作成、backfillはOwner承認を必要とする。
 - Selection prerequisite: current Selection Runなしは正常no-opであり、watched walletへfallbackせずPhase 5側でSelection Runを作らない。これはimplementation BLOCKERではないが、実DB backfill前にPhase 4.3の正式evaluateが必要である。
 - 判定: Phase 5.0の設計はimplementation READY。実DB migration / index / backfillは運用前提とOwner承認までBLOCKEDとする。
+
+## ADR-035: Performance runの計算成否と下流利用可否を分離する
+
+- 状態: 採用
+- 背景: 汚染入力から生成された`performance-v3` runは計算自体が成功していても、SelectionやBehaviorの正本入力にしてはならない。一方、`FAILED`への書換えや削除は当時の計算結果と事故証跡を破壊する。
+- 決定: `MetricCalculationRun`は`status`と独立した`trustState`および`trustRevision`を持つ。実際の状態変更はappend-onlyな`PerformanceRunTrustTransition`へ理由、incident参照、actor、operation key、revision、時刻を保存する。
+- SSoT: trusted run取得条件とprovenance整合検証は`performance-run-trust.ts`へ集約する。最新の`SUCCEEDED + TRUSTED`だけを暗黙参照し、隔離runは除外、直前trusted runへのfallbackは許可、新しいtrusted successorは自動採用する。不整合はfail closedとする。
+- 監査: 明示run IDによる履歴参照は隔離後も許可し、API DTOへtrust state/revisionを含める。Selection履歴も保持するが、`listEffectiveSelectedWallets()`は後日隔離されたrunを有効入力として返さない。
+- 互換性: 既存runはmigrationでrevision 0の`TRUSTED`となる。`performance-v3`計算式、`wallet-selection-v1`基準、既存run IDを変更しない。実DB migrationと実runのquarantineは別途Owner承認を必要とする。

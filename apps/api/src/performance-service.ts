@@ -28,6 +28,11 @@ import {
 import { type Queue } from "bullmq";
 
 import { AddressNotFoundError } from "./address-service.js";
+import {
+  assertPerformanceRunTrustConsistency,
+  performanceRunTrustSelect,
+  trustedPerformanceRunWhere,
+} from "./performance-run-trust.js";
 
 export interface CalculationRunDto {
   readonly runId: string;
@@ -46,6 +51,18 @@ export interface CalculationRunDto {
   readonly errorMessage: string | null;
   readonly inputFingerprint: string;
   readonly inputFingerprintShort: string;
+  readonly trustRevision: number;
+  readonly trustState: "TRUSTED" | "QUARANTINED";
+  readonly latestTrustTransition: {
+    readonly actor: string;
+    readonly createdAt: string;
+    readonly fromState: "TRUSTED" | "QUARANTINED";
+    readonly incidentRef: string | null;
+    readonly reasonCode: string;
+    readonly reasonDetail: string | null;
+    readonly revision: number;
+    readonly toState: "TRUSTED" | "QUARANTINED";
+  } | null;
 }
 
 export interface MetricDto {
@@ -226,6 +243,7 @@ const runSelect = {
   status: true,
   warningCodes: true,
   warningCount: true,
+  ...performanceRunTrustSelect,
 } satisfies Prisma.MetricCalculationRunSelect;
 
 const PERFORMANCE_FALLBACK_VERSION = "performance-v2";
@@ -699,13 +717,15 @@ export class PrismaPerformanceService implements PerformanceService {
       const run = await this.database.metricCalculationRun.findFirst({
         orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
         select: runSelect,
-        where: {
-          calculationVersion,
-          walletAddressId,
-          ...(status ? { status } : {}),
-        },
+        where:
+          status === "SUCCEEDED"
+            ? trustedPerformanceRunWhere({ calculationVersion, walletAddressId })
+            : { calculationVersion, walletAddressId, ...(status ? { status } : {}) },
       });
-      if (run) return run;
+      if (run) {
+        if (status === "SUCCEEDED") assertPerformanceRunTrustConsistency(run.id, run);
+        return run;
+      }
     }
     return null;
   }
@@ -726,14 +746,13 @@ export class PrismaPerformanceService implements PerformanceService {
     for (const calculationVersion of PERFORMANCE_READ_VERSION_PRIORITY) {
       const run = await this.database.metricCalculationRun.findFirst({
         orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
-        select: { id: true },
-        where: {
-          calculationVersion,
-          status: "SUCCEEDED",
-          walletAddressId,
-        },
+        select: { id: true, ...performanceRunTrustSelect },
+        where: trustedPerformanceRunWhere({ calculationVersion, walletAddressId }),
       });
-      if (run) return run;
+      if (run) {
+        assertPerformanceRunTrustConsistency(run.id, run);
+        return run;
+      }
     }
     return null;
   }
@@ -827,6 +846,7 @@ function maximumDate(values: ReadonlyArray<Date | null>): Date | null {
 }
 
 function toCalculationRunDto(run: RunRow): CalculationRunDto {
+  const transition = run.trustTransitions[0] ?? null;
   return {
     runId: run.id,
     status: run.status,
@@ -844,6 +864,20 @@ function toCalculationRunDto(run: RunRow): CalculationRunDto {
     errorMessage: sanitizeErrorMessage(run.errorMessage),
     inputFingerprint: run.inputFingerprint,
     inputFingerprintShort: run.inputFingerprint.slice(0, 12),
+    trustRevision: run.trustRevision,
+    trustState: run.trustState,
+    latestTrustTransition: transition
+      ? {
+          actor: transition.actor,
+          createdAt: transition.createdAt.toISOString(),
+          fromState: transition.fromState,
+          incidentRef: transition.incidentRef,
+          reasonCode: transition.reasonCode,
+          reasonDetail: transition.reasonDetail,
+          revision: transition.revision,
+          toState: transition.toState,
+        }
+      : null,
   };
 }
 
