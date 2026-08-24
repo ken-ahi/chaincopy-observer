@@ -36,6 +36,32 @@ export class HyperliquidJobProcessor {
       throw new Error(`Unsupported Hyperliquid job: ${job.name}`);
     }
     const jobName = job.name as HyperliquidJobName;
+    const canonicalWallet = await this.database.walletAddress.findUnique({
+      select: { address: true },
+      where: { id: job.data.walletAddressId },
+    });
+    if (!canonicalWallet) {
+      this.logger.error(
+        { jobId: job.id, jobName, walletAddressId: job.data.walletAddressId },
+        "Rejected a Hyperliquid job for an unknown wallet identity",
+      );
+      throw new UnrecoverableError(
+        `Hyperliquid wallet identity ${job.data.walletAddressId} was not found.`,
+      );
+    }
+    if (normalizeAddress(canonicalWallet.address) !== normalizeAddress(job.data.walletAddress)) {
+      this.logger.error(
+        { jobId: job.id, jobName, walletAddressId: job.data.walletAddressId },
+        "Rejected a Hyperliquid job whose wallet address does not match its canonical identity",
+      );
+      throw new UnrecoverableError(
+        `Hyperliquid wallet identity ${job.data.walletAddressId} does not match its canonical address.`,
+      );
+    }
+    const canonicalData: HyperliquidJobData = {
+      ...job.data,
+      walletAddress: canonicalWallet.address,
+    };
     const queueJobId = job.id ?? `${jobName}-${job.data.walletAddressId}`;
     const idempotencyKey = `${hyperliquidQueueName}:${queueJobId}`;
 
@@ -80,7 +106,7 @@ export class HyperliquidJobProcessor {
         idempotencyKey,
         jobId: job.id,
         jobName,
-        walletAddress: job.data.walletAddress,
+        walletAddress: canonicalData.walletAddress,
       },
       "Hyperliquid job started",
     );
@@ -88,18 +114,18 @@ export class HyperliquidJobProcessor {
     try {
       const result =
         jobName === hyperliquidJobNames.websocketListener
-          ? await this.startWebSocket(job.data)
+          ? await this.startWebSocket(canonicalData)
           : await withRedisLock(
               this.redis,
-              `hyperliquid:wallet-sync:${job.data.walletAddressId}`,
-              () => this.runJob(jobName, job.data, queueJobId),
+              `hyperliquid:wallet-sync:${canonicalData.walletAddressId}`,
+              () => this.runJob(jobName, canonicalData, queueJobId),
             );
       const performance =
         jobName === hyperliquidJobNames.dataQualityAudit ||
         jobName === hyperliquidJobNames.gapRecovery
           ? await this.performanceScheduler.enqueue(
-              job.data.walletAddressId,
-              new Date(job.data.requestedAt),
+              canonicalData.walletAddressId,
+              new Date(canonicalData.requestedAt),
               `automatic:${jobName}`,
             )
           : null;
@@ -205,6 +231,10 @@ export class HyperliquidJobProcessor {
     );
     return { listening: true };
   }
+}
+
+function normalizeAddress(address: string): string {
+  return address.trim().toLowerCase();
 }
 
 export function suppressImmediateLockRetry(error: SyncLockUnavailableError): UnrecoverableError {

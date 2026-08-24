@@ -26,9 +26,16 @@ function createProcessor(
       jobId: "performance-job-1",
     })),
   } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[7],
+  canonicalAddress = jobData.walletAddress,
 ): HyperliquidJobProcessor {
+  const databaseWithCanonicalWallet = {
+    ...database,
+    walletAddress: {
+      findUnique: vi.fn(async () => ({ address: canonicalAddress })),
+    },
+  } as unknown as PrismaClient;
   return new HyperliquidJobProcessor(
-    database,
+    databaseWithCanonicalWallet,
     {
       eval: vi.fn(async () => 1),
       set: vi.fn(async () => "OK"),
@@ -44,6 +51,59 @@ function createProcessor(
 }
 
 describe("HyperliquidJobProcessor", () => {
+  it("fails closed before API calls or persistence when wallet identity and address differ", async () => {
+    const snapshotPortfolio = vi.fn();
+    const upsert = vi.fn();
+    const processor = createProcessor(
+      { syncJob: { upsert } } as unknown as PrismaClient,
+      {} as ConstructorParameters<typeof HyperliquidJobProcessor>[4],
+      false,
+      { snapshotPortfolio } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+      undefined,
+      "0x2222222222222222222222222222222222222222",
+    );
+
+    await expect(
+      processor.process({
+        attemptsMade: 0,
+        data: jobData,
+        id: "mismatched-wallet-job",
+        name: hyperliquidJobNames.portfolioSnapshot,
+      } as Job<HyperliquidJobData>),
+    ).rejects.toMatchObject({ name: "UnrecoverableError" });
+    expect(snapshotPortfolio).not.toHaveBeenCalled();
+    expect(upsert).not.toHaveBeenCalled();
+  });
+
+  it("uses the canonical DB address after case-insensitive identity validation", async () => {
+    const snapshotPortfolio = vi.fn(async () => ({ captured: true }));
+    const database = {
+      syncJob: {
+        findUnique: vi.fn(async () => null),
+        update: vi.fn(async () => undefined),
+        upsert: vi.fn(async () => undefined),
+      },
+    } as unknown as PrismaClient;
+    const canonicalAddress = jobData.walletAddress.toUpperCase().replace("0X", "0x");
+    const processor = createProcessor(
+      database,
+      {} as ConstructorParameters<typeof HyperliquidJobProcessor>[4],
+      false,
+      { snapshotPortfolio } as unknown as ConstructorParameters<typeof HyperliquidJobProcessor>[3],
+      undefined,
+      canonicalAddress,
+    );
+
+    await processor.process({
+      attemptsMade: 0,
+      data: jobData,
+      id: "canonical-wallet-job",
+      name: hyperliquidJobNames.portfolioSnapshot,
+    } as Job<HyperliquidJobData>);
+
+    expect(snapshotPortfolio).toHaveBeenCalledWith({ ...jobData, walletAddress: canonicalAddress });
+  });
+
   it("marks lock contention unrecoverable for the current BullMQ job", () => {
     const error = suppressImmediateLockRetry(new SyncLockUnavailableError("wallet-lock"));
 
