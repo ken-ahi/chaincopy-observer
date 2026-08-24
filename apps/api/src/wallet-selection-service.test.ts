@@ -6,6 +6,7 @@ import { Prisma, type PrismaClient } from "@chaincopy/database";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { PrismaWalletSelectionService } from "./wallet-selection-service.js";
+import { PerformanceRunTrustInconsistentError } from "./performance-run-trust.js";
 
 const now = new Date("2026-08-08T00:00:00.000Z");
 const walletAddress = "0x1111111111111111111111111111111111111111";
@@ -249,6 +250,20 @@ function createHarness(
     dataSource: {
       upsert: async () => ({ id: "source-1" }),
     },
+    metricCalculationRun: {
+      findMany: async (input: {
+        readonly where: { readonly calculationVersion: string; readonly walletAddressId: string };
+      }) =>
+        wallets
+          .find((wallet) => wallet.id === input.where.walletAddressId)!
+          .metricCalculationRuns.filter(
+            (run) => run.calculationVersion === input.where.calculationVersion,
+          ),
+      findUnique: async (input: { readonly where: { readonly id: string } }) =>
+        wallets
+          .flatMap((wallet) => wallet.metricCalculationRuns)
+          .find((run) => run.id === input.where.id) ?? null,
+    },
     walletAddress: {
       findFirst: async () => ({ id: "wallet-1" }),
       findMany: async (input: {
@@ -367,6 +382,23 @@ describe("PrismaWalletSelectionService evaluation period", () => {
       performanceRunId: null,
     });
     expect(evaluated.items[0]?.automaticStatus).not.toBe("SELECTED");
+  });
+
+  it("fails closed instead of bypassing an inconsistent newer run", async () => {
+    const inconsistent = performanceFixture(
+      new Date("2026-05-03T00:00:00.000Z"),
+      new Date("2026-08-01T00:00:00.000Z"),
+    );
+    const harness = createHarness({
+      ...inconsistent,
+      trustRevision: 1,
+      trustState: "QUARANTINED",
+      trustTransitions: [],
+    });
+
+    await expect(harness.service.evaluate()).rejects.toBeInstanceOf(
+      PerformanceRunTrustInconsistentError,
+    );
   });
 
   it("reviews a 365-day run when the annualized-return metric covers only 60 days", async () => {

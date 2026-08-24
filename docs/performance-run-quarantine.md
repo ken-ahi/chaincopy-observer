@@ -17,7 +17,7 @@ Calculation outcome and downstream trust are separate concepts. A contaminated r
 
 ## Trusted-run SSoT
 
-`apps/api/src/performance-run-trust.ts` owns the trusted predicate and consistency check. Consumers must use `trustedPerformanceRunWhere` and `assertPerformanceRunTrustConsistency`; they must not duplicate `trustState` rules.
+`apps/api/src/performance-run-trust.ts` owns current-run lookup and consistency checks. Consumers must use `findCurrentTrustedPerformanceRunId`; they must not pre-filter candidates with `trustState = TRUSTED` or duplicate `trustState` rules. The resolver reads `SUCCEEDED` candidates in deterministic recency order in bounded pages, validates each candidate before branching, returns the first consistent trusted run, skips only consistently quarantined runs, and throws immediately on any inconsistent newer candidate.
 
 For each supported calculation version, the newest `SUCCEEDED + TRUSTED` run ordered by `requestedAt DESC, id DESC` is current. A quarantined newest run permits fallback to an older trusted run of that version. A newer trusted successor becomes current automatically. If no trusted run exists, the consumer returns explicit absence and existing fail-closed selection behavior applies.
 

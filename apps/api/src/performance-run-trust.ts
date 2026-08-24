@@ -42,16 +42,36 @@ export class PerformanceRunTrustConflictError extends Error {
   }
 }
 
-export function trustedPerformanceRunWhere(input: {
-  readonly calculationVersion: string;
-  readonly walletAddressId?: string;
-}): Prisma.MetricCalculationRunWhereInput {
-  return {
-    calculationVersion: input.calculationVersion,
-    status: "SUCCEEDED",
-    trustState: "TRUSTED",
-    ...(input.walletAddressId ? { walletAddressId: input.walletAddressId } : {}),
-  };
+const TRUST_LOOKUP_BATCH_SIZE = 100;
+
+export async function findCurrentTrustedPerformanceRunId(
+  database: PrismaClient,
+  input: {
+    readonly calculationVersion: string;
+    readonly walletAddressId: string;
+  },
+): Promise<string | null> {
+  let cursor: string | undefined;
+  for (;;) {
+    const candidates = await database.metricCalculationRun.findMany({
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
+      select: { id: true, ...performanceRunTrustSelect },
+      take: TRUST_LOOKUP_BATCH_SIZE,
+      where: {
+        calculationVersion: input.calculationVersion,
+        status: "SUCCEEDED",
+        walletAddressId: input.walletAddressId,
+      },
+    });
+    for (const candidate of candidates) {
+      assertPerformanceRunTrustConsistency(candidate.id, candidate);
+      if (candidate.trustState === "TRUSTED") return candidate.id;
+    }
+    if (candidates.length < TRUST_LOOKUP_BATCH_SIZE) return null;
+    cursor = candidates.at(-1)?.id;
+    if (!cursor) return null;
+  }
 }
 
 export function assertPerformanceRunTrustConsistency(

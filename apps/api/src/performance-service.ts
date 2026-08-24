@@ -30,8 +30,9 @@ import { type Queue } from "bullmq";
 import { AddressNotFoundError } from "./address-service.js";
 import {
   assertPerformanceRunTrustConsistency,
+  findCurrentTrustedPerformanceRunId,
   performanceRunTrustSelect,
-  trustedPerformanceRunWhere,
+  PerformanceRunTrustInconsistentError,
 } from "./performance-run-trust.js";
 
 export interface CalculationRunDto {
@@ -714,18 +715,29 @@ export class PrismaPerformanceService implements PerformanceService {
     status?: MetricCalculationStatus,
   ): Promise<RunRow | null> {
     for (const calculationVersion of PERFORMANCE_READ_VERSION_PRIORITY) {
+      if (status === "SUCCEEDED") {
+        const runId = await findCurrentTrustedPerformanceRunId(this.database, {
+          calculationVersion,
+          walletAddressId,
+        });
+        if (!runId) continue;
+        const trustedRun = await this.database.metricCalculationRun.findUnique({
+          select: runSelect,
+          where: { id: runId },
+        });
+        if (!trustedRun) throw new PerformanceRunTrustInconsistentError(runId);
+        assertPerformanceRunTrustConsistency(trustedRun.id, trustedRun);
+        if (trustedRun.trustState !== "TRUSTED") {
+          throw new PerformanceRunTrustInconsistentError(trustedRun.id);
+        }
+        return trustedRun;
+      }
       const run = await this.database.metricCalculationRun.findFirst({
         orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
         select: runSelect,
-        where:
-          status === "SUCCEEDED"
-            ? trustedPerformanceRunWhere({ calculationVersion, walletAddressId })
-            : { calculationVersion, walletAddressId, ...(status ? { status } : {}) },
+        where: { calculationVersion, walletAddressId, ...(status ? { status } : {}) },
       });
-      if (run) {
-        if (status === "SUCCEEDED") assertPerformanceRunTrustConsistency(run.id, run);
-        return run;
-      }
+      if (run) return run;
     }
     return null;
   }
@@ -744,15 +756,11 @@ export class PrismaPerformanceService implements PerformanceService {
     }
 
     for (const calculationVersion of PERFORMANCE_READ_VERSION_PRIORITY) {
-      const run = await this.database.metricCalculationRun.findFirst({
-        orderBy: [{ requestedAt: "desc" }, { id: "desc" }],
-        select: { id: true, ...performanceRunTrustSelect },
-        where: trustedPerformanceRunWhere({ calculationVersion, walletAddressId }),
+      const runId = await findCurrentTrustedPerformanceRunId(this.database, {
+        calculationVersion,
+        walletAddressId,
       });
-      if (run) {
-        assertPerformanceRunTrustConsistency(run.id, run);
-        return run;
-      }
+      if (runId) return { id: runId };
     }
     return null;
   }

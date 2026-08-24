@@ -30,6 +30,8 @@ interface RunQuery {
   };
 }
 
+const runsByFindFirst = new WeakMap<object, readonly TestRun[]>();
+
 function run(
   id: string,
   calculationVersion: string,
@@ -49,7 +51,7 @@ function run(
 }
 
 function createFindFirst(runs: readonly TestRun[]) {
-  return vi.fn<(query: RunQuery) => Promise<TestRun | null>>(async (query) => {
+  const findFirst = vi.fn<(query: RunQuery) => Promise<TestRun | null>>(async (query) => {
     const matches = runs
       .filter(
         (candidate) =>
@@ -68,11 +70,45 @@ function createFindFirst(runs: readonly TestRun[]) {
       );
     return matches[0] ?? null;
   });
+  runsByFindFirst.set(findFirst, runs);
+  return findFirst;
 }
 
 function serviceWithFindFirst(findFirst: unknown): PrismaPerformanceService {
+  const runs = runsByFindFirst.get(findFirst as object) ?? [];
   const database = {
-    metricCalculationRun: { findFirst },
+    metricCalculationRun: {
+      findFirst,
+      findMany: vi.fn(
+        async (
+          query: RunQuery & { readonly cursor?: { readonly id: string }; readonly take?: number },
+        ) => {
+          await (findFirst as (input: RunQuery) => Promise<TestRun | null>)(query);
+          const matches = runs
+            .filter(
+              (candidate) =>
+                (query.where.calculationVersion === undefined ||
+                  candidate.calculationVersion === query.where.calculationVersion) &&
+                (query.where.status === undefined || candidate.status === query.where.status) &&
+                (query.where.walletAddressId === undefined ||
+                  candidate.walletAddressId === query.where.walletAddressId),
+            )
+            .sort(
+              (left, right) =>
+                right.requestedAt.localeCompare(left.requestedAt) ||
+                right.id.localeCompare(left.id),
+            );
+          const offset = query.cursor
+            ? Math.max(0, matches.findIndex((candidate) => candidate.id === query.cursor?.id) + 1)
+            : 0;
+          return matches.slice(offset, offset + (query.take ?? matches.length));
+        },
+      ),
+      findUnique: vi.fn(
+        async (query: { readonly where: { readonly id: string } }) =>
+          runs.find((candidate) => candidate.id === query.where.id) ?? null,
+      ),
+    },
   } as unknown as PrismaClient;
   return new PrismaPerformanceService(database, {} as Queue<PerformanceJobData>);
 }
@@ -149,7 +185,7 @@ describe("performance calculation-version selection", () => {
       const result = await findLatestSuccessful(serviceWithFindFirst(findFirst));
 
       expect(result).toBe(currentV3);
-      expect(findFirst.mock.calls[0]?.[0].where).toMatchObject({ trustState: "TRUSTED" });
+      expect(findFirst.mock.calls[0]?.[0].where).not.toHaveProperty("trustState");
     });
 
     it("automatically selects a newer trusted successor", async () => {
@@ -168,6 +204,18 @@ describe("performance calculation-version selection", () => {
       };
       await expect(
         findLatestSuccessful(serviceWithFindFirst(createFindFirst([inconsistent]))),
+      ).rejects.toBeInstanceOf(PerformanceRunTrustInconsistentError);
+    });
+
+    it("fails closed when a newer quarantined run has inconsistent provenance", async () => {
+      const inconsistent = {
+        ...run("run-bad-quarantine", "performance-v3", "2026-07-03T00:00:00.000Z"),
+        trustRevision: 1,
+        trustState: "QUARANTINED" as const,
+        trustTransitions: [],
+      };
+      await expect(
+        findLatestSuccessful(serviceWithFindFirst(createFindFirst([currentV3, inconsistent]))),
       ).rejects.toBeInstanceOf(PerformanceRunTrustInconsistentError);
     });
 
@@ -230,7 +278,7 @@ describe("performance calculation-version selection", () => {
 
       const result = await resolveRun(serviceWithFindFirst(findFirst));
 
-      expect(result).toBe(currentV3);
+      expect(result).toEqual({ id: currentV3.id });
       expect(findFirst).toHaveBeenCalledTimes(1);
     });
 
@@ -239,7 +287,7 @@ describe("performance calculation-version selection", () => {
 
       const result = await resolveRun(serviceWithFindFirst(findFirst));
 
-      expect(result).toBe(oldV2);
+      expect(result).toEqual({ id: oldV2.id });
       expect(findFirst.mock.calls[1]?.[0]).toMatchObject({
         where: {
           calculationVersion: "performance-v2",
@@ -278,6 +326,20 @@ describe("performance calculation-version selection", () => {
       expect(result).toBe(oldV2);
       expect(findFirst).toHaveBeenCalledTimes(1);
       expect(findFirst.mock.calls[0]?.[0].where).not.toHaveProperty("calculationVersion");
+    });
+
+    it("keeps a quarantined run available to explicit audit lookup", async () => {
+      const quarantined = {
+        ...currentV3,
+        trustRevision: 1,
+        trustState: "QUARANTINED" as const,
+        trustTransitions: [{ revision: 1, toState: "QUARANTINED" as const }],
+      };
+      const result = await resolveRun(
+        serviceWithFindFirst(createFindFirst([quarantined])),
+        quarantined.id,
+      );
+      expect(result).toBe(quarantined);
     });
 
     it("does not get an explicit run belonging to another wallet", async () => {
