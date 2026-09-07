@@ -37,7 +37,7 @@
 
 ## MVP受入状態
 
-状態は「実装」「自動テスト」「実運用確認」を分離する。ここでの実運用欄は過去の承認済みIssue報告を含み、2026-09-07に実DBを再照合したことを意味しない。
+状態は「実装」「自動テスト」「実運用確認」を分離する。ここでの実運用欄は過去の承認済みIssue報告を含む。Issue 15の入力状態は下記の範囲で2026-09-07にread-only再照合したが、Issue 26の全integrity auditを再実行したものではない。
 
 | SPEC第32章対応                          | 実装                                     | 自動テスト                          | 実運用                           | 現在の判定                         |
 | --------------------------------------- | ---------------------------------------- | ----------------------------------- | -------------------------------- | ---------------------------------- |
@@ -52,12 +52,25 @@
 | I. signalからsource/version/DQを追跡    | Behavior provenanceまであり              | 全test成功                          | 未確認                           | signal未実装範囲は未達             |
 | J. 実売買・署名・秘密鍵なし、主要CI成功 | safety boundary維持                      | ローカル全validation・PR #27 CI成功 | 本番適用なし                     | merge承認待ち                      |
 
+## Issue 15 data-readiness read-only snapshot
+
+2026-09-07に、PostgreSQLへ `default_transaction_read_only=on` と30秒のstatement timeoutを強制して確認した。Workerは停止中であり、recalculate、Selection evaluate、Behavior、enqueue、DB/Redis mutationは実行していない。
+
+- watched Hyperliquid wallet: 14件。
+- current Selection Run: `cmtpiv9u10004pi0yx37tjy4h`、`wallet-selection-v1`、2026-09-06 08:00:44 UTC評価。universe 14 / selected 0 / qualified 0 / review 14 / excluded 0。
+- latest trusted `performance-v3`: 14/14 walletにSUCCEEDED/TRUSTED Runあり。history completenessは `GAP_DETECTED` 10件、`PARTIAL` 4件、`COMPLETE` 0件。
+- staleness: policy上限は24時間。14/14 walletの `lastSyncAt` が上限超過（約122時間が5件、約361時間が9件）。実装上は正式syncの `completeCursor()` 成功時に `lastSyncAt` が更新されるため、更新処理の欠落ではなくsync未実行状態である。
+- required metric: `annualizedReturn` と `maxDrawdown` は14/14 Runで未生成、`topTradeContribution` は10/14 RunのみAVAILABLE。current Selectionは14/14件を `REQUIRED_METRIC_MISSING` と判定している。
+- trusted closed cycle: policy下限20件を満たすのは2/14 wallet。12/14件は `TOO_FEW_COMPLETED_TRADES`。
+- OPEN DQ: `HYPERLIQUID_WEBSOCKET_GAP` 441件/10 wallet、`HYPERLIQUID_WEBSOCKET_ERROR` 177件/10 wallet、`HYPERLIQUID_FILL_HISTORY_LIMIT` 3件/3 wallet、`HYPERLIQUID_PARTIAL_API_FAILURE` 3件/3 wallet、`HYPERLIQUID_WEBSOCKET_USER_LIMIT` 4件/4 wallet。
+- したがってStage 4 canaryは引き続きBLOCKED。通常syncはstalenessを改善できるが、coverage proofのないWebSocket gapやsource history limitを解消済みとして扱うことはできない。
+
 ## 次の優先作業
 
 1. OwnerによるPR #27 mergeを待つ。Codexはmainへmergeしない。
-2. merge後、Issue 26を再実行せず、Issue 15の現行データreadinessを読み取り専用で再確認する。
-3. history completeness / staleness / metric calculabilityをwallet別・理由別に分類し、取得可能なデータ改善とsource制約を分離する。
-4. 実DB sync、Performance、Selection、Behavior canary/backfillへ進む場合は、対象Issueの承認範囲とOwner approvalを再確認する。
+2. merge後、Issue 26を再実行せず、Ownerが許可する場合に限り14 walletの正式syncでstalenessと再評価可能なDQを更新する。
+3. sync後もcoverage proofを満たせないgap/source limitはBLOCKED_SOURCE_DATAとして維持し、取得可能な入力だけでPerformanceを再計算する。
+4. Selection evaluate、Behavior canary/backfillへ進む場合は、Issue 15の最新契約とOwner approvalを再確認する。
 
 ## Blockerと承認境界
 
