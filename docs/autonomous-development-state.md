@@ -12,6 +12,7 @@
 - `HEAD` / `origin/main`: `7524a7f4e493c4a7ae42f7179774df09d553c5a0` (`Merge pull request #27 from ken-ahi/codex/issue-26-incident-repair`)
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
 - 本branchは、Owner承認済みの14 wallet正式sync・Performance再計算・Selection再評価の実施結果を記録する。
+- state更新commit `f47ec42`は`origin/codex/issue-15-data-readiness`へpush済み。GitHub CLIがなく、利用可能なbrowser sessionもGitHub未認証のため、PR作成とPR CI起動は未実施。
 
 ## 完了済みで再実行しない作業
 
