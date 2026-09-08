@@ -8,3 +8,6 @@ playwright-report/
 test-results/
 AGENTS.md
 docs/SPEC.md
+# Immutable Issue #26 Stage 3A evidence; byte hash is part of the repair contract.
+docs/issue26-stage3a-repair-manifest.json
+docs/issue26-stage3a-repair-manifest.md

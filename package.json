@@ -24,6 +24,7 @@
     "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "tsx prisma/seed.ts",
     "db:cleanup": "tsx scripts/db-cleanup.ts",
+    "db:issue26-stage3b-preflight": "tsx scripts/issue26-stage3b-preflight.ts",
     "queue:cleanup": "tsx apps/worker/src/maintenance/queue-cleanup-cli.ts",
     "deploy:local": "sh scripts/deploy-local.sh"
   },
