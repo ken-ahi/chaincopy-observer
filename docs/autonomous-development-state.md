@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-08 (Asia/Tokyo)
+最終更新: 2026-09-12 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -12,7 +12,7 @@
 - `HEAD` / `origin/main`: `7524a7f4e493c4a7ae42f7179774df09d553c5a0` (`Merge pull request #27 from ken-ahi/codex/issue-26-incident-repair`)
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
 - 本branchは、Owner承認済みの14 wallet正式sync・Performance再計算・Selection再評価の実施結果を記録する。
-- state更新commit `f47ec42`は`origin/codex/issue-15-data-readiness`へpush済み。GitHub CLIがなく、利用可能なbrowser sessionもGitHub未認証のため、PR作成とPR CI起動は未実施。
+- state更新commit `f47ec42`と認証blocker記録commit `af1c1e0`は`origin/codex/issue-15-data-readiness`へpush済み。GitHub CLIがなく、利用可能なbrowser sessionもGitHub未認証のため、PR作成とPR CI起動は未実施。
 
 ## 完了済みで再実行しない作業
 
@@ -36,7 +36,7 @@
 
 ## MVP受入状態
 
-状態は「実装」「自動テスト」「実運用確認」を分離する。ここでの実運用欄は過去の承認済みIssue報告を含む。Issue 26は完了済みとして再実行せず、Issue 15の14 walletだけを2026-09-08に同期・再評価した。
+状態は「実装」「自動テスト」「実運用確認」を分離する。ここでの実運用欄は過去の承認済みIssue報告を含む。Issue 26は完了済みとして再実行せず、Issue 15の14 walletだけを2026-09-08と2026-09-12に同期・再評価した。
 
 | SPEC第32章対応                          | 実装                                     | 自動テスト                          | 実運用                           | 現在の判定                          |
 | --------------------------------------- | ---------------------------------------- | ----------------------------------- | -------------------------------- | ----------------------------------- |
@@ -102,6 +102,38 @@
 - 観測peak: Worker約1.59 GiB、PostgreSQL約3.22 GiB、Redis約59 MiB。OOM、無制限backlog、retry stormはなかった。
 - 終了時queueはhyperliquid / performance / behaviorすべてwait / active / delayed / prioritizedが0。履歴としてhyperliquid failed 10件、performance failed 14件（既存保持分）、behavior failed 0件が残る。
 - 終了時PostgreSQL / Redisはhealthy、DB sizeは51 GB、WSL disk freeは796 GB。Workerは停止済み。
+
+## Issue 15 data-readiness refresh（2026-09-12）
+
+### Preflightと実行範囲
+
+- 前回処理を機械的に繰り返さず、live read-only監査を先行した。14/14 walletの`lastSyncAt`が24時間閾値を超えており、current Selection Runは引き続きselected 0 / review 14だったため、Owner承認済みの定期refresh対象と判定した。
+- 対象はSelection readiness監査で確定したwatched Hyperliquid wallet 14件だけである。Worker imageは`chaincopy-worker:issue15-7524a7f`、digestは`sha256:035ae76f6c12c8ac5bd7ef01b12c5ef4ca5677e58136795f46a9bcf7fc9d11af`、revision labelはmain merge commit `7524a7f4e493c4a7ae42f7179774df09d553c5a0`と一致した。
+- concurrency 1、queue backlog上限500、discovery無効のまま、正式scheduler/sync、`PerformanceJobScheduler`、`wallet-selection-v1`、Behavior control jobを使用した。手動cursor変更、DQ直接更新、quarantine解除、destructive DB操作、Redis key削除は0件である。
+- 開始時queueはhyperliquid / performance / behaviorのwait / active / delayed / prioritizedがすべて0、PostgreSQL / Redisはhealthy、DB sizeは51 GB、WSL disk freeは796 GBだった。
+
+### 正式syncと環境中断からの回復
+
+- schedulerはcurrent-state / fill / funding / ledger / portfolio / historical-orders / DQ auditを各14件、計98件の正式jobとして扱った。14/14 walletの主要laneは最終的に成功し、`lastSyncAt`の24時間超過は14件から0件へ解消した。最終sync時刻範囲は`2026-09-11T15:53:33.615Z`–`2026-09-11T16:03:59.635Z`（UTC）である。
+- 初回実行中にWSL session終了に伴いPostgreSQL / Redis / Workerが同時停止し、BullMQ stalled recovery時の同一wallet lock競合によってwallet `cms39x9ni000umw0iw2zkbf1e`のhistorical-ordersとDQ auditが各1件fail closedした。heap、backlog、retry storm、アプリケーション例外を原因とする停止ではない。
+- 欠けた2 laneだけをcanonical DB address `0x06438b0d1bb6f8aa4a455a4f2c1b1e744d53c760`とのidentity照合後、fresh job IDで正式queueへ再投入した。historical-ordersは`fetched=2000 / inserted=2000`、DQ auditは`missingScopes=[] / openIssues=55`で、両方attempt 1の`SUCCEEDED`となった。失敗履歴は監査証跡として削除していない。
+- Worker再起動時のscheduler tickは同じ14 walletだけを再照合した。既存idempotent job identityと正式processorを維持し、対象外walletやwrong-address identifierは使用していない。
+
+### Data Quality、Performance、Selection
+
+- OPEN DQの最終値は`HYPERLIQUID_FILL_HISTORY_LIMIT` 3件 / 3 wallet、`HYPERLIQUID_WEBSOCKET_GAP` 441件 / 10 wallet、`HYPERLIQUID_WEBSOCKET_ERROR` 177件 / 10 wallet、`HYPERLIQUID_WEBSOCKET_USER_LIMIT` 4件 / 4 walletで、refresh前後に変化はない。`HYPERLIQUID_PARTIAL_API_FAILURE`は0件を維持した。
+- 正式sync後、14 walletへ`performance-v3`を`force=true`で各1回実行し、14/14 `SUCCEEDED`、14/14 `TRUSTED`、FAILED 0だった。retryしたDQ auditは対象walletのPerformanceを正式契約からもう1回起動し、Run `cmtx5bqu80aagru0i4j9rhull`が`SUCCEEDED / TRUSTED / GAP_DETECTED`、metrics 12件で完了した。
+- current Selection Runは`cmtx5bxhq0007qn0yra29e6gq`、評価時刻`2026-09-11T16:03:56.201Z`、universe 14 / selected 0 / qualified 0 / review 14 / excluded 0である。全14 walletが`HISTORY_INCOMPLETE`と`REQUIRED_METRIC_MISSING`、うち11 walletが`TOO_FEW_COMPLETED_TRADES`となった。
+- latest trusted completenessは`GAP_DETECTED` 10件、`PARTIAL` 4件、`COMPLETE` 0件である。trusted closed cycle 20件以上は3/14だが、全walletで必須metricが揃っていない。`DATA_STALE`とthreshold由来のexcludeは0件である。
+- 結論: selected 0はstalenessではなく、解消していない履歴完全性と必須metric不足によるfail-closed `REVIEW`である。投資基準を本当に満たさないと確定した結果ではない。
+
+### Behavior、負荷、終了状態
+
+- Selection結果に従うBehavior control jobはstartup時とSelection再評価後の双方で`no-op / processedEvents=0`となった。Behavior event / run / scope / DQはすべて0件で、selected wallet不在時にwatched walletへfallbackしていない。
+- 観測peakは、正式sync中にWorker約1.67 GiB、PostgreSQL約3.31 GiB、Redis約55 MiB、Performance中にWorker約1.84 GiB、PostgreSQL約2.97 GiB、Redis約54 MiBだった。OOM、無制限backlog、retry stormはなかった。
+- 終了時queueはhyperliquid / performance / behaviorのwait / active / delayed / prioritizedがすべて0。Workerはgraceful stop済みでexit 0、PostgreSQL / Redisはhealthy、DB sizeは52 GB、WSL disk freeは796 GBである。
+- 14 incident Performance Runは`QUARANTINED` 14件、trust transition 14件のまま保持した。manual overrideは全件`AUTO`である。
+- 状態文書更新後のvalidationはformat、lint、typecheck、65 files / 613 tests、build 11/11 packages、`git diff --check`が成功した。integration testはvolumeなしの一時PostgreSQL / Redisへmigrationを適用して実行し、終了時に一時containerだけを停止した。実DB / 実Redisへtest mutationは行っていない。
 
 ## 次の優先作業
 
