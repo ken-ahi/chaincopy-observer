@@ -12,6 +12,7 @@
 - branch base / `origin/main`: `7524a7f4e493c4a7ae42f7179774df09d553c5a0` (`Merge pull request #27 from ken-ahi/codex/issue-26-incident-repair`)
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
 - 本branchは、Owner決定に基づくbounded Info API recoveryとofficial historical fillsのread-only設計、offline policy実装、検証結果を記録する。
+- 実装commit `936edad`は`origin/codex/hyperliquid-history-recovery`へpush済み。GitHub CLIはなく、in-app browserはGitHub未認証のため、PR作成とpull-request CI起動は外部認証待ちである。
 
 ## 完了済みで再実行しない作業
 
