@@ -20,7 +20,8 @@ export interface HyperliquidPaginatedResponse<T> {
 }
 
 export interface HyperliquidCoverageEvidence {
-  readonly evidence: "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" | "UNPROVEN";
+  readonly evidence:
+    "BOUNDED_EMPTY_EXHAUSTIVE_RESPONSE" | "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" | "UNPROVEN";
   readonly proven: boolean;
   readonly requestedFrom: number;
   readonly requestedTo: number;
@@ -188,9 +189,13 @@ function coverageEvidence(
   exhaustedRequestedRange: boolean,
   reachedHistoryLimit: boolean,
 ): HyperliquidCoverageEvidence {
-  const proven = itemCount > 0 && exhaustedRequestedRange && !reachedHistoryLimit;
+  const proven = exhaustedRequestedRange && !reachedHistoryLimit;
   return {
-    evidence: proven ? "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" : "UNPROVEN",
+    evidence: !proven
+      ? "UNPROVEN"
+      : itemCount === 0
+        ? "BOUNDED_EMPTY_EXHAUSTIVE_RESPONSE"
+        : "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE",
     proven,
     requestedFrom,
     requestedTo,

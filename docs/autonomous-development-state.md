@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-12 (Asia/Tokyo)
+最終更新: 2026-09-14 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -8,11 +8,10 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/issue-15-data-readiness`
-- `HEAD` / `origin/main`: `7524a7f4e493c4a7ae42f7179774df09d553c5a0` (`Merge pull request #27 from ken-ahi/codex/issue-26-incident-repair`)
+- branch: `codex/hyperliquid-history-recovery`
+- branch base / `origin/main`: `7524a7f4e493c4a7ae42f7179774df09d553c5a0` (`Merge pull request #27 from ken-ahi/codex/issue-26-incident-repair`)
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- 本branchは、Owner承認済みの14 wallet正式sync・Performance再計算・Selection再評価の実施結果を記録する。
-- state更新commit `f47ec42`と認証blocker記録commit `af1c1e0`は`origin/codex/issue-15-data-readiness`へpush済み。GitHub CLIがなく、利用可能なbrowser sessionもGitHub未認証のため、PR作成とPR CI起動は未実施。
+- 本branchは、Owner決定に基づくbounded Info API recoveryとofficial historical fillsのread-only設計、offline policy実装、検証結果を記録する。
 
 ## 完了済みで再実行しない作業
 
@@ -29,9 +28,9 @@
 
 - root `pnpm-workspace.yaml` の既存 `overrides` へ `fast-uri@3: 3.1.7` と `fast-uri@4: 4.1.4` を追加した。
 - `pnpm-lock.yaml` の解決結果は3系が3.1.7、4系が4.1.4で、3.1.5/4.1.2は残っていない。
-- `pnpm audit --audit-level high` はexit 0。残存はunrelatedなmoderate 2件であり、本変更では拡張対応しない。
+- `pnpm audit --audit-level high` はexit 0。残存はunrelatedなmoderate 4件であり、本変更では拡張対応しない。
 - pnpm 11.9.0でinstall/lockfile更新を実施した。
-- validation: format、lint、typecheck、65 files/613 tests、build 11/11 packages、E2E 21/21、`git diff --check` は成功した。
+- validation: format、lint、typecheck、66 files/620 tests、build 11/11 packages、E2E 21/21、`git diff --check` は成功した。
 - E2Eは一時PostgreSQL/Redisだけで実行し、終了後に両containerを削除した。実DB/実Redisは変更していない。
 
 ## MVP受入状態
@@ -137,14 +136,24 @@
 
 ## 次の優先作業
 
-1. 10 walletのWebSocket gapについて、fills / funding / ledger全laneのcoverage proofを取得できる正式なupstream history recovery契約を設計・承認する。
-2. 3 walletの公式10,000 Fill上限について、追加の信頼できる履歴sourceまたは証明可能なbounded recovery方針を決める。
-3. 上記が解消して`COMPLETE`となった後に`performance-v3`を再計算し、必須metricとclosed cycleが揃ったwalletだけをSelectionで再評価する。
-4. effective selected walletが1件以上になった場合のみ、通常Behavior処理を継続する。
+1. Owner承認を得てRequester Pays LIST / HEAD inventoryを取得し、3 walletのrequired rangeに対する公式archive coverage・旧新format cutover・exact byte costを確定する。
+2. approved sampleで旧`node_fills` strict parser fixtureを検証し、append-only provenance schemaをreviewする。
+3. 別Owner承認後に最小hour unionだけをdownload・dry-run照合し、承認済みmigration / ingestion / DQ再評価を行う。
+4. completenessが証明できたwalletについて`performance-v3` → `wallet-selection-v1` → effective selected walletの通常Behaviorを順に実行する。
+
+## Hyperliquid history recovery設計・実装（2026-09-14）
+
+- 正本を`docs/hyperliquid-history-recovery-spec.md`、設計判断をADR-036へ記録した。
+- Info API bounded recoveryは空responseを明示的なcoverage evidenceとして区別し、funding / ledgerでは受理、fillsでは直近10,000件cutoffとの識別不能を理由に引き続きfail closedとした。
+- official historical fills向けに旧1-event lineと新block envelopeのstrict parser、wallet抽出、large `tid`保持、identity/payload conflict検出、hour inventory coverage判定、Decimal cost estimatorを追加した。
+- 対象3 walletの最小hour unionは2025-04-24T00:00:00Zから2026-07-27T11:59:59.999Zまでの11,028 object-hour候補である。公式資料にarchive開始・cutover・sizeがないため、課金inventoryなしに推測で確定していない。
+- Requester Pays API call、download、実DB mutation、DQ更新、Performance / Selection / Behaviorは0件。次のOwner gateは課金LIST / HEAD inventory取得である。
+- validation中に公開された新規advisoryへ対応し、Next.jsをpatched `16.3.5`、transitive sharp overrideを`0.35.4`へdependency-only更新した。`16.3.3`はWindows production E2Eでruntime regressionを再現したため採用せず、`16.3.5`で21/21 E2E成功を確認した。auditはhigh以上0件、moderate 4件でexit 0である。
+- 最終validationはformat、lint、typecheck 11/11、66 files / 620 tests、build 11/11、E2E 21/21、audit high以上0件、`git diff --check`の全項目に成功した。integration / E2Eはvolumeなしの一時PostgreSQL / Redisで実行し、終了後に一時containerだけを削除して既存PostgreSQL / Redisをhealthyへ復元した。Workerは起動していない。
 
 ## Blockerと承認境界
 
-- 現在のnormal syncと既存gap recoveryだけでは、10 walletのgap coverageおよび3 walletの10,000 Fill以前の履歴を証明できない。追加取得sourceまたは正式仕様を伴う別作業契約が必要である。
+- Info APIでnon-empty fillsを取得できるgapは改訂契約で回復可能。empty/truncated fillsおよび3 walletの10,000 Fill以前は、Owner承認済みofficial archive inventory/downloadとprovenance付きingestionが完了するまで証明できない。
 - DQやhistory completenessを件数合わせ・手動更新で解消済みにしない。既存のfail-closed契約を維持する。
 - Issue 15 Stage 4 canary/backfillは、effective selected walletが1件以上あり、対象walletのhistory/DQ/quote条件が契約を満たし、必要なOwner承認が揃うまで実行しない。
 - main merge、実DB destructive operation、実migration、本番適用、大規模index、Redis削除、quarantine解除、秘密情報変更、実注文・署名・資金移動は自動実行しない。
