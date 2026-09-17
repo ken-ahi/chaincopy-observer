@@ -8,6 +8,7 @@ import { enqueueHyperliquidGapRecovery } from "../hyperliquid/queue.js";
 import {
   createGapRecoveryManifest,
   gapRecoveryJobId,
+  isDeterministicGapCoverageFailure,
   type GapRecoveryManifestInput,
   type GapRecoveryManifestRow,
 } from "./hyperliquid-gap-recovery-policy.js";
@@ -19,7 +20,14 @@ interface Options {
 }
 
 type ExistingState =
-  "absent" | "active" | "completed" | "delayed" | "failed" | "prioritized" | "waiting";
+  | "absent"
+  | "active"
+  | "completed"
+  | "delayed"
+  | "failed"
+  | "failedDeterministic"
+  | "prioritized"
+  | "waiting";
 
 async function main(): Promise<void> {
   loadRootEnvironment();
@@ -89,6 +97,7 @@ async function main(): Promise<void> {
     let enqueued = 0;
     let retried = 0;
     let alreadyPending = 0;
+    let deterministicFailures = 0;
     for (const row of manifest.rows) {
       const jobId = gapRecoveryJobId(row);
       const job = await queue.getJob(jobId);
@@ -96,6 +105,8 @@ async function main(): Promise<void> {
       if (state === "failed") {
         await job!.retry("failed");
         retried += 1;
+      } else if (state === "failedDeterministic") {
+        deterministicFailures += 1;
       } else if (state === "absent") {
         await enqueueHyperliquidGapRecovery(queue, toJobData(row));
         enqueued += 1;
@@ -105,7 +116,13 @@ async function main(): Promise<void> {
         throw new Error(`Unexpected job state ${state} for ${jobId}.`);
       }
     }
-    console.info(JSON.stringify({ ...summary, alreadyPending, enqueued, retried }, null, 2));
+    console.info(
+      JSON.stringify(
+        { ...summary, alreadyPending, deterministicFailures, enqueued, retried },
+        null,
+        2,
+      ),
+    );
   } finally {
     await queue.close();
     await redis.quit();
@@ -122,6 +139,7 @@ async function inspectExisting(
     completed: 0,
     delayed: 0,
     failed: 0,
+    failedDeterministic: 0,
     prioritized: 0,
     waiting: 0,
   };
@@ -135,6 +153,9 @@ async function inspectExisting(
 async function normalizedState(job: Job<HyperliquidJobData> | undefined): Promise<ExistingState> {
   if (!job) return "absent";
   const state = await job.getState();
+  if (state === "failed" && isDeterministicGapCoverageFailure(job.failedReason)) {
+    return "failedDeterministic";
+  }
   if (state === "unknown") return "absent";
   if (
     state === "active" ||

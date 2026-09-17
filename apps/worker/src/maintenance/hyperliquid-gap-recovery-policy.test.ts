@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   createGapRecoveryManifest,
   gapRecoveryJobId,
+  isDeterministicGapCoverageFailure,
   type GapRecoveryManifestInput,
 } from "./hyperliquid-gap-recovery-policy.js";
 
@@ -45,5 +46,18 @@ describe("Hyperliquid gap recovery manifest policy", () => {
 
   it("fails closed on duplicate source identities", () => {
     expect(() => createGapRecoveryManifest([row(), row()])).toThrow("duplicate identity");
+  });
+
+  it("distinguishes deterministic coverage failures from retryable infrastructure failures", () => {
+    expect(
+      isDeterministicGapCoverageFailure(
+        "Hyperliquid gap recovery did not prove complete source coverage. The range remains OPEN and deterministic retries are suppressed.",
+      ),
+    ).toBe(true);
+    expect(
+      isDeterministicGapCoverageFailure(
+        "A sync job already holds lock. Immediate BullMQ retries are suppressed; a later scheduler tick may enqueue fresh work.",
+      ),
+    ).toBe(false);
   });
 });

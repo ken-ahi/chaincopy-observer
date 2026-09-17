@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { hyperliquidJobNames } from "@chaincopy/domain";
 
 export const gapRecoveryManifestVersion = "hyperliquid-gap-recovery-manifest-v1";
+const DETERMINISTIC_COVERAGE_FAILURE =
+  "The range remains OPEN and deterministic retries are suppressed.";
 
 export interface GapRecoveryManifestInput {
   readonly boundaryRawEventId: string | null;
@@ -79,4 +81,8 @@ export function gapRecoveryJobId(row: GapRecoveryManifestRow): string {
   const startTime = new Date(row.startTime).getTime();
   const endTime = requestedAt;
   return `${hyperliquidJobNames.gapRecovery}-${row.walletAddressId}-${requestedAt}-gap-${startTime}-${endTime}`;
+}
+
+export function isDeterministicGapCoverageFailure(failedReason: string): boolean {
+  return failedReason.includes(DETERMINISTIC_COVERAGE_FAILURE);
 }
