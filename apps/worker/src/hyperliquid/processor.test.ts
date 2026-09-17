@@ -6,7 +6,12 @@ import pino from "pino";
 import { describe, expect, it, vi } from "vitest";
 
 import { SyncLockUnavailableError } from "./lock.js";
-import { HyperliquidJobProcessor, suppressImmediateLockRetry } from "./processor.js";
+import {
+  HyperliquidJobProcessor,
+  suppressImmediateLockRetry,
+  suppressUnprovenGapRetry,
+} from "./processor.js";
+import { GapCoverageNotProvenError } from "./sync-service.js";
 
 const jobData: HyperliquidJobData = {
   requestedAt: "2026-07-25T12:00:00.000Z",
@@ -109,6 +114,14 @@ describe("HyperliquidJobProcessor", () => {
 
     expect(error.name).toBe("UnrecoverableError");
     expect(error.message).toContain("later scheduler tick");
+  });
+
+  it("marks deterministic unproven gap coverage unrecoverable while leaving the range open", () => {
+    const error = suppressUnprovenGapRetry(new GapCoverageNotProvenError());
+
+    expect(error.name).toBe("UnrecoverableError");
+    expect(error.message).toContain("remains OPEN");
+    expect(error.message).toContain("deterministic retries are suppressed");
   });
 
   it("skips a BullMQ redelivery already committed as successful", async () => {
