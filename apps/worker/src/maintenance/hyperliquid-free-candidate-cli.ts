@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     now.getTime() - discoverySettings.fullRecentActivityDays * 24 * 60 * 60 * 1_000,
   );
   const candidates = await prisma.addressCandidate.findMany({
-    orderBy: [{ availableFrom: "desc" }, { retrievedFillCount: "asc" }, { id: "asc" }],
+    orderBy: [{ availableFrom: "desc" }, { retrievedFillCount: "desc" }, { id: "asc" }],
     select: {
       address: true,
       availableFrom: true,
