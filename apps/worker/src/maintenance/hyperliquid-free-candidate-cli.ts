@@ -13,6 +13,7 @@ import { Redis } from "ioredis";
 import { PrismaDiscoveryService } from "../../../api/src/discovery-service.js";
 import {
   createFreeCandidateManifest,
+  hasContinuousUtcDateCoverage,
   type FreeCandidateManifestRow,
 } from "./hyperliquid-free-candidate-policy.js";
 
@@ -178,6 +179,28 @@ async function main(): Promise<void> {
       });
       continue;
     }
+    const verifiedNavDates = [
+      ...new Set(
+        portfolioTimestamps.map((timestamp) => new Date(timestamp).toISOString().slice(0, 10)),
+      ),
+    ];
+    if (
+      !hasContinuousUtcDateCoverage(
+        portfolioTimestamps,
+        earliestSourceTimestamp,
+        now.getTime(),
+        selectionSettings.minimumEvaluationDays,
+      )
+    ) {
+      rejectedBoundaries.push({
+        candidateId: candidate.id,
+        earliestPortfolioAt: new Date(earliestPortfolioTimestamp).toISOString(),
+        earliestSourceAt: new Date(earliestSourceTimestamp).toISOString(),
+        reason: "UNTRUSTED_NAV_CONTINUITY",
+        verifiedNavDayCount: verifiedNavDates.length,
+      });
+      continue;
+    }
     rows.push({
       address: candidate.address,
       availableFrom: candidate.availableFrom.toISOString(),
@@ -189,6 +212,7 @@ async function main(): Promise<void> {
       earliestSourceAt: new Date(earliestSourceTimestamp).toISOString(),
       initialPositionBoundaries,
       verifiedFillCount: fills.items.length,
+      verifiedNavDayCount: verifiedNavDates.length,
     });
     if (rows.length === options.limit) break;
   }

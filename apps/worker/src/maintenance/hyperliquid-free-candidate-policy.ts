@@ -4,7 +4,7 @@ import { Prisma } from "@chaincopy/database";
 
 const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
-export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v6";
+export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v7";
 
 export interface FreeCandidateInitialPositionBoundary {
   readonly coin: string;
@@ -24,6 +24,7 @@ export interface FreeCandidateManifestRow {
   readonly earliestSourceAt: string;
   readonly initialPositionBoundaries: ReadonlyArray<FreeCandidateInitialPositionBoundary>;
   readonly verifiedFillCount: number;
+  readonly verifiedNavDayCount: number;
 }
 
 export interface FreeCandidateManifest {
@@ -45,7 +46,8 @@ export function createFreeCandidateManifest(
     if (
       row.dataQualityScore !== 100 ||
       row.discoveryRetrievedFillCount <= 0 ||
-      row.verifiedFillCount <= 0
+      row.verifiedFillCount <= 0 ||
+      row.verifiedNavDayCount <= 0
     ) {
       throw new Error(`Candidate ${row.candidateId} does not meet the free-data quality gate.`);
     }
@@ -91,4 +93,39 @@ export function createFreeCandidateManifest(
     sha256: createHash("sha256").update(canonical).digest("hex"),
     version: freeCandidateManifestVersion,
   };
+}
+
+export function hasContinuousUtcDateCoverage(
+  timestamps: ReadonlyArray<number>,
+  requiredFrom: number,
+  requiredTo: number,
+  minimumDays: number,
+): boolean {
+  if (
+    !Number.isFinite(requiredFrom) ||
+    !Number.isFinite(requiredTo) ||
+    !Number.isSafeInteger(minimumDays) ||
+    minimumDays < 1
+  ) {
+    return false;
+  }
+  const dates = [
+    ...new Set(
+      timestamps
+        .filter(Number.isFinite)
+        .map((timestamp) => new Date(timestamp).toISOString().slice(0, 10)),
+    ),
+  ].sort();
+  const fromDate = new Date(requiredFrom).toISOString().slice(0, 10);
+  const toDate = new Date(requiredTo).toISOString().slice(0, 10);
+  const coveredDates = dates.filter((date) => date >= fromDate && date <= toDate);
+  if (coveredDates[0] !== fromDate || coveredDates.at(-1) !== toDate) return false;
+  if (coveredDates.length < minimumDays + 1) return false;
+  return coveredDates.every((date, index) => {
+    const previous = coveredDates[index - 1];
+    return (
+      !previous ||
+      Date.parse(`${date}T00:00:00.000Z`) - Date.parse(`${previous}T00:00:00.000Z`) === 86_400_000
+    );
+  });
 }

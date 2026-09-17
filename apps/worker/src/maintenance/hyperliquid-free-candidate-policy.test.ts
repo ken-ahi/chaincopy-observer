@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   createFreeCandidateManifest,
+  hasContinuousUtcDateCoverage,
   type FreeCandidateManifestRow,
 } from "./hyperliquid-free-candidate-policy.js";
 
@@ -23,7 +24,34 @@ const row = (overrides: Partial<FreeCandidateManifestRow> = {}): FreeCandidateMa
     },
   ],
   verifiedFillCount: 100,
+  verifiedNavDayCount: 100,
   ...overrides,
+});
+
+describe("continuous UTC NAV coverage", () => {
+  const day = (value: string) => Date.parse(`${value}T12:00:00.000Z`);
+
+  it("accepts an inclusive contiguous range", () => {
+    expect(
+      hasContinuousUtcDateCoverage(
+        [day("2026-01-01"), day("2026-01-02"), day("2026-01-03")],
+        day("2026-01-01"),
+        day("2026-01-03"),
+        2,
+      ),
+    ).toBe(true);
+  });
+
+  it("rejects a missing UTC day", () => {
+    expect(
+      hasContinuousUtcDateCoverage(
+        [day("2026-01-01"), day("2026-01-03")],
+        day("2026-01-01"),
+        day("2026-01-03"),
+        2,
+      ),
+    ).toBe(false);
+  });
 });
 
 describe("free candidate promotion manifest policy", () => {
