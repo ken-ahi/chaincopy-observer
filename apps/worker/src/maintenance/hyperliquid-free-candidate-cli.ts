@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     now.getTime() - discoverySettings.fullRecentActivityDays * 24 * 60 * 60 * 1_000,
   );
   const candidates = await prisma.addressCandidate.findMany({
-    orderBy: [{ availableFrom: "asc" }, { retrievedFillCount: "asc" }, { id: "asc" }],
+    orderBy: [{ availableFrom: "desc" }, { retrievedFillCount: "asc" }, { id: "asc" }],
     select: {
       address: true,
       availableFrom: true,
@@ -109,12 +109,32 @@ async function main(): Promise<void> {
       });
       continue;
     }
+    const portfolio = await client.portfolio(candidate.address);
+    const portfolioTimestamps = portfolio.data
+      .filter(([periodName]) => periodName === "perpAllTime")
+      .flatMap(([, period]) => period.accountValueHistory.map(([timestamp]) => timestamp));
+    const earliestPortfolioTimestamp = Math.min(...portfolioTimestamps);
+    if (
+      !Number.isFinite(earliestPortfolioTimestamp) ||
+      new Date(earliestPortfolioTimestamp).toISOString().slice(0, 10) >
+        candidate.availableFrom.toISOString().slice(0, 10)
+    ) {
+      rejectedBoundaries.push({
+        candidateId: candidate.id,
+        earliestPortfolioAt: Number.isFinite(earliestPortfolioTimestamp)
+          ? new Date(earliestPortfolioTimestamp).toISOString()
+          : null,
+        reason: "UNTRUSTED_NAV_BOUNDARY",
+      });
+      continue;
+    }
     rows.push({
       address: candidate.address,
       availableFrom: candidate.availableFrom.toISOString(),
       availableTo: candidate.availableTo.toISOString(),
       candidateId: candidate.id,
       dataQualityScore: candidate.dataQualityScore,
+      earliestPortfolioAt: new Date(earliestPortfolioTimestamp).toISOString(),
       initialFillOccurredAt: new Date(first.time).toISOString(),
       initialSourceTradeId: first.tid,
       initialStartPosition: first.startPosition,

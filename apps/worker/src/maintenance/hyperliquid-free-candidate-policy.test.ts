@@ -11,6 +11,7 @@ const row = (overrides: Partial<FreeCandidateManifestRow> = {}): FreeCandidateMa
   availableTo: "2026-09-01T00:00:00.000Z",
   candidateId: "candidate-1",
   dataQualityScore: 100,
+  earliestPortfolioAt: "2024-01-01T00:00:00.000Z",
   initialFillOccurredAt: "2024-01-01T00:00:00.000Z",
   initialSourceTradeId: "1",
   initialStartPosition: "0",
@@ -39,6 +40,12 @@ describe("free candidate promotion manifest policy", () => {
     expect(() => createFreeCandidateManifest([row({ initialStartPosition: "0.1" })])).toThrow(
       "does not have a trusted flat boundary",
     );
+  });
+
+  it("fails closed when portfolio history starts after the fill boundary", () => {
+    expect(() =>
+      createFreeCandidateManifest([row({ earliestPortfolioAt: "2024-01-02T00:00:00.000Z" })]),
+    ).toThrow("does not have a trusted NAV boundary");
   });
 
   it("fails closed on duplicate addresses", () => {
