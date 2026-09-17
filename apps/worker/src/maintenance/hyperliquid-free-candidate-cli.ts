@@ -1,5 +1,5 @@
 import { HyperliquidClient, WeightedRateLimiter } from "@chaincopy/blockchain-adapters";
-import { loadRootEnvironment } from "@chaincopy/config";
+import { loadRootEnvironment, readWorkerEnv } from "@chaincopy/config";
 import { Prisma } from "@chaincopy/database";
 import { disconnectDatabase, prisma } from "@chaincopy/database";
 import {
@@ -29,6 +29,7 @@ const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
 async function main(): Promise<void> {
   loadRootEnvironment();
+  const environment = readWorkerEnv();
   const options = parseOptions(process.argv.slice(2));
   const source = await prisma.dataSource.findUniqueOrThrow({
     where: { key: "hyperliquid-mainnet" },
@@ -72,14 +73,11 @@ async function main(): Promise<void> {
       sourceId: source.id,
     },
   });
-  const client = new HyperliquidClient(
-    process.env.HYPERLIQUID_API_URL ?? "https://api.hyperliquid.xyz/info",
-    {
-      defaultPriority: 10,
-      rateLimiter: new WeightedRateLimiter(300, 60_000),
-      timeoutMs: Number(process.env.HYPERLIQUID_HTTP_TIMEOUT_MS ?? "10000"),
-    },
-  );
+  const client = new HyperliquidClient(environment.HYPERLIQUID_API_URL, {
+    defaultPriority: 10,
+    rateLimiter: new WeightedRateLimiter(environment.HYPERLIQUID_API_WEIGHT_PER_MINUTE, 60_000),
+    timeoutMs: environment.HYPERLIQUID_HTTP_TIMEOUT_MS,
+  });
   const rows: FreeCandidateManifestRow[] = [];
   const rejectedBoundaries: Array<Readonly<Record<string, unknown>>> = [];
   for (const candidate of candidates) {
