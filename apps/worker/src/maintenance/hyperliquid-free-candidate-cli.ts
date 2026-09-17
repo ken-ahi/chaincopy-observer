@@ -1,4 +1,6 @@
+import { HyperliquidClient, WeightedRateLimiter } from "@chaincopy/blockchain-adapters";
 import { loadRootEnvironment } from "@chaincopy/config";
+import { Prisma } from "@chaincopy/database";
 import { disconnectDatabase, prisma } from "@chaincopy/database";
 import {
   hyperliquidCandidateQueueName,
@@ -20,7 +22,10 @@ interface Options {
   readonly expectedSha256: string | undefined;
   readonly limit: number;
   readonly maximumFillCount: number;
+  readonly scanLimit: number;
 }
+
+const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
 async function main(): Promise<void> {
   loadRootEnvironment();
@@ -49,7 +54,7 @@ async function main(): Promise<void> {
       id: true,
       retrievedFillCount: true,
     },
-    take: options.limit,
+    take: options.scanLimit,
     where: {
       availableFrom: { lte: evaluationBoundary },
       availableTo: { gte: recentBoundary },
@@ -67,24 +72,63 @@ async function main(): Promise<void> {
       sourceId: source.id,
     },
   });
-  const rows: FreeCandidateManifestRow[] = candidates.map((candidate) => {
+  const client = new HyperliquidClient(
+    process.env.HYPERLIQUID_API_URL ?? "https://api.hyperliquid.xyz/info",
+    {
+      defaultPriority: 10,
+      rateLimiter: new WeightedRateLimiter(300, 60_000),
+      timeoutMs: Number(process.env.HYPERLIQUID_HTTP_TIMEOUT_MS ?? "10000"),
+    },
+  );
+  const rows: FreeCandidateManifestRow[] = [];
+  const rejectedBoundaries: Array<Readonly<Record<string, unknown>>> = [];
+  for (const candidate of candidates) {
     if (!candidate.availableFrom || !candidate.availableTo) {
       throw new Error(`Candidate ${candidate.id} has no availability boundary.`);
     }
-    return {
+    const boundaryTimestamp = candidate.availableFrom.getTime();
+    const boundary = await client.allUserFillsByTime(
+      candidate.address,
+      boundaryTimestamp,
+      boundaryTimestamp,
+    );
+    const boundaryFills = boundary.items.filter((fill) => fill.time === boundaryTimestamp);
+    const first = boundaryFills[0];
+    if (
+      boundary.reachedHistoryLimit ||
+      boundary.coverage.proven !== true ||
+      boundaryFills.length !== 1 ||
+      !first ||
+      !new FinancialDecimal(first.startPosition).isZero()
+    ) {
+      rejectedBoundaries.push({
+        candidateId: candidate.id,
+        fillCount: boundaryFills.length,
+        reason: "UNTRUSTED_INITIAL_POSITION_BOUNDARY",
+        startPosition: first?.startPosition ?? null,
+      });
+      continue;
+    }
+    rows.push({
       address: candidate.address,
       availableFrom: candidate.availableFrom.toISOString(),
       availableTo: candidate.availableTo.toISOString(),
       candidateId: candidate.id,
       dataQualityScore: candidate.dataQualityScore,
+      initialFillOccurredAt: new Date(first.time).toISOString(),
+      initialSourceTradeId: first.tid,
+      initialStartPosition: first.startPosition,
       retrievedFillCount: candidate.retrievedFillCount,
-    };
-  });
+    });
+    if (rows.length === options.limit) break;
+  }
   const manifest = createFreeCandidateManifest(rows);
   const summary = {
     count: manifest.count,
     dryRun: !options.enqueue,
+    rejectedBoundaries,
     rows: manifest.rows,
+    scannedCount: rows.length + rejectedBoundaries.length,
     sha256: manifest.sha256,
     version: manifest.version,
   };
@@ -140,6 +184,7 @@ function parseOptions(arguments_: ReadonlyArray<string>): Options {
   const enqueue = arguments_.includes("--enqueue");
   const limit = numericArgument(arguments_, "--limit=", 10);
   const maximumFillCount = numericArgument(arguments_, "--maximum-fill-count=", 2_500);
+  const scanLimit = numericArgument(arguments_, "--scan-limit=", 25);
   const expectedCount = optionalNumericArgument(arguments_, "--expected-count=");
   const expectedSha256 = arguments_
     .find((value) => value.startsWith("--expected-sha256="))
@@ -154,6 +199,9 @@ function parseOptions(arguments_: ReadonlyArray<string>): Options {
   ) {
     throw new Error("--maximum-fill-count must be an integer from 1 to 9999.");
   }
+  if (!Number.isSafeInteger(scanLimit) || scanLimit < limit || scanLimit > 100) {
+    throw new Error("--scan-limit must be an integer from --limit through 100.");
+  }
   if (
     enqueue &&
     (!Number.isSafeInteger(expectedCount) || !expectedSha256?.match(/^[a-f0-9]{64}$/))
@@ -162,7 +210,7 @@ function parseOptions(arguments_: ReadonlyArray<string>): Options {
       "--enqueue requires --expected-count=<integer> and --expected-sha256=<64 hex>.",
     );
   }
-  return { enqueue, expectedCount, expectedSha256, limit, maximumFillCount };
+  return { enqueue, expectedCount, expectedSha256, limit, maximumFillCount, scanLimit };
 }
 
 function numericArgument(

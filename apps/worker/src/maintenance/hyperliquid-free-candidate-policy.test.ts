@@ -11,6 +11,9 @@ const row = (overrides: Partial<FreeCandidateManifestRow> = {}): FreeCandidateMa
   availableTo: "2026-09-01T00:00:00.000Z",
   candidateId: "candidate-1",
   dataQualityScore: 100,
+  initialFillOccurredAt: "2024-01-01T00:00:00.000Z",
+  initialSourceTradeId: "1",
+  initialStartPosition: "0",
   retrievedFillCount: 100,
   ...overrides,
 });
@@ -29,6 +32,12 @@ describe("free candidate promotion manifest policy", () => {
   it("fails closed on incomplete quality evidence", () => {
     expect(() => createFreeCandidateManifest([row({ dataQualityScore: 99 })])).toThrow(
       "does not meet the free-data quality gate",
+    );
+  });
+
+  it("fails closed when the first fill does not prove a flat boundary", () => {
+    expect(() => createFreeCandidateManifest([row({ initialStartPosition: "0.1" })])).toThrow(
+      "does not have a trusted flat boundary",
     );
   });
 

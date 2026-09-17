@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
-export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v1";
+import { Prisma } from "@chaincopy/database";
+
+const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
+
+export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v2";
 
 export interface FreeCandidateManifestRow {
   readonly address: string;
@@ -8,6 +12,9 @@ export interface FreeCandidateManifestRow {
   readonly availableTo: string;
   readonly candidateId: string;
   readonly dataQualityScore: number;
+  readonly initialFillOccurredAt: string;
+  readonly initialSourceTradeId: string;
+  readonly initialStartPosition: string;
   readonly retrievedFillCount: number;
 }
 
@@ -29,6 +36,13 @@ export function createFreeCandidateManifest(
     }
     if (row.dataQualityScore !== 100 || row.retrievedFillCount <= 0) {
       throw new Error(`Candidate ${row.candidateId} does not meet the free-data quality gate.`);
+    }
+    if (
+      !row.initialSourceTradeId ||
+      !Number.isFinite(new Date(row.initialFillOccurredAt).getTime()) ||
+      !new FinancialDecimal(row.initialStartPosition).isZero()
+    ) {
+      throw new Error(`Candidate ${row.candidateId} does not have a trusted flat boundary.`);
     }
     candidateIds.add(row.candidateId);
     addresses.add(row.address);
