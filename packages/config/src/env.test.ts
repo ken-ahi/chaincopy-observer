@@ -49,4 +49,27 @@ describe("environment schemas", () => {
       workerEnvSchema.safeParse({ ...shared, HYPERLIQUID_WORKER_CONCURRENCY: "0" }).success,
     ).toBe(false);
   });
+
+  it("accepts explicit discovery runtime component overrides", () => {
+    const result = workerEnvSchema.parse({
+      ...shared,
+      HYPERLIQUID_DISCOVERY_ENABLED: "true",
+      HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED: "true",
+      HYPERLIQUID_DISCOVERY_ENRICHMENT_CONSUMER_ENABLED: "false",
+      HYPERLIQUID_DISCOVERY_SCHEDULER_ENABLED: "false",
+    });
+
+    expect(result.HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED).toBe(true);
+    expect(result.HYPERLIQUID_DISCOVERY_ENRICHMENT_CONSUMER_ENABLED).toBe(false);
+    expect(result.HYPERLIQUID_DISCOVERY_SCHEDULER_ENABLED).toBe(false);
+  });
+
+  it("treats empty optional discovery runtime overrides as unset", () => {
+    const result = workerEnvSchema.parse({
+      ...shared,
+      HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED: "",
+    });
+
+    expect(result.HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED).toBeUndefined();
+  });
 });

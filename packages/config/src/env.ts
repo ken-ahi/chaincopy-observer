@@ -11,6 +11,10 @@ const positiveDecimalStringSchema = z
   .trim()
   .regex(/^(?:0|[1-9]\d*)(?:\.\d+)?$/, "Expected a non-negative decimal string.");
 const booleanEnvironmentSchema = z.enum(["true", "false"]).transform((value) => value === "true");
+const optionalBooleanEnvironmentSchema = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  booleanEnvironmentSchema.optional(),
+);
 const commaSeparatedSchema = z.string().transform((value) =>
   value
     .split(",")
@@ -67,6 +71,9 @@ export const workerEnvSchema = sharedSchema.extend({
   HYPERLIQUID_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(2),
   HYPERLIQUID_DISCOVERY_WORKER_CONCURRENCY: z.coerce.number().int().min(1).max(32).default(4),
   HYPERLIQUID_DISCOVERY_ENABLED: booleanEnvironmentSchema.default(false),
+  HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED: optionalBooleanEnvironmentSchema,
+  HYPERLIQUID_DISCOVERY_ENRICHMENT_CONSUMER_ENABLED: optionalBooleanEnvironmentSchema,
+  HYPERLIQUID_DISCOVERY_SCHEDULER_ENABLED: optionalBooleanEnvironmentSchema,
   HYPERLIQUID_DISCOVERY_MODE: z.enum(["MAJOR", "ALL"]).default("MAJOR"),
   HYPERLIQUID_DISCOVERY_PRIORITY_COINS: commaSeparatedSchema.default([
     "BTC",
