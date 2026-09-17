@@ -4,7 +4,14 @@ import { Prisma } from "@chaincopy/database";
 
 const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
-export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v5";
+export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v6";
+
+export interface FreeCandidateInitialPositionBoundary {
+  readonly coin: string;
+  readonly occurredAt: string;
+  readonly sourceTradeId: string;
+  readonly startPosition: string;
+}
 
 export interface FreeCandidateManifestRow {
   readonly address: string;
@@ -15,9 +22,7 @@ export interface FreeCandidateManifestRow {
   readonly discoveryRetrievedFillCount: number;
   readonly earliestPortfolioAt: string;
   readonly earliestSourceAt: string;
-  readonly initialFillOccurredAt: string;
-  readonly initialSourceTradeId: string;
-  readonly initialStartPosition: string;
+  readonly initialPositionBoundaries: ReadonlyArray<FreeCandidateInitialPositionBoundary>;
   readonly verifiedFillCount: number;
 }
 
@@ -44,10 +49,19 @@ export function createFreeCandidateManifest(
     ) {
       throw new Error(`Candidate ${row.candidateId} does not meet the free-data quality gate.`);
     }
+    const coins = new Set<string>();
     if (
-      !row.initialSourceTradeId ||
-      !Number.isFinite(new Date(row.initialFillOccurredAt).getTime()) ||
-      !new FinancialDecimal(row.initialStartPosition).isZero()
+      row.initialPositionBoundaries.length === 0 ||
+      row.initialPositionBoundaries.some((boundary) => {
+        const invalid =
+          !boundary.coin ||
+          coins.has(boundary.coin) ||
+          !boundary.sourceTradeId ||
+          !Number.isFinite(new Date(boundary.occurredAt).getTime()) ||
+          !new FinancialDecimal(boundary.startPosition).isZero();
+        coins.add(boundary.coin);
+        return invalid;
+      })
     ) {
       throw new Error(`Candidate ${row.candidateId} does not have a trusted flat boundary.`);
     }
@@ -62,7 +76,12 @@ export function createFreeCandidateManifest(
     }
     candidateIds.add(row.candidateId);
     addresses.add(row.address);
-    return { ...row };
+    return {
+      ...row,
+      initialPositionBoundaries: [...row.initialPositionBoundaries].sort((left, right) =>
+        left.coin.localeCompare(right.coin),
+      ),
+    };
   });
   rows.sort((left, right) => left.candidateId.localeCompare(right.candidateId));
   const canonical = JSON.stringify({ rows, version: freeCandidateManifestVersion });

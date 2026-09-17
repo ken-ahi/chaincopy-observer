@@ -14,9 +14,14 @@ const row = (overrides: Partial<FreeCandidateManifestRow> = {}): FreeCandidateMa
   discoveryRetrievedFillCount: 100,
   earliestPortfolioAt: "2024-01-01T00:00:00.000Z",
   earliestSourceAt: "2024-01-01T00:00:00.000Z",
-  initialFillOccurredAt: "2024-01-01T00:00:00.000Z",
-  initialSourceTradeId: "1",
-  initialStartPosition: "0",
+  initialPositionBoundaries: [
+    {
+      coin: "BTC",
+      occurredAt: "2024-01-01T00:00:00.000Z",
+      sourceTradeId: "1",
+      startPosition: "0",
+    },
+  ],
   verifiedFillCount: 100,
   ...overrides,
 });
@@ -45,9 +50,29 @@ describe("free candidate promotion manifest policy", () => {
   });
 
   it("fails closed when the first fill does not prove a flat boundary", () => {
-    expect(() => createFreeCandidateManifest([row({ initialStartPosition: "0.1" })])).toThrow(
-      "does not have a trusted flat boundary",
-    );
+    expect(() =>
+      createFreeCandidateManifest([
+        row({
+          initialPositionBoundaries: [
+            {
+              coin: "BTC",
+              occurredAt: "2024-01-01T00:00:00.000Z",
+              sourceTradeId: "1",
+              startPosition: "0.1",
+            },
+          ],
+        }),
+      ]),
+    ).toThrow("does not have a trusted flat boundary");
+  });
+
+  it("fails closed when a coin boundary is duplicated", () => {
+    const boundary = row().initialPositionBoundaries[0]!;
+    expect(() =>
+      createFreeCandidateManifest([
+        row({ initialPositionBoundaries: [boundary, { ...boundary, sourceTradeId: "2" }] }),
+      ]),
+    ).toThrow("does not have a trusted flat boundary");
   });
 
   it("fails closed when portfolio history starts after the fill boundary", () => {

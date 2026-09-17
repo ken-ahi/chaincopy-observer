@@ -85,28 +85,55 @@ async function main(): Promise<void> {
       throw new Error(`Candidate ${candidate.id} has no availability boundary.`);
     }
     const fills = await client.allUserFillsByTime(candidate.address, 0, now.getTime());
-    const first = fills.items[0];
-    const boundaryFills = first ? fills.items.filter((fill) => fill.time === first.time) : [];
+    const firstFillsByCoin = new Map<string, typeof fills.items>();
+    for (const fill of fills.items) {
+      const current = firstFillsByCoin.get(fill.coin);
+      if (!current) {
+        firstFillsByCoin.set(fill.coin, [fill]);
+      } else if (current[0]?.time === fill.time) {
+        firstFillsByCoin.set(fill.coin, [...current, fill]);
+      }
+    }
+    const invalidCoinBoundaries = [...firstFillsByCoin.entries()].filter(
+      ([, boundaryFills]) =>
+        boundaryFills.length !== 1 ||
+        !boundaryFills[0] ||
+        !new FinancialDecimal(boundaryFills[0].startPosition).isZero(),
+    );
     if (
       fills.reachedHistoryLimit ||
       fills.coverage.proven !== true ||
       fills.items.length > options.maximumFillCount ||
-      boundaryFills.length !== 1 ||
-      !first ||
-      !new FinancialDecimal(first.startPosition).isZero()
+      firstFillsByCoin.size === 0 ||
+      invalidCoinBoundaries.length > 0
     ) {
       rejectedBoundaries.push({
         candidateId: candidate.id,
         coverage: fills.coverage.evidence,
         discoveryRetrievedFillCount: candidate.retrievedFillCount,
-        fillCount: boundaryFills.length,
+        invalidCoinBoundaries: invalidCoinBoundaries.map(([coin, boundaryFills]) => ({
+          coin,
+          fillCount: boundaryFills.length,
+          startPosition: boundaryFills[0]?.startPosition ?? null,
+        })),
         reason: "UNTRUSTED_INITIAL_POSITION_BOUNDARY",
         reachedHistoryLimit: fills.reachedHistoryLimit,
-        startPosition: first?.startPosition ?? null,
         verifiedFillCount: fills.items.length,
       });
       continue;
     }
+    const initialPositionBoundaries = [...firstFillsByCoin.entries()].map(
+      ([coin, boundaryFills]) => {
+        const boundary = boundaryFills[0];
+        if (!boundary) throw new Error(`Candidate ${candidate.id} lost its ${coin} boundary.`);
+        return {
+          coin,
+          occurredAt: new Date(boundary.time).toISOString(),
+          sourceTradeId: boundary.tid,
+          startPosition: boundary.startPosition,
+        };
+      },
+    );
     const [portfolio, funding, ledger] = await Promise.all([
       client.portfolio(candidate.address),
       client.allUserFunding(candidate.address, 0, now.getTime()),
@@ -133,7 +160,7 @@ async function main(): Promise<void> {
       .flatMap(([, period]) => period.accountValueHistory.map(([timestamp]) => timestamp));
     const earliestPortfolioTimestamp = Math.min(...portfolioTimestamps);
     const earliestSourceTimestamp = Math.min(
-      first.time,
+      ...initialPositionBoundaries.map((boundary) => new Date(boundary.occurredAt).getTime()),
       ...funding.items.map((item) => item.time),
       ...ledger.items.map((item) => item.time),
     );
@@ -160,9 +187,7 @@ async function main(): Promise<void> {
       discoveryRetrievedFillCount: candidate.retrievedFillCount,
       earliestPortfolioAt: new Date(earliestPortfolioTimestamp).toISOString(),
       earliestSourceAt: new Date(earliestSourceTimestamp).toISOString(),
-      initialFillOccurredAt: new Date(first.time).toISOString(),
-      initialSourceTradeId: first.tid,
-      initialStartPosition: first.startPosition,
+      initialPositionBoundaries,
       verifiedFillCount: fills.items.length,
     });
     if (rows.length === options.limit) break;
