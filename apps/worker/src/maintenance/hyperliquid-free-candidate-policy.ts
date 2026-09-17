@@ -4,7 +4,7 @@ import { Prisma } from "@chaincopy/database";
 
 const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
-export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v4";
+export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v5";
 
 export interface FreeCandidateManifestRow {
   readonly address: string;
@@ -12,12 +12,13 @@ export interface FreeCandidateManifestRow {
   readonly availableTo: string;
   readonly candidateId: string;
   readonly dataQualityScore: number;
+  readonly discoveryRetrievedFillCount: number;
   readonly earliestPortfolioAt: string;
   readonly earliestSourceAt: string;
   readonly initialFillOccurredAt: string;
   readonly initialSourceTradeId: string;
   readonly initialStartPosition: string;
-  readonly retrievedFillCount: number;
+  readonly verifiedFillCount: number;
 }
 
 export interface FreeCandidateManifest {
@@ -36,7 +37,11 @@ export function createFreeCandidateManifest(
     if (candidateIds.has(row.candidateId) || addresses.has(row.address)) {
       throw new Error(`Candidate ${row.candidateId} has a duplicate identity.`);
     }
-    if (row.dataQualityScore !== 100 || row.retrievedFillCount <= 0) {
+    if (
+      row.dataQualityScore !== 100 ||
+      row.discoveryRetrievedFillCount <= 0 ||
+      row.verifiedFillCount <= 0
+    ) {
       throw new Error(`Candidate ${row.candidateId} does not meet the free-data quality gate.`);
     }
     if (

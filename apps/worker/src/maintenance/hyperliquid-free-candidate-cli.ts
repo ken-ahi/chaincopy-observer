@@ -84,26 +84,26 @@ async function main(): Promise<void> {
     if (!candidate.availableFrom || !candidate.availableTo) {
       throw new Error(`Candidate ${candidate.id} has no availability boundary.`);
     }
-    const boundaryTimestamp = candidate.availableFrom.getTime();
-    const boundary = await client.allUserFillsByTime(
-      candidate.address,
-      boundaryTimestamp,
-      boundaryTimestamp,
-    );
-    const boundaryFills = boundary.items.filter((fill) => fill.time === boundaryTimestamp);
-    const first = boundaryFills[0];
+    const fills = await client.allUserFillsByTime(candidate.address, 0, now.getTime());
+    const first = fills.items[0];
+    const boundaryFills = first ? fills.items.filter((fill) => fill.time === first.time) : [];
     if (
-      boundary.reachedHistoryLimit ||
-      boundary.coverage.proven !== true ||
+      fills.reachedHistoryLimit ||
+      fills.coverage.proven !== true ||
+      fills.items.length > options.maximumFillCount ||
       boundaryFills.length !== 1 ||
       !first ||
       !new FinancialDecimal(first.startPosition).isZero()
     ) {
       rejectedBoundaries.push({
         candidateId: candidate.id,
+        coverage: fills.coverage.evidence,
+        discoveryRetrievedFillCount: candidate.retrievedFillCount,
         fillCount: boundaryFills.length,
         reason: "UNTRUSTED_INITIAL_POSITION_BOUNDARY",
+        reachedHistoryLimit: fills.reachedHistoryLimit,
         startPosition: first?.startPosition ?? null,
+        verifiedFillCount: fills.items.length,
       });
       continue;
     }
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
       .flatMap(([, period]) => period.accountValueHistory.map(([timestamp]) => timestamp));
     const earliestPortfolioTimestamp = Math.min(...portfolioTimestamps);
     const earliestSourceTimestamp = Math.min(
-      candidate.availableFrom.getTime(),
+      first.time,
       ...funding.items.map((item) => item.time),
       ...ledger.items.map((item) => item.time),
     );
@@ -157,12 +157,13 @@ async function main(): Promise<void> {
       availableTo: candidate.availableTo.toISOString(),
       candidateId: candidate.id,
       dataQualityScore: candidate.dataQualityScore,
+      discoveryRetrievedFillCount: candidate.retrievedFillCount,
       earliestPortfolioAt: new Date(earliestPortfolioTimestamp).toISOString(),
       earliestSourceAt: new Date(earliestSourceTimestamp).toISOString(),
       initialFillOccurredAt: new Date(first.time).toISOString(),
       initialSourceTradeId: first.tid,
       initialStartPosition: first.startPosition,
-      retrievedFillCount: candidate.retrievedFillCount,
+      verifiedFillCount: fills.items.length,
     });
     if (rows.length === options.limit) break;
   }
