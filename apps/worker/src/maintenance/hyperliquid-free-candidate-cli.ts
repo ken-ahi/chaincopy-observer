@@ -109,15 +109,40 @@ async function main(): Promise<void> {
       });
       continue;
     }
-    const portfolio = await client.portfolio(candidate.address);
+    const [portfolio, funding, ledger] = await Promise.all([
+      client.portfolio(candidate.address),
+      client.allUserFunding(candidate.address, 0, now.getTime()),
+      client.allUserLedgerUpdates(candidate.address, 0, now.getTime()),
+    ]);
+    if (
+      funding.coverage.proven !== true ||
+      funding.reachedHistoryLimit ||
+      ledger.coverage.proven !== true ||
+      ledger.reachedHistoryLimit
+    ) {
+      rejectedBoundaries.push({
+        candidateId: candidate.id,
+        fundingCoverage: funding.coverage.evidence,
+        fundingReachedHistoryLimit: funding.reachedHistoryLimit,
+        ledgerCoverage: ledger.coverage.evidence,
+        ledgerReachedHistoryLimit: ledger.reachedHistoryLimit,
+        reason: "UNTRUSTED_SOURCE_LANE_BOUNDARY",
+      });
+      continue;
+    }
     const portfolioTimestamps = portfolio.data
       .filter(([periodName]) => periodName === "perpAllTime")
       .flatMap(([, period]) => period.accountValueHistory.map(([timestamp]) => timestamp));
     const earliestPortfolioTimestamp = Math.min(...portfolioTimestamps);
+    const earliestSourceTimestamp = Math.min(
+      candidate.availableFrom.getTime(),
+      ...funding.items.map((item) => item.time),
+      ...ledger.items.map((item) => item.time),
+    );
     if (
       !Number.isFinite(earliestPortfolioTimestamp) ||
       new Date(earliestPortfolioTimestamp).toISOString().slice(0, 10) >
-        candidate.availableFrom.toISOString().slice(0, 10)
+        new Date(earliestSourceTimestamp).toISOString().slice(0, 10)
     ) {
       rejectedBoundaries.push({
         candidateId: candidate.id,
@@ -135,6 +160,7 @@ async function main(): Promise<void> {
       candidateId: candidate.id,
       dataQualityScore: candidate.dataQualityScore,
       earliestPortfolioAt: new Date(earliestPortfolioTimestamp).toISOString(),
+      earliestSourceAt: new Date(earliestSourceTimestamp).toISOString(),
       initialFillOccurredAt: new Date(first.time).toISOString(),
       initialSourceTradeId: first.tid,
       initialStartPosition: first.startPosition,

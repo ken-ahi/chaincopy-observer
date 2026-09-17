@@ -4,7 +4,7 @@ import { Prisma } from "@chaincopy/database";
 
 const FinancialDecimal = Prisma.Decimal.clone({ precision: 80 });
 
-export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v3";
+export const freeCandidateManifestVersion = "hyperliquid-free-candidate-manifest-v4";
 
 export interface FreeCandidateManifestRow {
   readonly address: string;
@@ -13,6 +13,7 @@ export interface FreeCandidateManifestRow {
   readonly candidateId: string;
   readonly dataQualityScore: number;
   readonly earliestPortfolioAt: string;
+  readonly earliestSourceAt: string;
   readonly initialFillOccurredAt: string;
   readonly initialSourceTradeId: string;
   readonly initialStartPosition: string;
@@ -46,11 +47,11 @@ export function createFreeCandidateManifest(
       throw new Error(`Candidate ${row.candidateId} does not have a trusted flat boundary.`);
     }
     const portfolioAt = new Date(row.earliestPortfolioAt);
-    const availableFrom = new Date(row.availableFrom);
+    const earliestSourceAt = new Date(row.earliestSourceAt);
     if (
       !Number.isFinite(portfolioAt.getTime()) ||
-      !Number.isFinite(availableFrom.getTime()) ||
-      portfolioAt.toISOString().slice(0, 10) > availableFrom.toISOString().slice(0, 10)
+      !Number.isFinite(earliestSourceAt.getTime()) ||
+      portfolioAt.toISOString().slice(0, 10) > earliestSourceAt.toISOString().slice(0, 10)
     ) {
       throw new Error(`Candidate ${row.candidateId} does not have a trusted NAV boundary.`);
     }

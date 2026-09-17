@@ -12,6 +12,7 @@ const row = (overrides: Partial<FreeCandidateManifestRow> = {}): FreeCandidateMa
   candidateId: "candidate-1",
   dataQualityScore: 100,
   earliestPortfolioAt: "2024-01-01T00:00:00.000Z",
+  earliestSourceAt: "2024-01-01T00:00:00.000Z",
   initialFillOccurredAt: "2024-01-01T00:00:00.000Z",
   initialSourceTradeId: "1",
   initialStartPosition: "0",
