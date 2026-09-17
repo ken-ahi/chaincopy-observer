@@ -254,18 +254,30 @@ export function mapSpotBalances(
   state: HyperliquidSpotState,
   capturedAt = new Date(),
 ): ReadonlyArray<NormalizedSpotBalance> {
-  return state.balances.map((balance) => ({
-    fingerprint: createEventFingerprint("spot-balance", walletAddress, {
-      balance,
-      capturedAt: capturedAt.toISOString(),
-    }),
-    coin: balance.coin,
-    tokenIndex: balance.token,
-    total: balance.total,
-    hold: balance.hold,
-    entryNotional: balance.entryNtl,
-    capturedAt,
-  }));
+  return state.balances.flatMap((balance) => {
+    if (balance.token === undefined) {
+      const isZeroBalance = [balance.total, balance.hold, balance.entryNtl].every((value) =>
+        new Decimal(value).isZero(),
+      );
+      if (isZeroBalance) return [];
+      throw new Error(`Hyperliquid spot balance ${balance.coin} has no token index.`);
+    }
+
+    return [
+      {
+        fingerprint: createEventFingerprint("spot-balance", walletAddress, {
+          balance,
+          capturedAt: capturedAt.toISOString(),
+        }),
+        coin: balance.coin,
+        tokenIndex: balance.token,
+        total: balance.total,
+        hold: balance.hold,
+        entryNotional: balance.entryNtl,
+        capturedAt,
+      },
+    ];
+  });
 }
 
 export function mapHistoricalOrder(

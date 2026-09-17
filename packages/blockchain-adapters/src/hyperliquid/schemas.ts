@@ -118,7 +118,7 @@ export const spotBalanceSchema = z
     coin: z.string().min(1),
     entryNtl: exactDecimalSchema,
     hold: exactDecimalSchema,
-    token: z.number().int().safe().or(exactIntegerStringSchema.transform(Number)),
+    token: z.number().int().safe().or(exactIntegerStringSchema.transform(Number)).optional(),
     total: exactDecimalSchema,
   })
   .passthrough();

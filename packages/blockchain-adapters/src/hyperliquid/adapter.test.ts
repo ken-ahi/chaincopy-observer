@@ -3,12 +3,19 @@ import { describe, expect, it } from "vitest";
 
 import { hyperliquidAddressSchema, normalizeHyperliquidAddress } from "./address.js";
 import { createEventFingerprint } from "./event-fingerprint.js";
-import { mapFill, mapFundingPayment, mapLedgerUpdate, mapWebSocketFunding } from "./mapper.js";
+import {
+  mapFill,
+  mapFundingPayment,
+  mapLedgerUpdate,
+  mapSpotBalances,
+  mapWebSocketFunding,
+} from "./mapper.js";
 import {
   exactDecimalSchema,
   fillSchema,
   fundingPaymentSchema,
   ledgerUpdateSchema,
+  spotClearinghouseStateSchema,
   websocketFundingSchema,
 } from "./schemas.js";
 
@@ -116,5 +123,32 @@ describe("Hyperliquid response mapping", () => {
     const websocketMapped = mapWebSocketFunding(address, websocket);
     expect(websocketMapped.externalPaymentId).toBe(httpMapped.externalPaymentId);
     expect(websocketMapped.fingerprint).toBe(httpMapped.fingerprint);
+  });
+});
+
+describe("Hyperliquid spot balance mapping", () => {
+  const capturedAt = new Date("2026-09-17T00:00:00.000Z");
+
+  it("ignores tokenless zero balances returned by the Info API", () => {
+    const state = spotClearinghouseStateSchema.parse({
+      balances: [
+        { coin: "USDC", entryNtl: "1.25", hold: "0.0", token: 0, total: "2.5" },
+        { coin: "+37550", entryNtl: "0.0", hold: "0.0", total: "0.0" },
+      ],
+    });
+
+    expect(mapSpotBalances(address, state, capturedAt)).toEqual([
+      expect.objectContaining({ coin: "USDC", tokenIndex: 0, total: "2.5" }),
+    ]);
+  });
+
+  it("fails closed for a tokenless non-zero balance", () => {
+    const state = spotClearinghouseStateSchema.parse({
+      balances: [{ coin: "+37550", entryNtl: "1.0", hold: "0.0", total: "1.0" }],
+    });
+
+    expect(() => mapSpotBalances(address, state, capturedAt)).toThrow(
+      "Hyperliquid spot balance +37550 has no token index.",
+    );
   });
 });
