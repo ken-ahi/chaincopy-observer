@@ -92,6 +92,33 @@ describe("candidate enriched filter", () => {
     expect(result.reasons).toContain("API_HISTORY_LIMIT_REACHED");
   });
 
+  it("fails closed when the first available fill begins from a non-flat position", () => {
+    const start = Date.parse("2026-01-01T00:00:00.000Z");
+    const fills = Array.from({ length: 30 }, (_, index) =>
+      makeFill(
+        index % 2 === 0 ? "BTC" : "ETH",
+        "1000",
+        "1",
+        start + index * 7 * 24 * 60 * 60 * 1_000,
+        String(index),
+        "Open Long",
+        index === 0 ? "2.5" : "0",
+      ),
+    );
+
+    const result = evaluateEnrichedCandidate(
+      fills,
+      false,
+      settings,
+      new Date("2026-07-26T00:00:00.000Z"),
+    );
+
+    expect(result.status).toBe("INSUFFICIENT_HISTORY");
+    expect(result.completeness).toBe("PARTIAL");
+    expect(result.dataQualityScore).toBe(70);
+    expect(result.reasons).toContain("NON_FLAT_INITIAL_POSITION_BOUNDARY");
+  });
+
   it("applies full history thresholds deterministically with Decimal notionals", () => {
     const start = Date.parse("2026-01-01T00:00:00.000Z");
     const fills = Array.from({ length: 30 }, (_, index) =>
@@ -136,6 +163,7 @@ function makeFill(
   time: number,
   tid: string,
   dir = "Open Long",
+  startPosition = "0",
 ) {
   return fillSchema.parse({
     closedPnl: "0",
@@ -148,7 +176,7 @@ function makeFill(
     oid: tid,
     px,
     side: "B",
-    startPosition: "0",
+    startPosition,
     sz,
     tid,
     time,
