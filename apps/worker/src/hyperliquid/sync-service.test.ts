@@ -271,7 +271,7 @@ describe("HyperliquidSyncService", () => {
     expect(repository.markSourceSuccess).not.toHaveBeenCalled();
   });
 
-  it("keeps a gap open when a successful bounded lane response is empty and unproven", async () => {
+  it("keeps a gap open when bounded fills are empty despite exhaustive HTTP pagination", async () => {
     const repository = {
       completeWebSocketGap: vi.fn(async () => false),
       markSourceSuccess: vi.fn(async () => undefined),
@@ -284,8 +284,8 @@ describe("HyperliquidSyncService", () => {
     );
     vi.spyOn(service, "syncFills").mockResolvedValue({
       coverage: {
-        evidence: "UNPROVEN",
-        proven: false,
+        evidence: "BOUNDED_EMPTY_EXHAUSTIVE_RESPONSE",
+        proven: true,
         requestedFrom: Date.parse(gapStart),
         requestedTo: Date.parse(gapEnd),
       },
@@ -301,5 +301,36 @@ describe("HyperliquidSyncService", () => {
     expect(repository.completeWebSocketGap).not.toHaveBeenCalled();
     expect(repository.resolveQualityIssue).not.toHaveBeenCalled();
     expect(repository.markSourceSuccess).not.toHaveBeenCalled();
+  });
+
+  it("accepts exhaustive empty funding and ledger lanes when fills prove the bounded gap", async () => {
+    const repository = {
+      completeWebSocketGap: vi.fn(async () => true),
+      markSourceSuccess: vi.fn(async () => undefined),
+      resolveQualityIssue: vi.fn(async () => undefined),
+    } as unknown as HyperliquidRepository;
+    const service = new HyperliquidSyncService(
+      {} as HyperliquidClient,
+      repository,
+      pino({ level: "silent" }),
+    );
+    const emptyCoverage = {
+      coverage: {
+        evidence: "BOUNDED_EMPTY_EXHAUSTIVE_RESPONSE",
+        proven: true,
+        requestedFrom: Date.parse(gapStart),
+        requestedTo: Date.parse(gapEnd),
+      },
+      fetched: 0,
+      reachedHistoryLimit: false,
+    };
+    vi.spyOn(service, "syncFills").mockResolvedValue(provenGapCoverage());
+    vi.spyOn(service, "syncFunding").mockResolvedValue(emptyCoverage);
+    vi.spyOn(service, "syncLedger").mockResolvedValue(emptyCoverage);
+
+    await expect(
+      service.recoverGap({ ...job, endTime: gapEnd, startTime: gapStart }),
+    ).resolves.toMatchObject({ connectionCursorUpdated: true });
+    expect(repository.resolveQualityIssue).toHaveBeenCalledOnce();
   });
 });

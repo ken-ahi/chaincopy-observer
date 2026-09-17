@@ -321,3 +321,16 @@
 - SSoT: trusted run取得条件とprovenance整合検証は`performance-run-trust.ts`へ集約する。`SUCCEEDED`候補を新しい順にbounded paginationで検査し、整合する`TRUSTED`を採用、整合する`QUARANTINED`だけをskipする。`trustState`で事前filterせず、新しい候補に不整合があれば古いrunへfallbackせずfail closedとする。直前trusted runへのfallbackは有効なquarantineの場合だけ許可し、新しいtrusted successorは自動採用する。
 - 監査: 明示run IDによる履歴参照は隔離後も許可し、API DTOへtrust state/revisionを含める。Selection履歴も保持するが、`listEffectiveSelectedWallets()`は後日隔離されたrunを有効入力として返さない。
 - 互換性: 既存runはmigrationでrevision 0の`TRUSTED`となる。`performance-v3`計算式、`wallet-selection-v1`基準、既存run IDを変更しない。実DB migrationと実runのquarantineは別途Owner承認を必要とする。
+
+## ADR-036: Hyperliquid履歴回復はbounded Info APIと公式node fillsを証拠別に扱う
+
+- 状態: 採用（historical ingestionは実sample・provenance schema・Owner承認待ち）
+- 背景: 10 walletのWebSocket gapと3 walletのInfo API直近10,000 Fill上限により、14 walletの`performance-v3`は`COMPLETE`にならず、Selectionはdata不足でselected 0となっている。
+- bounded recovery: 明示`startTime` / `endTime`に対するexhaustive responseだけをcoverage evidenceにする。funding / ledgerは空のexhaustive responseを受理できるが、fillsの空responseは直近10,000件より古い切捨てと区別できないためInfo API単独のproofにしない。3 laneのbounds・limit・proofが一致した場合だけ既存DQ lifecycleでgapを解消する。
+- secondary source: Info API上限以前は公式Requester Pays `hl-mainnet-node-data/node_fills` / `node_fills_by_block`だけをtrusted secondary source候補とする。`node_trades`、community mirror、indexerは正本にしない。
+- coverage: 公式公開資料に正確な開始hour・cutover・object sizeがないため、Owner承認済みLIST / HEAD inventoryで各required UTC hourがexactly one objectに対応することを証明する。欠損・重複・未知formatはfail closedとする。
+- identity: canonical wallet + time + coin + tidをsource identityとし、hash / oid / side / Decimal canonical payloadの一致を要求する。`tid`をcausal orderingへ使用しない。
+- provenance: bucket/key/ETag/VersionId/size/SHA-256/format/hour/line/block/event indexとmanifest hashをappend-onlyに保持する。現行schemaへ直接投入せず、provenance schemaを別途reviewする。
+- cost/approval: estimatorはinventoryとOwnerが確認したAWS単価をDecimal文字列で計算する。Requester Pays LIST / HEAD / GET、実DB migration、historical ingestionはOwner承認前に実行しない。
+- 非変更: completeness基準、`performance-v3`、`wallet-selection-v1`、threshold、manual override、Behavior SSoTは変更しない。
+- 詳細: `docs/hyperliquid-history-recovery-spec.md`を正本とする。

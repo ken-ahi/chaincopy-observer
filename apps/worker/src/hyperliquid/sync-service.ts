@@ -331,7 +331,11 @@ export class HyperliquidSyncService {
         this.syncFunding(job),
         this.syncLedger(job),
       ]);
-      if ([fills, funding, ledger].some((result) => !provesCoverage(result, startTime, endTime))) {
+      if (
+        !provesCoverage(fills, startTime, endTime, false) ||
+        !provesCoverage(funding, startTime, endTime, true) ||
+        !provesCoverage(ledger, startTime, endTime, true)
+      ) {
         throw new Error(
           "Hyperliquid gap recovery did not prove complete source coverage for every required lane.",
         );
@@ -407,12 +411,16 @@ function provesCoverage(
   result: Readonly<Record<string, unknown>>,
   startTime: string,
   endTime: string,
+  allowEmpty: boolean,
 ): boolean {
   const coverage = result.coverage;
   if (!coverage || typeof coverage !== "object") return false;
   const evidence = coverage as Readonly<Record<string, unknown>>;
+  const acceptedEvidence = allowEmpty
+    ? ["BOUNDED_EMPTY_EXHAUSTIVE_RESPONSE", "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE"]
+    : ["BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE"];
   return (
-    evidence.evidence === "BOUNDED_NON_EMPTY_EXHAUSTIVE_RESPONSE" &&
+    acceptedEvidence.includes(String(evidence.evidence)) &&
     evidence.proven === true &&
     evidence.requestedFrom === parseJobTimestamp(startTime, "startTime") &&
     evidence.requestedTo === parseJobTimestamp(endTime, "endTime") &&

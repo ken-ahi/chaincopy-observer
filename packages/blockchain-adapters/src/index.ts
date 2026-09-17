@@ -12,6 +12,7 @@ export * from "./hyperliquid/client.js";
 export * from "./hyperliquid/errors.js";
 export * from "./hyperliquid/event-fingerprint.js";
 export * from "./hyperliquid/http-client.js";
+export * from "./hyperliquid/historical-fills.js";
 export * from "./hyperliquid/mapper.js";
 export * from "./hyperliquid/market-trade.js";
 export * from "./hyperliquid/market-websocket-client.js";

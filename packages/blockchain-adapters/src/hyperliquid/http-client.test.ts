@@ -101,7 +101,7 @@ describe("Hyperliquid history pagination", () => {
     expect(secondBody.startTime).toBe(500);
   });
 
-  it("does not claim coverage for a successful empty bounded response", async () => {
+  it("records an exhaustive empty bounded response separately from non-empty evidence", async () => {
     const client = new HyperliquidClient("https://example.test/info", {
       fetchImplementation: vi
         .fn<typeof fetch>()
@@ -111,8 +111,8 @@ describe("Hyperliquid history pagination", () => {
     const result = await client.allUserFillsByTime(address, 100, 200);
 
     expect(result.coverage).toEqual({
-      evidence: "UNPROVEN",
-      proven: false,
+      evidence: "BOUNDED_EMPTY_EXHAUSTIVE_RESPONSE",
+      proven: true,
       requestedFrom: 100,
       requestedTo: 200,
     });
