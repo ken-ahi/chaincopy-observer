@@ -26,6 +26,8 @@
     "db:cleanup": "tsx scripts/db-cleanup.ts",
     "db:issue26-stage3b-preflight": "tsx scripts/issue26-stage3b-preflight.ts",
     "hl:historical-fills:estimate": "tsx scripts/hyperliquid-historical-fills-estimate.ts",
+    "hl:gap-recovery": "tsx apps/worker/src/maintenance/hyperliquid-gap-recovery-cli.ts",
+    "hl:promote-free-candidates": "tsx apps/worker/src/maintenance/hyperliquid-free-candidate-cli.ts",
     "queue:cleanup": "tsx apps/worker/src/maintenance/queue-cleanup-cli.ts",
     "deploy:local": "sh scripts/deploy-local.sh"
   },

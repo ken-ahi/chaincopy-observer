@@ -50,7 +50,17 @@ import {
 loadRootEnvironment();
 
 const env = readWorkerEnv();
-const discoveryRuntime = createDiscoveryRuntimePolicy(env.HYPERLIQUID_DISCOVERY_ENABLED);
+const discoveryRuntime = createDiscoveryRuntimePolicy(env.HYPERLIQUID_DISCOVERY_ENABLED, {
+  ...(env.HYPERLIQUID_DISCOVERY_ENRICHMENT_CONSUMER_ENABLED === undefined
+    ? {}
+    : { candidateConsumer: env.HYPERLIQUID_DISCOVERY_ENRICHMENT_CONSUMER_ENABLED }),
+  ...(env.HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED === undefined
+    ? {}
+    : { discoveryConsumer: env.HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED }),
+  ...(env.HYPERLIQUID_DISCOVERY_SCHEDULER_ENABLED === undefined
+    ? {}
+    : { scheduler: env.HYPERLIQUID_DISCOVERY_SCHEDULER_ENABLED }),
+});
 const logger = createLogger("worker", env.LOG_LEVEL);
 const redis = new Redis(env.REDIS_URL, {
   enableReadyCheck: true,
@@ -519,9 +529,11 @@ if (discoveryRuntime.scheduler && discoveryRuntime.marketWebSocket) {
 } else {
   logger.info(
     {
-      queues: [hyperliquidDiscoveryQueueName, hyperliquidCandidateQueueName],
+      candidateConsumer: discoveryRuntime.candidateConsumer,
+      discoveryConsumer: discoveryRuntime.discoveryConsumer,
+      scheduler: discoveryRuntime.scheduler,
     },
-    "Hyperliquid discovery runtime disabled; scheduler, WebSocket, and consumers not started",
+    "Hyperliquid market discovery scheduler and WebSocket not started",
   );
 }
 logger.info(
@@ -531,9 +543,8 @@ logger.info(
     queues: [
       systemQueueName,
       hyperliquidQueueName,
-      ...(discoveryRuntime.discoveryConsumer && discoveryRuntime.candidateConsumer
-        ? [hyperliquidDiscoveryQueueName, hyperliquidCandidateQueueName]
-        : []),
+      ...(discoveryRuntime.discoveryConsumer ? [hyperliquidDiscoveryQueueName] : []),
+      ...(discoveryRuntime.candidateConsumer ? [hyperliquidCandidateQueueName] : []),
       performanceQueueName,
       behaviorQueueName,
     ],

@@ -109,8 +109,13 @@ export function evaluateEnrichedCandidate(
     new FinancialDecimal(0),
   );
   const historyReasons: string[] = [];
+  const hasUntrustedInitialBoundary =
+    first !== undefined && !new FinancialDecimal(first.startPosition).isZero();
   if (historyTruncated) {
     historyReasons.push("API_HISTORY_LIMIT_REACHED");
+  }
+  if (hasUntrustedInitialBoundary) {
+    historyReasons.push("NON_FLAT_INITIAL_POSITION_BOUNDARY");
   }
   if (activeDays < settings.fullMinimumActiveDays) {
     historyReasons.push("AVAILABLE_ACTIVITY_PERIOD_BELOW_MINIMUM");
@@ -120,18 +125,19 @@ export function evaluateEnrichedCandidate(
   }
 
   if (historyReasons.length > 0) {
+    const historyIncomplete = historyTruncated || hasUntrustedInitialBoundary;
     return {
       activeDays,
       activeMonths,
       availableFrom,
       availableTo,
-      completeness: historyTruncated ? "PARTIAL" : "INSUFFICIENT",
+      completeness: historyIncomplete ? "PARTIAL" : "INSUFFICIENT",
       cumulativeNotionalUsd: cumulativeNotional.toFixed(),
       dataQualityScore: calculateDataQualityScore({
         activeDays,
         endpointFailures: 0,
         fillCount: ordered.length,
-        historyTruncated,
+        historyTruncated: historyIncomplete,
       }),
       reasons: historyReasons,
       status: "INSUFFICIENT_HISTORY",

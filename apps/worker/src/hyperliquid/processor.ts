@@ -12,7 +12,7 @@ import { type Logger } from "pino";
 
 import { SyncLockUnavailableError, withRedisLock } from "./lock.js";
 import { enqueueWalletBackfillChildren } from "./queue.js";
-import type { HyperliquidSyncService } from "./sync-service.js";
+import { GapCoverageNotProvenError, type HyperliquidSyncService } from "./sync-service.js";
 import type { HyperliquidWebSocketSupervisor } from "./websocket-supervisor.js";
 import type { PerformanceJobScheduler } from "../performance/scheduler.js";
 
@@ -175,6 +175,9 @@ export class HyperliquidJobProcessor {
       if (error instanceof SyncLockUnavailableError) {
         throw suppressImmediateLockRetry(error);
       }
+      if (error instanceof GapCoverageNotProvenError) {
+        throw suppressUnprovenGapRetry(error);
+      }
       throw error;
     }
   }
@@ -240,5 +243,11 @@ function normalizeAddress(address: string): string {
 export function suppressImmediateLockRetry(error: SyncLockUnavailableError): UnrecoverableError {
   return new UnrecoverableError(
     `${error.message} Immediate BullMQ retries are suppressed; a later scheduler tick may enqueue fresh work.`,
+  );
+}
+
+export function suppressUnprovenGapRetry(error: GapCoverageNotProvenError): UnrecoverableError {
+  return new UnrecoverableError(
+    `${error.message} The range remains OPEN and deterministic retries are suppressed.`,
   );
 }

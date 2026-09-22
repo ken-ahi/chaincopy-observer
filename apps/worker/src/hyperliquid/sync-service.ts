@@ -5,6 +5,15 @@ import { type Logger } from "pino";
 
 import type { HyperliquidRepository } from "./repository.js";
 
+export class GapCoverageNotProvenError extends Error {
+  public constructor() {
+    super(
+      "Hyperliquid gap recovery did not prove complete source coverage for every required lane.",
+    );
+    this.name = "GapCoverageNotProvenError";
+  }
+}
+
 const cursorType = "timestamp";
 
 export class HyperliquidSyncService {
@@ -336,9 +345,7 @@ export class HyperliquidSyncService {
         !provesCoverage(funding, startTime, endTime, true) ||
         !provesCoverage(ledger, startTime, endTime, true)
       ) {
-        throw new Error(
-          "Hyperliquid gap recovery did not prove complete source coverage for every required lane.",
-        );
+        throw new GapCoverageNotProvenError();
       }
       const connectionCursorUpdated = await this.repository.completeWebSocketGap(
         job.walletAddressId,

@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-14 (Asia/Tokyo)
+最終更新: 2026-09-17 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -8,11 +8,12 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/hyperliquid-history-recovery`
-- branch base / `origin/main`: `7524a7f4e493c4a7ae42f7179774df09d553c5a0` (`Merge pull request #27 from ken-ahi/codex/issue-26-incident-repair`)
+- branch: `codex/free-data-discovery-recovery`
+- branch base / `origin/main`: `8537876953d979a8b05be7f425d44fb544736429` (`Merge pull request #28 from ken-ahi/codex/hyperliquid-history-recovery`)
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- 本branchは、Owner決定に基づくbounded Info API recoveryとofficial historical fillsのread-only設計、offline policy実装、検証結果を記録する。
-- 実装commit `936edad`は`origin/codex/hyperliquid-history-recovery`へpush済み。GitHub CLIはなく、in-app browserはGitHub未認証のため、PR作成とpull-request CI起動は外部認証待ちである。
+- 本branchは、Ownerの無料データ限定方針に基づくbounded Info API recovery、無料Discovery候補のfail-closed検証、Performance / Selection / Behavior再評価を実装・記録する。
+- AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
+- branchは`origin/codex/free-data-discovery-recovery`へpush済み。PR #29はopenで、main mergeはOwner承認待ちである。
 
 ## 完了済みで再実行しない作業
 
@@ -135,12 +136,47 @@
 - 14 incident Performance Runは`QUARANTINED` 14件、trust transition 14件のまま保持した。manual overrideは全件`AUTO`である。
 - 状態文書更新後のvalidationはformat、lint、typecheck、65 files / 613 tests、build 11/11 packages、`git diff --check`が成功した。integration testはvolumeなしの一時PostgreSQL / Redisへmigrationを適用して実行し、終了時に一時containerだけを停止した。実DB / 実Redisへtest mutationは行っていない。
 
+## 無料データ限定recovery / Discovery（2026-09-17）
+
+### Owner境界と実行provenance
+
+- Owner決定により、有料データソースとAWS Requester Paysを現時点では不採用とした。LIST / HEAD / inventory / downloadを含むAWS API callは0件である。
+- bounded gap recovery、candidate監査、正式sync、Performance、Selection、Behaviorは、無料のHyperliquid Info APIと既存正式契約だけを使用した。Selection閾値、`performance-v3`計算式、manual overrideは変更していない。
+- 実行用Worker imageは各実装commitのclean worktreeから構築した。最終read-only candidate監査はcommit `ccac591b2d1647a1f35083ee60656ff35ce00586`、image `chaincopy-worker:free-data-ccac591`、image ID `sha256:48d2af46dcb1f0b7107d6b8a72e404f9201740434823760040dd04bbe5878fb6`を使用した。
+- destructive DB操作、手動cursor変更、DQ直接更新、quarantine解除、Redis key / queue削除、実注文・署名・資金移動は0件である。
+
+### 10 walletのbounded gap recovery
+
+- OPEN `HYPERLIQUID_WEBSOCKET_GAP` 441件 / 10 walletを正式allowlistへ固定し、無料Info APIのbounded recoveryを全件実行した。
+- fills / funding / ledgerのrequired laneについて対象区間のcoverageを証明できたgapは0件だった。transient lock競合5件だけを正式retryし、最終的に全441件が決定論的なcoverage不足としてfail closedした。
+- gap DQは441件 / 10 walletのOPENを維持した。10,000 Fill上限に到達した3 walletの`HYPERLIQUID_FILL_HISTORY_LIMIT`もOPENのままで、推測による`HISTORY_COMPLETE`への遷移はない。
+- deterministic coverage不足をBullMQで繰り返さないよう、retryableなtransient failureとnon-retryableな`GapCoverageNotProvenError`を分離した。
+
+### 無料Discovery候補
+
+- Discoveryで既に収集・enrichment済みの候補を対象に、Info APIだけでpromotion前の完全性を再証明するmanifest CLIを追加した。
+- gateは、10,000未満のexhaustive fills、coinごとの最初の一意なFillが`startPosition = 0`、funding / ledgerのexhaustive coverage、最古source日以前から現在日までの連続UTC日次NAV、既存DQなしをすべて要求する。
+- 段階監査で6 candidateを正式promotionした。1件は`PARTIAL`、5件は最新`performance-v3`が`COMPLETE / TRUSTED / SUCCEEDED`となったが、5件とも日次NAV欠損により`annualizedReturn` / `maxDrawdown`が生成されなかった。この実データを受け、promotion前gateをPerformanceと同じ日次NAV連続性まで強化した。
+- 最終manifest v7 read-only監査は未promotion候補100件をscanし、accepted 0件、manifest hash `cbdd1732825a95cbe5feaebaa98ea78b675b274443eba9fabb07e95e5f3a8315`だった。0件のためenqueue / DB mutationは行っていない。
+- `hyperliquid-candidate-enrichment`には今回以前からpriority backlog 8,425件とactive 1件が残る。今回のpromotionは別の`hyperliquid-discovery` queueを使用し、同queueはwait / active / delayed / prioritizedが0である。既存backlogは削除・一括処理せず、consumerを停止したまま監査証跡として報告する。
+
+### Performance / Selection / Behaviorの最終状態
+
+- watched Hyperliquid walletは30件。最新trusted `performance-v3`は`COMPLETE` 5件、`PARTIAL` 15件、`GAP_DETECTED` 10件で、30/30 `SUCCEEDED / TRUSTED`である。
+- current Selection Runは`cmu5m49um0004u1o0p02fa3jq`、評価時刻`2026-09-17T14:16:01.858Z`、universe 30 / selected 0 / qualified 0 / review 30 / excluded 0である。manual overrideは30/30 `AUTO`。
+- reasonは`REQUIRED_METRIC_MISSING` 30件、`HISTORY_INCOMPLETE` 25件、`TOO_FEW_COMPLETED_TRADES` 22件。`RETURN_BELOW_MINIMUM`、`DRAWDOWN_TOO_HIGH`、`PROFIT_TOO_CONCENTRATED`は0件である。
+- current Selection入力では`annualizedReturn` 0/30、`maxDrawdown` 0/30、`topTradeContribution` 23/30である。したがってselected 0は投資閾値不合格ではなく、無料sourceだけでは解消できていない履歴 / required metric不足によるfail-closed `REVIEW`である。
+- Selection後のBehavior control job `behavior-9902c4c3e51a6086386b0c3944d20d34bcc76402b599e7b769ef7d4aee86699b`は`no-op / processedEvents 0`で完了した。Behavior run / event / scope / DQはすべて0件で、watched wallet fallbackはない。
+- OPEN DQは`HYPERLIQUID_FILL_HISTORY_LIMIT` 3件 / 3 wallet、`HYPERLIQUID_INCOMPLETE_INITIAL_SYNC` 4件 / 4 wallet、`HYPERLIQUID_WEBSOCKET_GAP` 441件 / 10 wallet、`HYPERLIQUID_WEBSOCKET_ERROR` 177件 / 10 wallet、`HYPERLIQUID_WEBSOCKET_USER_LIMIT` 15件 / 15 walletである。
+- 14 incident Performance Runは`QUARANTINED`、trust transitionは14件のまま。Selection / Behaviorへtrusted inputとして混入していない。
+- 終了時PostgreSQL / Redisはhealthy、DB size 54 GB、disk free 712 GB。Workerは停止済み。`hyperliquid-sync`、`hyperliquid-discovery`、Performance、Behaviorのwait / active / delayed / prioritizedはすべて0である。
+
 ## 次の優先作業
 
-1. Owner承認を得てRequester Pays LIST / HEAD inventoryを取得し、3 walletのrequired rangeに対する公式archive coverage・旧新format cutover・exact byte costを確定する。
-2. approved sampleで旧`node_fills` strict parser fixtureを検証し、append-only provenance schemaをreviewする。
-3. 別Owner承認後に最小hour unionだけをdownload・dry-run照合し、承認済みmigration / ingestion / DQ再評価を行う。
-4. completenessが証明できたwalletについて`performance-v3` → `wallet-selection-v1` → effective selected walletの通常Behaviorを順に実行する。
+1. 無料Discoveryの新規market eventsを通常契約で継続収集し、manifest v7を満たす候補が現れた場合だけbounded promotionする。
+2. 既存`hyperliquid-candidate-enrichment` backlog 8,425件は、queue retention / enqueue抑制 / bounded drainの正式運用判断を別Issueで行う。直接DEL / ZREMや無制限consumer起動は行わない。
+3. `COMPLETE`かつrequired metricsを持つ候補が得られた場合、通常の`performance-v3` → `wallet-selection-v1` → Behaviorを再実行する。
+4. 有料sourceを再検討しない限り、10,000 Fill以前やInfo APIでcoverageを証明できないgapは`HISTORY_INCOMPLETE / REVIEW`のまま維持する。
 
 ## Hyperliquid history recovery設計・実装（2026-09-14）
 
@@ -154,7 +190,9 @@
 
 ## Blockerと承認境界
 
-- Info APIでnon-empty fillsを取得できるgapは改訂契約で回復可能。empty/truncated fillsおよび3 walletの10,000 Fill以前は、Owner承認済みofficial archive inventory/downloadとprovenance付きingestionが完了するまで証明できない。
+- Info APIでcoverageを証明できなかった441 gapと3 walletの10,000 Fill以前は、現行の無料source限定方針では証明できない。これらのwalletは`HISTORY_INCOMPLETE / REVIEW`を維持し、救済自体を目的化しない。
+- 無料Discovery候補100件の最終監査ではmanifest v7通過が0件だった。selected 0の直接原因は投資閾値ではなく、30 wallet全件のrequired metric不足である。
+- AWS Requester Pays、有料API、有料データ契約は不採用であり、Ownerの新たな明示判断なしに調査実行・download・ingestionへ進まない。
 - DQやhistory completenessを件数合わせ・手動更新で解消済みにしない。既存のfail-closed契約を維持する。
 - Issue 15 Stage 4 canary/backfillは、effective selected walletが1件以上あり、対象walletのhistory/DQ/quote条件が契約を満たし、必要なOwner承認が揃うまで実行しない。
 - main merge、実DB destructive operation、実migration、本番適用、大規模index、Redis削除、quarantine解除、秘密情報変更、実注文・署名・資金移動は自動実行しない。
@@ -163,6 +201,6 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- GitHub CLI: なし
+- GitHub CLIは未導入。feature branchはpush済み、PR #29はopenで、required CIを監視する。main mergeはOwner承認待ち。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
-- この作業で行った許可済みmutation: 14 walletの正式sync、正式DQ lifecycle、Performance run作成、Selection run作成。禁止された直接DB/Redis mutationは0件。
+- この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateの正式promotion / sync、30 walletのPerformance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。

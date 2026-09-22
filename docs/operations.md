@@ -63,6 +63,23 @@ PostgreSQL と Redis のホスト公開は `127.0.0.1:5432`、`127.0.0.1:6379` �
 - weighted limiterの1分予算はWorker process内で共有するため、公式IP単位制限を守る運用ではWorker replicaを1に固定する。水平分割する場合は、分散weight予算を実装してから行う。
 - Worker停止時は最大2分のgrace periodで実行中の候補Enrichmentを完了させ、未完jobはBullMQの再配信で継続する。
 
+### Free-data readiness recovery
+
+OPEN `HYPERLIQUID_WEBSOCKET_GAP`を過去分から回復するときは、最初に`pnpm hl:gap-recovery`をdry-runし、OPEN issueごとの`disconnectedAt`と、同walletでそれより後に保存された最初のWebSocket raw eventからmanifestを作る。実行は`--enqueue --expected-count=<count> --expected-sha256=<hash>`を必須とし、manifest変化、終了境界欠損、重複identity、500件超のqueue backlog、OPENのまま残るcompleted jobがあればfail closedする。既存failed jobは同一job IDを正式BullMQ retryし、DQやcursorを直接更新しない。required laneのcoverageを証明できないgapは、その時点のsource evidenceでは決定的に回復不能としてBullMQの自動retryを停止するが、対応するDQはOPENのまま保持する。source evidenceが変わった場合だけ、新しいmanifest検証を経て再実行する。
+
+Discovery候補を無料データ範囲で追加するときは、`pnpm hl:promote-free-candidates`をdry-runする。対象は既存正式filterが`ELIGIBLE`、enrichmentが`SUCCEEDED`、historyが`COMPLETE`、non-truncated、DQ score 100、候補OPEN DQなし、Selection評価期間とDiscovery recent activityを満たすものに限る。さらにInfo APIで候補の`availableFrom`を始点にbounded fill取得を行い、coverageが証明され、最初のfillを一意に特定でき、その`startPosition`がcanonical zeroであることを必須とする。funding / ledgerもall-time rangeがexhaustiveかつ非truncatedでなければならず、`perpAllTime` portfolio historyの最初のNAV日はこの3 laneの最古入力日以前でなければならない。`tid`はidentityであり、境界のcausal ordering根拠にはしない。dry-run manifestには最初のfillのtimestamp / `tid` / `startPosition`、全sourceの最古timestamp、最初のNAV timestampを含め、実行はcount/hash一致を必須とする。候補走査は最低評価期間を満たす新しい開始境界から`--scan-limit`上限まで行い、promotion後の履歴取得は通常の`walletBackfill`を使う。backfillで10,000 Fill上限や他の不完全性が判明したwalletは`REVIEW`のまま扱う。
+
+大量の候補enrichment backlogがある状態でpromotionだけを処理する場合、Discovery全体を有効にした上で次を明示する。
+
+```dotenv
+HYPERLIQUID_DISCOVERY_ENABLED=true
+HYPERLIQUID_DISCOVERY_CONSUMER_ENABLED=true
+HYPERLIQUID_DISCOVERY_ENRICHMENT_CONSUMER_ENABLED=false
+HYPERLIQUID_DISCOVERY_SCHEDULER_ENABLED=false
+```
+
+component overrideは有効なDiscovery runtimeの一部を停止するためだけに使い、global disableを迂回できない。通常運用ではoverrideを省略し、既存のall-or-nothing動作を維持する。
+
 30分実データ試験では、開始前後の`discovery_stats`、`discovery_trades`、`address_candidates`、Queue件数を記録する。15分前後でWorkerを再起動し、Cursorが後退せず、再購読後の重複が増えても取引・候補統計が二重加算されないことを確認する。試験終了時は`finally`相当で探索設定を元へ戻す。
 
 `pnpm test:e2e`は専用API/Webを本番確認用Composeと衝突しない`3101`/`3100`で起動する。PostgreSQLの`chaincopy_e2e` schemaとRedis DB 15へ隔離し、成功・失敗を問わず終了時に両方を消去する。fixture walletを削除しても通常の`hyperliquid-sync` queueへ孤立jobを残さない。
