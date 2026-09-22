@@ -13,7 +13,7 @@
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
 - 本branchは、Ownerの無料データ限定方針に基づくbounded Info API recovery、無料Discovery候補のfail-closed検証、Performance / Selection / Behavior再評価を実装・記録する。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- branchは`origin/codex/free-data-discovery-recovery`へpush済み。PR作成は、live recovery / Selection結果をGitHubへ掲載する外部送信の明示確認待ちである。
+- branchは`origin/codex/free-data-discovery-recovery`へpush済み。PR #29はopenで、main mergeはOwner承認待ちである。
 
 ## 完了済みで再実行しない作業
 
@@ -201,6 +201,6 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- GitHub CLIは未導入。feature branchはpush済みで、PR作成・pull-request CIは外部送信の明示確認待ち。
+- GitHub CLIは未導入。feature branchはpush済み、PR #29はopenで、required CIを監視する。main mergeはOwner承認待ち。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
 - この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateの正式promotion / sync、30 walletのPerformance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。
