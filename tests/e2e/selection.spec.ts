@@ -10,12 +10,14 @@ import {
 test.describe("Wallet selection browser E2E", () => {
   test.describe.configure({ mode: "serial" });
 
-  test("rejects unauthenticated selection API requests", async ({ request }) => {
-    const response = await request.get("/api/wallet-selection");
-    expect(response.status()).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({
-      error: { code: "authentication_required" },
-    });
+  test("rejects unauthenticated selection and ranking API requests", async ({ request }) => {
+    for (const path of ["/api/wallet-selection", "/api/wallet-selection/ranking"]) {
+      const response = await request.get(path);
+      expect(response.status()).toBe(401);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { code: "authentication_required" },
+      });
+    }
   });
 
   test.describe("authenticated", () => {
@@ -33,70 +35,76 @@ test.describe("Wallet selection browser E2E", () => {
       ]);
     });
 
-    test("evaluates, configures, filters, and manually overrides monitored wallets", async ({
+    test("shows only Discovery-promoted wallets that pass the automatic hard gates", async ({
       page,
     }) => {
-      await page.goto("/dashboard/selection");
-      await expect(page.getByRole("heading", { name: "参考にするアドレス" })).toBeVisible();
+      const firstEvaluation = await page.request.post("/api/wallet-selection/evaluate");
+      expect(firstEvaluation.ok()).toBe(true);
+      const secondEvaluation = await page.request.post("/api/wallet-selection/evaluate");
+      const firstPayload = await firstEvaluation.json();
+      const secondPayload = await secondEvaluation.json();
+      expect(firstPayload.run.id).toBe(secondPayload.run.id);
+      expect(secondPayload.reused).toBe(true);
 
-      await page.getByRole("button", { name: "再評価" }).click();
-      await expect(page.getByText("監視中のアドレスを再評価しました。")).toBeVisible();
+      await page.goto("/dashboard/selection");
+      await expect(page.getByRole("heading", { name: "参考ウォレットランキング" })).toBeVisible();
 
       const selectedRow = page.locator("tr", {
         has: page.locator(`a[href="/dashboard/addresses/${e2eSelectionAddress}"]`),
       });
       await expect(selectedRow.getByText("参考対象", { exact: true })).toBeVisible();
       await expect(selectedRow).toContainText("+34%");
+      await expect(selectedRow).toContainText("55%");
+      await expect(selectedRow).toContainText("2.1");
       await expect(selectedRow).toContainText("20件");
 
-      const firstEvaluation = await page.request.post("/api/wallet-selection/evaluate");
-      const secondEvaluation = await page.request.post("/api/wallet-selection/evaluate");
-      const firstPayload = await firstEvaluation.json();
-      const secondPayload = await secondEvaluation.json();
-      expect(firstPayload.run.id).toBe(secondPayload.run.id);
-      expect(secondPayload.reused).toBe(true);
-      expect(
-        secondPayload.items.find(
-          (item: { readonly address: string }) => item.address === e2eSelectionAddress,
-        ).performanceRunId,
-      ).toBe("phase4-3-e2e-selected-performance-run");
-
-      const reviewRow = page.locator("tr", {
-        has: page.locator(`a[href="/dashboard/addresses/${e2eManualPerformanceAddress}"]`),
-      });
-      await expect(reviewRow.getByText("要確認", { exact: true })).toBeVisible();
+      await expect(
+        page.locator(`a[href="/dashboard/addresses/${e2eManualPerformanceAddress}"]`),
+      ).toHaveCount(0);
       await expect(
         page.locator(`a[href="/dashboard/addresses/${e2eDiscoveryAddress}"]`),
       ).toHaveCount(0);
-      expect(await page.locator("body").innerText()).not.toMatch(
-        /NO_PERFORMANCE_V3|HISTORY_INCOMPLETE|DATA_STALE|wallet-selection-v1/,
+      await expect(page.getByText("要確認", { exact: true })).toHaveCount(0);
+      await expect(page.getByText("対象外", { exact: true })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "参考対象にする" })).toHaveCount(0);
+      await expect(page.getByRole("button", { name: "再評価" })).toHaveCount(0);
+
+      const ranking = await page.request.get("/api/wallet-selection/ranking");
+      await expect(ranking.json()).resolves.toMatchObject({
+        items: [
+          {
+            address: e2eSelectionAddress,
+            automaticStatus: "SELECTED",
+            performanceRunId: "phase4-3-e2e-selected-performance-run",
+            rank: 1,
+          },
+        ],
+        run: { eligibleCount: 1, selectedCount: 1 },
+      });
+    });
+
+    test("keeps manual EXCLUDE as an administrative denylist without exposing controls", async ({
+      page,
+    }) => {
+      const exclude = await page.request.patch(
+        `/api/wallet-selection/${e2eSelectionAddress}/override`,
+        { data: { decision: "EXCLUDE", note: "e2e denylist" } },
       );
+      expect(exclude.ok()).toBe(true);
+      await page.goto("/dashboard/selection");
+      await expect(
+        page.getByText("現在、履歴・成績・リスクの全条件を通過したウォレットはありません。"),
+      ).toBeVisible();
 
-      await page.getByText("選定条件", { exact: true }).click();
-      await page.getByLabel("自動選定する最大件数").fill("1");
-      await page.getByRole("button", { name: "選定条件を保存" }).click();
-      await expect(page.getByText("選定条件を保存しました。再評価してください。")).toBeVisible();
-      await page.getByRole("button", { name: "再評価" }).click();
-      await expect(page.getByText("監視中のアドレスを再評価しました。")).toBeVisible();
-      const changedPolicyEvaluation = await page.request.get("/api/wallet-selection");
-      expect((await changedPolicyEvaluation.json()).run.id).not.toBe(firstPayload.run.id);
-
-      await selectedRow.getByRole("button", { name: "対象外にする" }).click();
-      await expect(selectedRow.getByText("対象外", { exact: true })).toBeVisible();
-      await expect(selectedRow.getByText("手動設定", { exact: true })).toBeVisible();
-      await selectedRow.getByRole("button", { name: "自動判定に戻す" }).click();
-      await expect(selectedRow.getByText("参考対象", { exact: true })).toBeVisible();
-
-      await reviewRow.getByRole("button", { name: "参考対象にする" }).click();
-      await expect(reviewRow.getByText("参考対象", { exact: true })).toBeVisible();
-      await reviewRow.getByText("理由を見る", { exact: true }).click();
-      await expect(reviewRow.getByText("成績をまだ確認できません")).toBeVisible();
-      await reviewRow.getByRole("button", { name: "自動判定に戻す" }).click();
-      await expect(reviewRow.getByText("要確認", { exact: true })).toBeVisible();
-
-      await page.getByLabel("参考状態で絞り込む").selectOption("REVIEW");
-      await expect(reviewRow).toBeVisible();
-      await expect(selectedRow).toHaveCount(0);
+      const restore = await page.request.patch(
+        `/api/wallet-selection/${e2eSelectionAddress}/override`,
+        { data: { decision: "AUTO", note: null } },
+      );
+      expect(restore.ok()).toBe(true);
+      await page.reload();
+      await expect(
+        page.locator(`a[href="/dashboard/addresses/${e2eSelectionAddress}"]`),
+      ).toBeVisible();
     });
   });
 });

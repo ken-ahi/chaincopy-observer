@@ -493,6 +493,8 @@ effectiveLeverage = grossPositionNotional / accountEquity
 
 # 15. 総合評価
 
+> 現行の参考ウォレット自動選定は、任意の重み付きscoreではなく、`docs/phase4-3-wallet-selection-spec.md`の`wallet-selection-v1`を正式契約とする。以下のscoreは必要metricとversioned policyが正式化された後の拡張構想であり、現行Selectionの代替ではない。
+
 ## 15.1 基本スコア
 
 ```text

@@ -50,6 +50,7 @@ export function registerWalletSelectionRoutes<LoggerType extends FastifyBaseLogg
   service: WalletSelectionService,
 ): void {
   app.get("/api/wallet-selection", async () => service.getCurrentSelection());
+  app.get("/api/wallet-selection/ranking", async () => service.getCurrentRanking());
   app.get("/api/wallet-selection/settings", async () => service.getSettings());
   app.get("/api/wallet-selection/effective-selected", async () => ({
     items: await service.listEffectiveSelectedWallets(),
@@ -102,7 +103,7 @@ function sendSelectionError(error: unknown, reply: FastifyReply) {
   if (error instanceof WalletSelectionWalletNotFoundError) {
     return reply.code(404).send({
       error: "not_found",
-      message: "The monitored wallet was not found.",
+      message: "The Discovery-promoted wallet was not found.",
     });
   }
   throw error;

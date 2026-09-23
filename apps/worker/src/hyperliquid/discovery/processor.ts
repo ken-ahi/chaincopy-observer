@@ -15,7 +15,11 @@ import { type Logger } from "pino";
 import { enqueueHyperliquidJob } from "../queue.js";
 import { type CandidateEnrichmentService } from "./enrichment-service.js";
 import { evaluateLightweightCandidate } from "./filter.js";
-import { enqueueCandidateEnrichment, enqueueCandidateFilter } from "./queue.js";
+import {
+  enqueueCandidateEnrichment,
+  enqueueCandidateFilter,
+  enqueueCandidatePromotion,
+} from "./queue.js";
 import { type HyperliquidDiscoveryRepository } from "./repository.js";
 import { type HyperliquidDiscoveryWebSocketSupervisor } from "./websocket-supervisor.js";
 
@@ -200,7 +204,15 @@ export class HyperliquidDiscoveryJobProcessor {
       ) {
         return { manuallyExcluded: true };
       }
+      const promotionJobId =
+        stored.result.status === "ELIGIBLE"
+          ? await enqueueCandidatePromotion(this.discoveryQueue, {
+              ...data,
+              automatic: true,
+            })
+          : null;
       return {
+        ...(promotionJobId ? { promotionJobId } : {}),
         reasons: stored.result.reasons,
         status: stored.result.status,
       };

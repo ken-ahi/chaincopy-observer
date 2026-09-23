@@ -56,6 +56,7 @@ export interface WalletSelectionItemDto {
   readonly reasonCodes: readonly WalletSelectionReasonCode[];
   readonly performanceRunId: string | null;
   readonly performanceRunTrustState: "TRUSTED" | "QUARANTINED" | null;
+  readonly performanceCalculationTo: string | null;
   readonly lastSyncAt: string | null;
   readonly historyCompleteness: string | null;
   readonly trustedClosedCycleCount: number;
@@ -81,6 +82,29 @@ export interface WalletSelectionEvaluationDto extends WalletSelectionRunDto {
   readonly reused: boolean;
 }
 
+export interface WalletRankingItemDto {
+  readonly walletAddressId: string;
+  readonly address: string;
+  readonly automaticStatus: Extract<WalletSelectionAutomaticStatus, "SELECTED" | "QUALIFIED">;
+  readonly rank: number;
+  readonly performanceRunId: string;
+  readonly latestActivityAt: string;
+  readonly lastSyncAt: string;
+  readonly trustedClosedCycleCount: number;
+  readonly metrics: Readonly<Record<string, string>>;
+}
+
+export interface WalletRankingDto {
+  readonly run: {
+    readonly id: string;
+    readonly policyVersion: string;
+    readonly evaluatedAt: string;
+    readonly eligibleCount: number;
+    readonly selectedCount: number;
+  } | null;
+  readonly items: readonly WalletRankingItemDto[];
+}
+
 export interface EffectiveSelectedWalletDto {
   readonly walletAddressId: string;
   readonly address: string;
@@ -92,6 +116,7 @@ export interface EffectiveSelectedWalletDto {
 
 export interface WalletSelectionService {
   getCurrentSelection(): Promise<WalletSelectionRunDto>;
+  getCurrentRanking(): Promise<WalletRankingDto>;
   getSettings(): Promise<WalletSelectionSettingsDto>;
   updateSettings(input: WalletSelectionSettingsUpdate): Promise<WalletSelectionSettingsDto>;
   evaluate(): Promise<WalletSelectionEvaluationDto>;
@@ -105,7 +130,7 @@ export interface WalletSelectionService {
 
 export class WalletSelectionWalletNotFoundError extends Error {
   public constructor(address: string) {
-    super(`Hyperliquid wallet ${address} was not found.`);
+    super(`Discovery-promoted Hyperliquid wallet ${address} was not found.`);
     this.name = "WalletSelectionWalletNotFoundError";
   }
 }
@@ -114,6 +139,7 @@ const selectionResultInclude = {
   performanceRun: {
     select: {
       _count: { select: { positionCycles: { where: { status: "CLOSED" as const } } } },
+      calculationTo: true,
       historyCompleteness: true,
       ...performanceRunTrustSelect,
       performanceMetrics: {
@@ -164,7 +190,42 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
     const run = settings.currentSelectionRunId
       ? await this.findRunById(source.id, settings.currentSelectionRunId)
       : null;
-    return run ? toRunDto(run) : { items: [], run: null };
+    if (!run) return { items: [], run: null };
+    assertSelectionRunPerformanceTrust(run);
+    return toRunDto(run);
+  }
+
+  public async getCurrentRanking(): Promise<WalletRankingDto> {
+    const current = await this.getCurrentSelection();
+    if (!current.run) return { items: [], run: null };
+    const items = current.items
+      .flatMap<WalletRankingItemDto>((item) => {
+        if (!isAutomaticRankingItem(item)) return [];
+        return [
+          {
+            address: item.address,
+            automaticStatus: item.automaticStatus,
+            lastSyncAt: item.lastSyncAt,
+            latestActivityAt: item.performanceCalculationTo,
+            metrics: item.metrics,
+            performanceRunId: item.performanceRunId,
+            rank: item.rank,
+            trustedClosedCycleCount: item.trustedClosedCycleCount,
+            walletAddressId: item.walletAddressId,
+          },
+        ];
+      })
+      .sort((left, right) => left.rank - right.rank);
+    return {
+      items,
+      run: {
+        eligibleCount: items.length,
+        evaluatedAt: current.run.evaluatedAt,
+        id: current.run.id,
+        policyVersion: current.run.policyVersion,
+        selectedCount: items.filter((item) => item.automaticStatus === "SELECTED").length,
+      },
+    };
   }
 
   public async getSettings(): Promise<WalletSelectionSettingsDto> {
@@ -308,7 +369,11 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
     const address = normalizeHyperliquidAddress(addressInput);
     const wallet = await this.database.walletAddress.findFirst({
       select: { id: true },
-      where: { address, isWatched: true, source: { kind: "HYPERLIQUID" } },
+      where: {
+        address,
+        promotedCandidates: { some: { source: { kind: "HYPERLIQUID" } } },
+        source: { kind: "HYPERLIQUID" },
+      },
     });
     if (!wallet) throw new WalletSelectionWalletNotFoundError(address);
 
@@ -400,7 +465,10 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
         id: true,
         lastSyncAt: true,
       },
-      where: { isWatched: true, sourceId },
+      where: {
+        promotedCandidates: { some: { sourceId } },
+        sourceId,
+      },
     });
     return Promise.all(
       wallets.map(async (wallet) => {
@@ -414,6 +482,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
             _count: {
               select: { positionCycles: { where: { status: "CLOSED" } } },
             },
+            calculationTo: true,
             calculationVersion: true,
             historyCompleteness: true,
             id: true,
@@ -475,6 +544,32 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
   }
 }
 
+function isAutomaticRankingItem(item: WalletSelectionItemDto): item is WalletSelectionItemDto & {
+  readonly automaticStatus: "SELECTED" | "QUALIFIED";
+  readonly lastSyncAt: string;
+  readonly performanceCalculationTo: string;
+  readonly performanceRunId: string;
+  readonly rank: number;
+} {
+  return (
+    (item.automaticStatus === "SELECTED" || item.automaticStatus === "QUALIFIED") &&
+    item.manualOverride !== "EXCLUDE" &&
+    item.performanceRunTrustState === "TRUSTED" &&
+    item.rank !== null &&
+    item.performanceCalculationTo !== null &&
+    item.performanceRunId !== null &&
+    item.lastSyncAt !== null
+  );
+}
+
+function assertSelectionRunPerformanceTrust(run: SelectionRunRow): void {
+  for (const result of run.results) {
+    if (result.performanceRunId && result.performanceRun) {
+      assertPerformanceRunTrustConsistency(result.performanceRunId, result.performanceRun);
+    }
+  }
+}
+
 function toPolicy(settings: {
   readonly maxAutoSelected: number;
   readonly maximumDataAgeHours: number;
@@ -532,6 +627,7 @@ function toItemDto(row: SelectionResultRow): WalletSelectionItemDto {
     overrideNote: row.walletAddress.walletSelectionOverride?.note ?? null,
     performanceRunId: row.performanceRunId,
     performanceRunTrustState: row.performanceRun?.trustState ?? null,
+    performanceCalculationTo: row.performanceRun?.calculationTo.toISOString() ?? null,
     rank: row.rank,
     reasonCodes: row.reasonCodes as WalletSelectionReasonCode[],
     trustedClosedCycleCount: row.performanceRun?._count.positionCycles ?? 0,

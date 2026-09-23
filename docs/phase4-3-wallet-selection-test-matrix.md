@@ -1,6 +1,6 @@
 # Phase 4.3 参考ウォレット選定 Test Matrix
 
-最終更新: 2026-08-08
+最終更新: 2026-09-23
 
 | ID    | 層             | シナリオ                         | 期待結果                                     |
 | ----- | -------------- | -------------------------------- | -------------------------------------------- |
@@ -21,11 +21,11 @@
 | WS-15 | API Unit       | settings取得・更新・validation   | 正常応答 / 不正入力400                       |
 | WS-16 | API Unit       | evaluate / override              | 正常応答、未知decision 400、未知wallet 404   |
 | WS-17 | API Unit       | 予期しない内部エラー             | secret・stackを含まない500                   |
-| WS-18 | Web Unit       | 4状態・理由・確かさ              | 初心者向け日本語、内部enum非表示             |
-| WS-19 | Web Unit       | summary / filter / empty state   | 有効状態件数、絞り込み、初回案内             |
-| WS-20 | Web Unit       | settings / manual actions        | 保存後に再評価案内、3操作を提供              |
-| WS-21 | Browser E2E    | ページ表示・再評価               | 参考対象 / 要確認と主要指標を表示            |
-| WS-22 | Browser E2E    | INCLUDE / EXCLUDE / AUTO         | 状態反映、AUTO復帰、自動理由保持             |
+| WS-18 | Web Unit       | overall ranking表示              | rankと主要Performance / risk指標を表示       |
+| WS-19 | Web Unit       | eligible-only / empty state      | SELECTED / QUALIFIEDだけ表示、0件を正常表示  |
+| WS-20 | Web Unit       | 通常画面の手動操作               | evaluate / INCLUDE / 理由UIを表示しない      |
+| WS-21 | Browser E2E    | ランキングページ表示             | 自動選定済みwalletと主要指標だけを表示       |
+| WS-22 | Service Unit   | manual EXCLUDE                   | overall rankingとeffective setから除外       |
 | WS-23 | Browser E2E    | Discovery Candidate              | Selection一覧へ直接混入しない                |
 | WS-24 | Browser E2E    | reason code                      | 内部コードを画面へ表示しない                 |
 | WS-25 | Service Unit   | Run全体365日、年率Metric期間60日 | REVIEW / EVALUATION_PERIOD_TOO_SHORT         |
@@ -36,5 +36,11 @@
 | WS-30 | Analytics Unit | 閾値と鮮度のちょうど境界         | 0、-0.5、0.75、24時間前を通過                |
 | WS-31 | Analytics Unit | maxAutoSelected = 0              | SELECTED 0件、合格walletはQUALIFIED          |
 | WS-32 | Service Unit   | settings初回作成の同時upsert     | P2002後に作成済みsettingsを再取得            |
+| WS-33 | Service Unit   | automatic universe               | promoted Candidate由来、isWatched条件なし    |
+| WS-34 | Worker Unit    | enriched CandidateがELIGIBLE     | idempotent promotionを自動enqueue            |
+| WS-35 | Worker Unit    | Performance成功                  | Selection評価後にBehavior controlをenqueue   |
+| WS-36 | Worker Unit    | Performance失敗                  | Selection / Behaviorへ進まない               |
+| WS-37 | Service Unit   | REVIEWをmanual INCLUDE           | 通常rankingには表示しない                    |
+| WS-38 | API Unit       | ranking endpoint                 | eligible-only DTO、reason / REVIEWを返さない |
 
 全体ゲートは`format:check`、`lint`、workspace再帰`typecheck`、`test`、workspace再帰`build`、`CI=1 test:e2e`である。
