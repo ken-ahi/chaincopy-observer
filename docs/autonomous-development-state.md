@@ -13,7 +13,7 @@
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
 - PR #29はmainへmerge済みであり、無料データ限定recovery / Discovery作業は完了した。本branchは、DiscoveryからBehaviorまでの自動ranking / reference-wallet flowを実装・記録する。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- 本branchのpush / PR / CI状態は、この節を含む実装の全validation後に更新する。main mergeはOwner承認境界である。
+- branchは`origin/codex/automatic-wallet-ranking`へpush済み。PR #30はopenで、GitHub Actions `verify`はPASSした。main mergeはOwner承認境界である。
 
 ## 完了済みで再実行しない作業
 
@@ -183,12 +183,12 @@
 - full Selection API、結果、理由、settings、overrideは監査・管理用に保持する。`EXCLUDE`はdenylistとしてranking / effective setへ反映し、`INCLUDE`は後方互換の管理機能だが通常rankingを迂回できない。
 - DB schema / migration、実DB、実Redis、threshold、Performance式、DQ / quarantine、paid data、注文・署名は変更していない。
 - 正式設計は`docs/automatic-wallet-ranking-design.md`、更新したSelection正本は`docs/phase4-3-wallet-selection-spec.md`、判断はADR-037である。
-- feature branch検証はformat / lint PASS、typecheck 11/11 PASS、test 70 files / 639 PASS、build 11/11 PASS、E2E 22/22 PASS、`pnpm audit --audit-level high`はhigh以上0、`git diff --check` PASSである。
+- feature branch検証はformat / lint PASS、typecheck 11/11 PASS、test 70 files / 639 PASS、build 11/11 PASS、E2E 22/22 PASS、`pnpm audit --audit-level high`はhigh以上0、`git diff --check` PASSである。PR #30のGitHub Actions `verify`も全step PASSした。
 - integration / E2Eは永続volumeなしの隔離PostgreSQL 16 / Redis 7コンテナだけで実行し、完了後に停止・自動破棄した。実DB / 実Redisへのmutationは0件である。
 
 ## 次の優先作業
 
-1. 本branchの全validation、commit、push、PR、CIを完了し、main mergeはOwner承認を待つ。
+1. PR #30のmain mergeはOwner承認を待つ。merge前に新しいreview / CI failureが発生した場合だけfeature branchで修正する。
 2. merge後の正式Worker imageで、通常DiscoveryからCandidate auto-promotion、Performance、Selection、Behaviorの自動連鎖を運用監視する。実DB migrationは不要である。
 3. 既存`hyperliquid-candidate-enrichment` backlog 8,425件は、queue retention / enqueue抑制 / bounded drainの正式運用判断を別Issueで行う。直接DEL / ZREMや無制限consumer起動は行わない。
 4. 有料sourceを再検討しない限り、10,000 Fill以前やInfo APIでcoverageを証明できないgapは`HISTORY_INCOMPLETE / REVIEW`のまま維持する。
@@ -216,6 +216,6 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- PR作成手段とCI状態は全validation後に確認・更新する。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
+- PR #30はGitHub APIで作成済み、GitHub Actions `verify`はPASS。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
 - この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateの正式promotion / sync、30 walletのPerformance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。
