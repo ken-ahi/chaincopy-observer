@@ -2,158 +2,73 @@ import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
-import { type WalletSelectionItem } from "../lib/wallet-selection-api";
+import { type WalletRankingItem } from "../lib/wallet-selection-api";
 
 import {
-  dataCertaintyLabel,
+  formatSelectionDate,
+  formatSelectionDecimal,
   formatSelectionPercent,
-  selectionReasonLabel,
-  selectionReasonSummary,
-  selectionStatusAnnotations,
-  selectionStatusLabels,
-  selectionSummary,
-  sortSelectionItems,
+  sortWalletRankingItems,
 } from "./selection-display.js";
 
-function item(overrides: Partial<WalletSelectionItem> = {}): WalletSelectionItem {
+function item(overrides: Partial<WalletRankingItem> = {}): WalletRankingItem {
   return {
     address: "0x1111111111111111111111111111111111111111",
-    automaticStatus: "REVIEW",
-    effectiveStatus: "REVIEW",
-    historyCompleteness: "PARTIAL",
-    lastSyncAt: "2026-08-08T00:00:00.000Z",
-    manualOverride: "AUTO",
-    metrics: {},
-    overrideNote: null,
+    automaticStatus: "SELECTED",
+    lastSyncAt: "2026-09-23T00:00:00.000Z",
+    latestActivityAt: "2026-09-22T23:00:00.000Z",
+    metrics: {
+      annualizedReturn: "0.2",
+      cumulativeReturn: "0.4",
+      maxDrawdown: "-0.1",
+      profitFactor: "2.5",
+      winRate: "0.6",
+    },
     performanceRunId: "performance-run-1",
-    rank: null,
-    reasonCodes: ["HISTORY_INCOMPLETE"],
-    trustedClosedCycleCount: 10,
+    rank: 1,
+    trustedClosedCycleCount: 30,
     walletAddressId: "wallet-1",
     ...overrides,
   };
 }
 
-describe("wallet selection display", () => {
-  it("uses beginner-facing Japanese labels for every status and reason", () => {
-    expect(selectionStatusLabels).toEqual({
-      EXCLUDED: "対象外",
-      QUALIFIED: "候補",
-      REVIEW: "要確認",
-      SELECTED: "参考対象",
-    });
-    expect(selectionReasonSummary(item())).toBe("履歴不足");
-    expect(selectionReasonLabel("HISTORY_INCOMPLETE")).toBe("取引履歴の一部が不足しています");
-    expect(selectionReasonLabel("UNKNOWN_FUTURE_REASON")).not.toContain("UNKNOWN_FUTURE_REASON");
-    expect(selectionReasonSummary(item({ reasonCodes: ["UNKNOWN_FUTURE_REASON"] }))).not.toContain(
-      "UNKNOWN_FUTURE_REASON",
-    );
-  });
-
-  it("keeps the automatic reason summary next to a manual override", () => {
-    expect(
-      selectionStatusAnnotations(
-        item({
-          automaticStatus: "REVIEW",
-          effectiveStatus: "SELECTED",
-          manualOverride: "INCLUDE",
-          reasonCodes: ["HISTORY_INCOMPLETE"],
-        }),
-      ),
-    ).toEqual({ manualLabel: "手動設定", reasonSummary: "履歴不足" });
-  });
-
-  it("counts effective states so manual overrides are reflected", () => {
-    const summary = selectionSummary([
-      item({ effectiveStatus: "SELECTED", manualOverride: "INCLUDE" }),
-      item({ effectiveStatus: "REVIEW", walletAddressId: "wallet-2" }),
-      item({ effectiveStatus: "EXCLUDED", walletAddressId: "wallet-3" }),
-    ]);
-    expect(summary.map(({ label, value }) => [label, value])).toEqual([
-      ["参考対象", 1],
-      ["候補", 0],
-      ["要確認", 1],
-      ["対象外", 1],
-    ]);
-  });
-
-  it("sorts by state, rank, annualized return, then address", () => {
+describe("automatic wallet ranking display", () => {
+  it("uses the persisted deterministic rank and address as a stable fallback", () => {
     const items = [
-      item({ address: "0x03", effectiveStatus: "REVIEW", walletAddressId: "3" }),
-      item({
-        address: "0x02",
-        automaticStatus: "SELECTED",
-        effectiveStatus: "SELECTED",
-        metrics: { annualizedReturn: "100000000000000000000.1" },
-        rank: 2,
-        reasonCodes: [],
-        walletAddressId: "2",
-      }),
-      item({
-        address: "0x01",
-        automaticStatus: "SELECTED",
-        effectiveStatus: "SELECTED",
-        metrics: { annualizedReturn: "0.2" },
-        rank: 1,
-        reasonCodes: [],
-        walletAddressId: "1",
-      }),
+      item({ address: "0x03", rank: 2, walletAddressId: "3" }),
+      item({ address: "0x02", rank: 1, walletAddressId: "2" }),
+      item({ address: "0x01", rank: 1, walletAddressId: "1" }),
     ];
-    expect(sortSelectionItems(items).map(({ address }) => address)).toEqual([
+
+    expect(sortWalletRankingItems(items).map(({ address }) => address)).toEqual([
       "0x01",
       "0x02",
       "0x03",
     ]);
   });
 
-  it("formats values only at presentation time", () => {
+  it("formats stored Decimal strings only at presentation time", () => {
     expect(formatSelectionPercent("0.3412", true)).toBe("+34.12%");
     expect(formatSelectionPercent(undefined)).toBe("-");
+    expect(formatSelectionDecimal("2.345")).toBe("2.35");
+    expect(formatSelectionDate("invalid")).toBe("-");
   });
 
-  it.each([
-    ["SELECTED", "SELECTED", "AUTO", [], "高い"],
-    ["QUALIFIED", "QUALIFIED", "AUTO", [], "高い"],
-    ["EXCLUDED", "EXCLUDED", "AUTO", ["RETURN_BELOW_MINIMUM"], "高い"],
-    ["REVIEW", "REVIEW", "AUTO", ["DATA_STALE"], "確認が必要"],
-    ["REVIEW", "REVIEW", "AUTO", ["REQUIRED_METRIC_MISSING"], "確認が必要"],
-    ["REVIEW", "SELECTED", "INCLUDE", ["DATA_STALE"], "確認が必要"],
-  ] as const)(
-    "reports certainty from automatic status %s even when effective status is %s",
-    (automaticStatus, effectiveStatus, manualOverride, reasonCodes, expected) => {
-      expect(
-        dataCertaintyLabel(
-          item({
-            automaticStatus,
-            effectiveStatus,
-            historyCompleteness: "COMPLETE",
-            manualOverride,
-            reasonCodes: [...reasonCodes],
-          }),
-        ),
-      ).toBe(expected);
-    },
-  );
-
-  it("requires confirmation for partial history and reports missing performance as unconfirmed", () => {
-    expect(dataCertaintyLabel(item({ historyCompleteness: "PARTIAL" }))).toBe("確認が必要");
-    expect(dataCertaintyLabel(item({ historyCompleteness: null }))).toBe("未確認");
-  });
-
-  it("keeps settings collapsed, supports filters and manual actions, and hides technical copy", () => {
+  it("uses the eligible-only ranking API and omits review, rejection, and manual inclusion UX", () => {
     const source = readFileSync(new URL("./selection-client.tsx", import.meta.url), "utf8");
-    expect(source).toContain("<details");
-    expect(source).toContain("参考状態で絞り込む");
-    expect(source).toContain("参考対象にする");
-    expect(source).toContain("対象外にする");
-    expect(source).toContain("自動判定に戻す");
-    expect(source).toContain("理由を見る");
-    expect(source).not.toContain("policyVersion");
-    expect(source).not.toContain("inputFingerprint");
-    expect(source).not.toContain("Performance Run");
+    expect(source).toContain("/api/wallet-selection/ranking");
+    expect(source).toContain("総合ランキング");
+    expect(source).toContain("完了取引");
+    expect(source).toContain("勝率");
+    expect(source).toContain("Profit Factor");
+    expect(source).not.toContain("REVIEW");
+    expect(source).not.toContain("EXCLUDED");
+    expect(source).not.toContain("理由を見る");
+    expect(source).not.toContain("参考対象にする");
+    expect(source).not.toContain("再評価");
   });
 
-  it("adds the authenticated page and safe same-origin API route", () => {
+  it("keeps the authenticated page and safe same-origin API route", () => {
     const page = readFileSync(
       new URL("../app/dashboard/selection/page.tsx", import.meta.url),
       "utf8",

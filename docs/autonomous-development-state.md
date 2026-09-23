@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-17 (Asia/Tokyo)
+最終更新: 2026-09-23 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -8,12 +8,12 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/free-data-discovery-recovery`
-- branch base / `origin/main`: `8537876953d979a8b05be7f425d44fb544736429` (`Merge pull request #28 from ken-ahi/codex/hyperliquid-history-recovery`)
+- branch: `codex/automatic-wallet-ranking`
+- branch base / `origin/main`: `22ad55f` (`Merge pull request #29 from ken-ahi/codex/free-data-discovery-recovery`)
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- 本branchは、Ownerの無料データ限定方針に基づくbounded Info API recovery、無料Discovery候補のfail-closed検証、Performance / Selection / Behavior再評価を実装・記録する。
+- PR #29はmainへmerge済みであり、無料データ限定recovery / Discovery作業は完了した。本branchは、DiscoveryからBehaviorまでの自動ranking / reference-wallet flowを実装・記録する。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- branchは`origin/codex/free-data-discovery-recovery`へpush済み。PR #29はopenで、main mergeはOwner承認待ちである。
+- branchは`origin/codex/automatic-wallet-ranking`へpush済み。PR #30はopenで、GitHub Actions `verify`はPASSした。main mergeはOwner承認境界である。
 
 ## 完了済みで再実行しない作業
 
@@ -171,11 +171,26 @@
 - 14 incident Performance Runは`QUARANTINED`、trust transitionは14件のまま。Selection / Behaviorへtrusted inputとして混入していない。
 - 終了時PostgreSQL / Redisはhealthy、DB size 54 GB、disk free 712 GB。Workerは停止済み。`hyperliquid-sync`、`hyperliquid-discovery`、Performance、Behaviorのwait / active / delayed / prioritizedはすべて0である。
 
+## Automatic ranking / reference-wallet flow（2026-09-23）
+
+- 実装前監査で、Candidate作成・enrichment、正式sync / DQ、`performance-v3`、`wallet-selection-v1`、Selection Run snapshot、`listEffectiveSelectedWallets()`、Behaviorの0件no-opは再利用可能と確認した。
+- 手動依存は、(1) `ELIGIBLE` Candidateのpromotion、(2) `isWatched=true`によるSelection universe制限、(3) Selection evaluate、(4) 通常画面のsettings / INCLUDE / reason表示だった。
+- full enrichmentが`ELIGIBLE`を確定した時点でidempotent promotionを自動enqueueする。promotion後は既存backfill / scheduler / DQ / Performance契約だけを使う。
+- automatic universeを、同じHyperliquid DataSourceのDiscovery Candidateからpromotionされたwalletへ限定した。`isWatched`はsync購読状態として残るがSelection条件ではなく、手動watch登録だけのwalletは混入しない。
+- `performance-v3`成功後に`wallet-selection-v1`を自動評価し、Selection Run確定後にBehavior control jobをenqueueする。Behavior backlog抑制を成功扱いにせず、selected 0はwatched fallbackなしの正常no-opとする。
+- ranking policyとthresholdは変更していない。overall rankはannualized return、absolute drawdown、trusted closed cycle count、addressの既存順序を使用する。新しいweighted scoreや欠損値補完はない。
+- 通常画面専用`GET /api/wallet-selection/ranking`はautomatic `SELECTED / QUALIFIED`かつ非EXCLUDEのwalletだけを返す。UIはrank、完了取引、勝率、年率 / 累積収益率、Profit Factor、最大drawdown、最終活動だけを表示し、REVIEW / EXCLUDED / reason / manual INCLUDE操作を表示しない。
+- full Selection API、結果、理由、settings、overrideは監査・管理用に保持する。`EXCLUDE`はdenylistとしてranking / effective setへ反映し、`INCLUDE`は後方互換の管理機能だが通常rankingを迂回できない。
+- DB schema / migration、実DB、実Redis、threshold、Performance式、DQ / quarantine、paid data、注文・署名は変更していない。
+- 正式設計は`docs/automatic-wallet-ranking-design.md`、更新したSelection正本は`docs/phase4-3-wallet-selection-spec.md`、判断はADR-037である。
+- feature branch検証はformat / lint PASS、typecheck 11/11 PASS、test 70 files / 639 PASS、build 11/11 PASS、E2E 22/22 PASS、`pnpm audit --audit-level high`はhigh以上0、`git diff --check` PASSである。PR #30のGitHub Actions `verify`も全step PASSした。
+- integration / E2Eは永続volumeなしの隔離PostgreSQL 16 / Redis 7コンテナだけで実行し、完了後に停止・自動破棄した。実DB / 実Redisへのmutationは0件である。
+
 ## 次の優先作業
 
-1. 無料Discoveryの新規market eventsを通常契約で継続収集し、manifest v7を満たす候補が現れた場合だけbounded promotionする。
-2. 既存`hyperliquid-candidate-enrichment` backlog 8,425件は、queue retention / enqueue抑制 / bounded drainの正式運用判断を別Issueで行う。直接DEL / ZREMや無制限consumer起動は行わない。
-3. `COMPLETE`かつrequired metricsを持つ候補が得られた場合、通常の`performance-v3` → `wallet-selection-v1` → Behaviorを再実行する。
+1. PR #30のmain mergeはOwner承認を待つ。merge前に新しいreview / CI failureが発生した場合だけfeature branchで修正する。
+2. merge後の正式Worker imageで、通常DiscoveryからCandidate auto-promotion、Performance、Selection、Behaviorの自動連鎖を運用監視する。実DB migrationは不要である。
+3. 既存`hyperliquid-candidate-enrichment` backlog 8,425件は、queue retention / enqueue抑制 / bounded drainの正式運用判断を別Issueで行う。直接DEL / ZREMや無制限consumer起動は行わない。
 4. 有料sourceを再検討しない限り、10,000 Fill以前やInfo APIでcoverageを証明できないgapは`HISTORY_INCOMPLETE / REVIEW`のまま維持する。
 
 ## Hyperliquid history recovery設計・実装（2026-09-14）
@@ -201,6 +216,6 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- GitHub CLIは未導入。feature branchはpush済み、PR #29はopenで、required CIを監視する。main mergeはOwner承認待ち。
+- PR #30はGitHub APIで作成済み、GitHub Actions `verify`はPASS。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
 - この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateの正式promotion / sync、30 walletのPerformance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。

@@ -6,7 +6,7 @@ import { requireAdminSession } from "@/lib/require-admin";
 
 export const dynamic = "force-dynamic";
 
-export const metadata: Metadata = { title: "参考にするアドレス" };
+export const metadata: Metadata = { title: "参考ウォレットランキング" };
 
 export default async function SelectionPage() {
   const session = await requireAdminSession();

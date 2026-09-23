@@ -161,6 +161,7 @@ function createHarness(
   let runs = new Map<string, StoredRun>();
   let nextRunNumber = 1;
   let failResultPersistence = false;
+  let lastUniverseWhere: unknown = null;
 
   function hydratedRun(run: StoredRun | undefined) {
     if (!run) return null;
@@ -270,15 +271,18 @@ function createHarness(
         readonly select?: {
           readonly metricCalculationRuns?: { readonly where?: { readonly trustState?: string } };
         };
-      }) =>
-        wallets.map((wallet) => ({
+        readonly where?: unknown;
+      }) => {
+        lastUniverseWhere = input.where;
+        return wallets.map((wallet) => ({
           ...wallet,
           metricCalculationRuns: wallet.metricCalculationRuns.filter(
             (run) =>
               input.select?.metricCalculationRuns?.where?.trustState === undefined ||
               run.trustState === input.select.metricCalculationRuns.where.trustState,
           ),
-        })),
+        }));
+      },
     },
     walletSelectionOverride: {
       upsert: async (input: {
@@ -356,6 +360,7 @@ function createHarness(
 
   return {
     currentRunId: () => settings.currentSelectionRunId,
+    lastUniverseWhere: () => lastUniverseWhere,
     failNextResultPersistence: () => {
       failResultPersistence = true;
     },
@@ -364,6 +369,18 @@ function createHarness(
 }
 
 describe("PrismaWalletSelectionService evaluation period", () => {
+  it("constructs the automatic universe from Discovery promotion without a watch-state gate", async () => {
+    const harness = createHarness();
+
+    await harness.service.evaluate();
+
+    expect(harness.lastUniverseWhere()).toEqual({
+      promotedCandidates: { some: { sourceId: "source-1" } },
+      sourceId: "source-1",
+    });
+    expect(harness.lastUniverseWhere()).not.toHaveProperty("isWatched");
+  });
+
   it("never consumes a quarantined SUCCEEDED run", async () => {
     const trusted = performanceFixture(
       new Date("2026-05-03T00:00:00.000Z"),
@@ -487,6 +504,44 @@ describe("PrismaWalletSelectionService current run", () => {
       walletAddressId: "wallet-1",
     });
     expect(harness.currentRunId()).toBe(runA.run?.id);
+  });
+
+  it("returns only automatically eligible wallets in the user-facing ranking", async () => {
+    await harness.service.evaluate();
+
+    await expect(harness.service.getCurrentRanking()).resolves.toMatchObject({
+      items: [
+        {
+          automaticStatus: "SELECTED",
+          rank: 1,
+          walletAddressId: "wallet-1",
+        },
+      ],
+      run: { eligibleCount: 1, selectedCount: 1 },
+    });
+
+    await harness.service.setOverride(walletAddress, "EXCLUDE", "denylisted");
+    await expect(harness.service.getCurrentRanking()).resolves.toMatchObject({
+      items: [],
+      run: { eligibleCount: 0, selectedCount: 0 },
+    });
+  });
+
+  it("does not expose a manually included REVIEW wallet in the automatic ranking", async () => {
+    const incompleteHarness = createHarness({
+      ...performanceFixture(
+        new Date("2026-05-03T00:00:00.000Z"),
+        new Date("2026-08-01T00:00:00.000Z"),
+      ),
+      historyCompleteness: "PARTIAL",
+    });
+    await incompleteHarness.service.evaluate();
+    await incompleteHarness.service.setOverride(walletAddress, "INCLUDE", "administrative only");
+
+    await expect(incompleteHarness.service.getCurrentRanking()).resolves.toMatchObject({
+      items: [],
+      run: { eligibleCount: 0, selectedCount: 0 },
+    });
   });
 
   it("does not switch the current pointer when new result persistence fails", async () => {

@@ -163,6 +163,7 @@ const emptyWalletSelection: WalletSelectionRunDto = { items: [], run: null };
 
 const walletSelectionService: WalletSelectionService = {
   evaluate: async () => ({ ...emptyWalletSelection, reused: false }),
+  getCurrentRanking: async () => ({ items: [], run: null }),
   getCurrentSelection: async () => emptyWalletSelection,
   getSettings: async () => ({
     maxAutoSelected: 100,
@@ -1087,10 +1088,11 @@ describe("wallet selection routes", () => {
     const app = await createTestApi();
     const responses = await Promise.all([
       app.inject({ method: "GET", url: "/api/wallet-selection" }),
+      app.inject({ method: "GET", url: "/api/wallet-selection/ranking" }),
       app.inject({ method: "GET", url: "/api/wallet-selection/settings" }),
       app.inject({ method: "POST", url: "/api/wallet-selection/evaluate" }),
     ]);
-    expect(responses.map((response) => response.statusCode)).toEqual([401, 401, 401]);
+    expect(responses.map((response) => response.statusCode)).toEqual([401, 401, 401, 401]);
   });
 
   it("returns the latest selection, settings, and Phase 5 selected set", async () => {
@@ -1127,12 +1129,14 @@ describe("wallet selection routes", () => {
       }),
     );
 
-    const [list, settings, selected] = await Promise.all([
+    const [list, ranking, settings, selected] = await Promise.all([
       authorizedGet(app, "/api/wallet-selection"),
+      authorizedGet(app, "/api/wallet-selection/ranking"),
       authorizedGet(app, "/api/wallet-selection/settings"),
       authorizedGet(app, "/api/wallet-selection/effective-selected"),
     ]);
     expect(list.json()).toEqual(selection);
+    expect(ranking.json()).toEqual({ items: [], run: null });
     expect(settings.json()).toMatchObject({ policyVersion: "wallet-selection-v1" });
     expect(selected.json().items).toHaveLength(1);
   });
@@ -1212,7 +1216,7 @@ describe("wallet selection routes", () => {
     expect(response.statusCode).toBe(404);
     expect(response.json()).toEqual({
       error: "not_found",
-      message: "The monitored wallet was not found.",
+      message: "The Discovery-promoted wallet was not found.",
     });
   });
 });

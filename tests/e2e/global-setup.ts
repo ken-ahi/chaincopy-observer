@@ -567,7 +567,12 @@ export default async function globalSetup() {
   await database.addressCandidate.deleteMany({
     where: {
       address: {
-        in: [e2eDiscoveryAddress, e2eDiscoveryOtherAddress, e2ePromotionAddress],
+        in: [
+          e2eDiscoveryAddress,
+          e2eDiscoveryOtherAddress,
+          e2ePromotionAddress,
+          e2eSelectionAddress,
+        ],
       },
     },
   });
@@ -648,6 +653,27 @@ export default async function globalSetup() {
         lastSeenAt: new Date("2026-07-25T22:00:00.000Z"),
         sourceId: source.id,
         tradeCount: 12,
+      },
+      {
+        activeDays: 365,
+        activeHours: 2000,
+        address: e2eSelectionAddress,
+        averageTradeUsd: "5000",
+        availableFrom: selectionCalculationFrom,
+        availableTo: selectionCalculationTo,
+        dataQualityScore: 100,
+        distinctCoins: 2,
+        enrichmentStatus: "SUCCEEDED",
+        estimatedNotionalUsd: "100000",
+        filterStatus: "PROMOTED",
+        firstSeenAt: selectionCalculationFrom,
+        historyCompleteness: "COMPLETE",
+        largestTradeUsd: "10000",
+        lastSeenAt: selectionCalculationTo,
+        promotedAt: selectionCalculationTo,
+        promotedWalletId: selectionWallet.id,
+        sourceId: source.id,
+        tradeCount: 100,
       },
     ],
   });

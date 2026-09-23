@@ -1,49 +1,30 @@
 "use client";
 
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@chaincopy/ui";
-import { LoaderCircle, RefreshCw, SlidersHorizontal } from "lucide-react";
+import { LoaderCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
-import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ApiRequestError, apiRequest } from "@/lib/address-api";
-import {
-  type WalletSelectionItem,
-  type WalletSelectionOverride,
-  type WalletSelectionResponse,
-  type WalletSelectionSettings,
-  type WalletSelectionStatus,
-} from "@/lib/wallet-selection-api";
+import { type WalletRankingItem, type WalletRankingResponse } from "@/lib/wallet-selection-api";
 
 import {
-  dataCertaintyLabel,
+  formatSelectionDate,
+  formatSelectionDecimal,
   formatSelectionPercent,
-  selectionReasonLabel,
-  selectionStatusAnnotations,
-  selectionStatusLabels,
-  selectionSummary,
-  sortSelectionItems,
+  sortWalletRankingItems,
 } from "./selection-display";
 
 export function SelectionClient() {
-  const [selection, setSelection] = useState<WalletSelectionResponse>({ items: [], run: null });
-  const [settings, setSettings] = useState<WalletSelectionSettings | null>(null);
-  const [filter, setFilter] = useState<WalletSelectionStatus | "">("");
+  const [ranking, setRanking] = useState<WalletRankingResponse>({ items: [], run: null });
   const [loading, setLoading] = useState(true);
-  const [pendingAddress, setPendingAddress] = useState<string | null>(null);
-  const [evaluating, setEvaluating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const [nextSelection, nextSettings] = await Promise.all([
-        apiRequest<WalletSelectionResponse>("/api/wallet-selection"),
-        apiRequest<WalletSelectionSettings>("/api/wallet-selection/settings"),
-      ]);
-      setSelection(nextSelection);
-      setSettings(nextSettings);
+      setRanking(await apiRequest<WalletRankingResponse>("/api/wallet-selection/ranking"));
     } catch (cause) {
       setError(errorMessage(cause));
     } finally {
@@ -55,120 +36,45 @@ export function SelectionClient() {
     void load();
   }, [load]);
 
-  const visibleItems = useMemo(
-    () =>
-      sortSelectionItems(selection.items).filter(
-        (item) => !filter || item.effectiveStatus === filter,
-      ),
-    [filter, selection.items],
-  );
-
-  async function evaluate() {
-    setEvaluating(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const next = await apiRequest<WalletSelectionResponse>("/api/wallet-selection/evaluate", {
-        method: "POST",
-      });
-      setSelection(next);
-      setMessage("監視中のアドレスを再評価しました。");
-    } catch (cause) {
-      setError(errorMessage(cause));
-    } finally {
-      setEvaluating(false);
-    }
-  }
-
-  async function setOverride(item: WalletSelectionItem, decision: WalletSelectionOverride) {
-    setPendingAddress(item.address);
-    setError(null);
-    setMessage(null);
-    try {
-      const updated = await apiRequest<WalletSelectionItem>(
-        `/api/wallet-selection/${encodeURIComponent(item.address)}/override`,
-        { body: JSON.stringify({ decision }), method: "PATCH" },
-      );
-      setSelection((current) => ({
-        ...current,
-        items: current.items.map((currentItem) =>
-          currentItem.walletAddressId === updated.walletAddressId ? updated : currentItem,
-        ),
-      }));
-      setMessage(
-        decision === "AUTO"
-          ? "自動判定に戻しました。"
-          : decision === "INCLUDE"
-            ? "手動で参考対象にしました。"
-            : "手動で対象外にしました。",
-      );
-    } catch (cause) {
-      setError(errorMessage(cause));
-    } finally {
-      setPendingAddress(null);
-    }
-  }
+  const items = useMemo(() => sortWalletRankingItems(ranking.items), [ranking.items]);
 
   return (
     <div className="mx-auto max-w-[96rem] px-4 py-7 sm:px-7">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-white">参考にするアドレス</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-white">
+            参考ウォレットランキング
+          </h1>
           <p className="mt-2 text-sm text-slate-400">
-            売買の参考にするアドレスを、成績とデータの確かさから選びます。
+            完全な履歴と信頼できる成績を確認できたウォレットだけを、自動で順位付けしています。
           </p>
         </div>
-        <Button disabled={evaluating} onClick={() => void evaluate()} size="sm">
-          {evaluating ? (
+        <Button disabled={loading} onClick={() => void load()} size="sm" variant="outline">
+          {loading ? (
             <LoaderCircle aria-hidden="true" className="size-4 animate-spin" />
           ) : (
             <RefreshCw aria-hidden="true" className="size-4" />
           )}
-          再評価
+          表示を更新
         </Button>
       </div>
 
-      {error ? <Notice tone="error">{error}</Notice> : null}
-      {message ? <Notice tone="success">{message}</Notice> : null}
+      {error ? <Notice>{error}</Notice> : null}
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {selectionSummary(selection.items).map((item) => (
-          <Card key={item.status}>
-            <CardContent className="py-4">
-              <p className="text-sm text-slate-400">{item.label}</p>
-              <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{item.value}</p>
-            </CardContent>
-          </Card>
-        ))}
+      <div className="mt-5 grid gap-3 sm:grid-cols-2">
+        <SummaryCard label="自動選定中" value={ranking.run?.selectedCount ?? 0} />
+        <SummaryCard label="条件通過・順位付き" value={ranking.run?.eligibleCount ?? 0} />
       </div>
-
-      {settings ? (
-        <SelectionSettingsCard
-          onSaved={(next) => {
-            setSettings(next);
-            setMessage("選定条件を保存しました。再評価してください。");
-          }}
-          settings={settings}
-        />
-      ) : null}
 
       <Card className="mt-5">
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <CardTitle>アドレス一覧</CardTitle>
-            <select
-              aria-label="参考状態で絞り込む"
-              className="input-field max-w-48"
-              onChange={(event) => setFilter(event.target.value as WalletSelectionStatus | "")}
-              value={filter}
-            >
-              <option value="">すべての状態</option>
-              {(Object.keys(selectionStatusLabels) as WalletSelectionStatus[]).map((status) => (
-                <option key={status} value={status}>
-                  {selectionStatusLabels[status]}
-                </option>
-              ))}
-            </select>
+            <CardTitle>総合ランキング</CardTitle>
+            {ranking.run ? (
+              <span className="text-xs text-slate-500">
+                評価日時 {formatSelectionDate(ranking.run.evaluatedAt)}
+              </span>
+            ) : null}
           </div>
         </CardHeader>
         <CardContent>
@@ -178,38 +84,36 @@ export function SelectionClient() {
               読み込み中
             </div>
           ) : null}
-          {!loading && selection.run === null ? (
+          {!loading && ranking.run === null ? (
             <EmptyState>
-              まだ選定結果がありません。「再評価」から最初の選定を行ってください。
+              自動評価はまだ完了していません。候補の同期と成績計算が完了すると自動で更新されます。
             </EmptyState>
           ) : null}
-          {!loading && selection.run !== null && visibleItems.length === 0 ? (
-            <EmptyState>この状態に該当するアドレスはありません。</EmptyState>
+          {!loading && ranking.run !== null && items.length === 0 ? (
+            <EmptyState>
+              現在、履歴・成績・リスクの全条件を通過したウォレットはありません。
+            </EmptyState>
           ) : null}
-          {!loading && visibleItems.length > 0 ? (
+          {!loading && items.length > 0 ? (
             <div className="overflow-x-auto">
               <table className="data-table min-w-[1180px]">
                 <thead>
                   <tr>
-                    <th>アドレス</th>
-                    <th>状態</th>
-                    <th>1年あたりの増減</th>
-                    <th>資産の増減</th>
-                    <th>最大の下落</th>
-                    <th>確認できた取引</th>
-                    <th>大勝ちへの依存</th>
-                    <th>データの確かさ</th>
-                    <th>操作</th>
+                    <th>順位</th>
+                    <th>ウォレット</th>
+                    <th>選定</th>
+                    <th>完了取引</th>
+                    <th>勝率</th>
+                    <th>年率収益率</th>
+                    <th>累積収益率</th>
+                    <th>Profit Factor</th>
+                    <th>最大ドローダウン</th>
+                    <th>最終活動</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleItems.map((item) => (
-                    <SelectionRow
-                      item={item}
-                      key={item.walletAddressId}
-                      onOverride={setOverride}
-                      pending={pendingAddress === item.address}
-                    />
+                  {items.map((item) => (
+                    <RankingRow item={item} key={item.walletAddressId} />
                   ))}
                 </tbody>
               </table>
@@ -221,18 +125,10 @@ export function SelectionClient() {
   );
 }
 
-function SelectionRow({
-  item,
-  onOverride,
-  pending,
-}: {
-  readonly item: WalletSelectionItem;
-  readonly onOverride: (item: WalletSelectionItem, decision: WalletSelectionOverride) => void;
-  readonly pending: boolean;
-}) {
-  const { manualLabel, reasonSummary } = selectionStatusAnnotations(item);
+function RankingRow({ item }: { readonly item: WalletRankingItem }) {
   return (
     <tr>
+      <td className="text-lg font-semibold tabular-nums text-white">{item.rank}</td>
       <td>
         <Link
           className="font-mono text-xs text-cyan-200 hover:underline"
@@ -242,219 +138,30 @@ function SelectionRow({
         </Link>
       </td>
       <td>
-        <div className="flex flex-col items-start gap-1">
-          <StatusBadge status={item.effectiveStatus} />
-          {manualLabel ? <span className="text-[11px] text-slate-500">{manualLabel}</span> : null}
-          {reasonSummary ? (
-            <span className="text-[11px] text-amber-200">{reasonSummary}</span>
-          ) : null}
-          {item.reasonCodes.length > 0 ? (
-            <details className="text-xs text-slate-400">
-              <summary className="cursor-pointer text-cyan-300">理由を見る</summary>
-              <ul className="mt-2 space-y-1">
-                {item.reasonCodes.map((code) => (
-                  <li key={code}>・{selectionReasonLabel(code)}</li>
-                ))}
-              </ul>
-            </details>
-          ) : null}
-        </div>
+        <Badge variant={item.automaticStatus === "SELECTED" ? "success" : "neutral"}>
+          {item.automaticStatus === "SELECTED" ? "参考対象" : "条件通過"}
+        </Badge>
       </td>
+      <td>{item.trustedClosedCycleCount}件</td>
+      <td>{formatSelectionPercent(item.metrics.winRate)}</td>
       <td>{formatSelectionPercent(item.metrics.annualizedReturn, true)}</td>
       <td>{formatSelectionPercent(item.metrics.cumulativeReturn, true)}</td>
+      <td>{formatSelectionDecimal(item.metrics.profitFactor)}</td>
       <td>{formatSelectionPercent(item.metrics.maxDrawdown)}</td>
-      <td>{item.performanceRunId ? `${item.trustedClosedCycleCount}件` : "-"}</td>
-      <td>{formatSelectionPercent(item.metrics.topTradeContribution)}</td>
-      <td>{dataCertaintyLabel(item)}</td>
-      <td>
-        <div className="flex min-w-72 flex-wrap gap-1.5">
-          <Button
-            disabled={pending || item.manualOverride === "INCLUDE"}
-            onClick={() => onOverride(item, "INCLUDE")}
-            size="sm"
-            variant="outline"
-          >
-            参考対象にする
-          </Button>
-          <Button
-            disabled={pending || item.manualOverride === "EXCLUDE"}
-            onClick={() => onOverride(item, "EXCLUDE")}
-            size="sm"
-            variant="ghost"
-          >
-            対象外にする
-          </Button>
-          {item.manualOverride !== "AUTO" ? (
-            <Button
-              disabled={pending}
-              onClick={() => onOverride(item, "AUTO")}
-              size="sm"
-              variant="ghost"
-            >
-              自動判定に戻す
-            </Button>
-          ) : null}
-        </div>
-      </td>
+      <td>{formatSelectionDate(item.latestActivityAt)}</td>
     </tr>
   );
 }
 
-function SelectionSettingsCard({
-  onSaved,
-  settings,
-}: {
-  readonly onSaved: (settings: WalletSelectionSettings) => void;
-  readonly settings: WalletSelectionSettings;
-}) {
-  const [values, setValues] = useState(() => settingsFormValues(settings));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setSaving(true);
-    setError(null);
-    try {
-      const next = await apiRequest<WalletSelectionSettings>("/api/wallet-selection/settings", {
-        body: JSON.stringify({
-          maxAutoSelected: Number.parseInt(values.maxAutoSelected, 10),
-          maximumDataAgeHours: Number.parseInt(values.maximumDataAgeHours, 10),
-          maximumDrawdown: values.maximumDrawdown,
-          maximumTopTradeContribution: values.maximumTopTradeContribution,
-          minimumAnnualizedReturn: values.minimumAnnualizedReturn,
-          minimumEvaluationDays: Number.parseInt(values.minimumEvaluationDays, 10),
-          minimumTrustedClosedCycles: Number.parseInt(values.minimumTrustedClosedCycles, 10),
-        }),
-        method: "PATCH",
-      });
-      setValues(settingsFormValues(next));
-      onSaved(next);
-    } catch (cause) {
-      setError(errorMessage(cause));
-    } finally {
-      setSaving(false);
-    }
-  }
-
+function SummaryCard({ label, value }: { readonly label: string; readonly value: number }) {
   return (
-    <details className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.025]">
-      <summary className="flex cursor-pointer items-center gap-2 px-5 py-4 text-sm font-medium text-slate-200">
-        <SlidersHorizontal aria-hidden="true" className="size-4" />
-        選定条件
-      </summary>
-      <form
-        className="grid gap-3 border-t border-white/[0.06] p-5 md:grid-cols-3"
-        onSubmit={submit}
-      >
-        <SettingsInput
-          label="自動選定する最大件数"
-          onChange={(value) => setValues((current) => ({ ...current, maxAutoSelected: value }))}
-          value={values.maxAutoSelected}
-        />
-        <SettingsInput
-          label="最低評価期間（日）"
-          onChange={(value) =>
-            setValues((current) => ({ ...current, minimumEvaluationDays: value }))
-          }
-          value={values.minimumEvaluationDays}
-        />
-        <SettingsInput
-          label="最低取引数"
-          onChange={(value) =>
-            setValues((current) => ({ ...current, minimumTrustedClosedCycles: value }))
-          }
-          value={values.minimumTrustedClosedCycles}
-        />
-        <SettingsInput
-          label="最低1年あたり収益率（0.1 = 10%）"
-          onChange={(value) =>
-            setValues((current) => ({ ...current, minimumAnnualizedReturn: value }))
-          }
-          text
-          value={values.minimumAnnualizedReturn}
-        />
-        <SettingsInput
-          label="最大下落の上限（0.5 = 50%）"
-          onChange={(value) => setValues((current) => ({ ...current, maximumDrawdown: value }))}
-          text
-          value={values.maximumDrawdown}
-        />
-        <SettingsInput
-          label="大勝ち依存の上限（0.75 = 75%）"
-          onChange={(value) =>
-            setValues((current) => ({ ...current, maximumTopTradeContribution: value }))
-          }
-          text
-          value={values.maximumTopTradeContribution}
-        />
-        <SettingsInput
-          label="データ更新の許容時間（時間）"
-          min="1"
-          onChange={(value) => setValues((current) => ({ ...current, maximumDataAgeHours: value }))}
-          value={values.maximumDataAgeHours}
-        />
-        <div className="flex items-end">
-          <Button className="w-full" disabled={saving} type="submit">
-            {saving ? <LoaderCircle aria-hidden="true" className="size-4 animate-spin" /> : null}
-            選定条件を保存
-          </Button>
-        </div>
-        {error ? (
-          <div className="md:col-span-3">
-            <Notice tone="error">{error}</Notice>
-          </div>
-        ) : null}
-      </form>
-    </details>
+    <Card>
+      <CardContent className="py-4">
+        <p className="text-sm text-slate-400">{label}</p>
+        <p className="mt-2 text-2xl font-semibold tabular-nums text-white">{value}</p>
+      </CardContent>
+    </Card>
   );
-}
-
-function SettingsInput({
-  label,
-  min = "0",
-  onChange,
-  text = false,
-  value,
-}: {
-  readonly label: string;
-  readonly min?: string;
-  readonly onChange: (value: string) => void;
-  readonly text?: boolean;
-  readonly value: string;
-}) {
-  return (
-    <label className="text-xs text-slate-500">
-      {label}
-      <input
-        aria-label={label}
-        className="input-field mt-1"
-        inputMode={text ? "decimal" : "numeric"}
-        min={text ? undefined : min}
-        onChange={(event) => onChange(event.target.value)}
-        required
-        type={text ? "text" : "number"}
-        value={value}
-      />
-    </label>
-  );
-}
-
-function settingsFormValues(settings: WalletSelectionSettings) {
-  return {
-    maxAutoSelected: String(settings.maxAutoSelected),
-    maximumDataAgeHours: String(settings.maximumDataAgeHours),
-    maximumDrawdown: settings.maximumDrawdown,
-    maximumTopTradeContribution: settings.maximumTopTradeContribution,
-    minimumAnnualizedReturn: settings.minimumAnnualizedReturn,
-    minimumEvaluationDays: String(settings.minimumEvaluationDays),
-    minimumTrustedClosedCycles: String(settings.minimumTrustedClosedCycles),
-  };
-}
-
-function StatusBadge({ status }: { readonly status: WalletSelectionStatus }) {
-  const variant = status === "SELECTED" ? "success" : status === "REVIEW" ? "warning" : "neutral";
-  return <Badge variant={variant}>{selectionStatusLabels[status]}</Badge>;
 }
 
 function EmptyState({ children }: { readonly children: React.ReactNode }) {
@@ -465,20 +172,10 @@ function EmptyState({ children }: { readonly children: React.ReactNode }) {
   );
 }
 
-function Notice({
-  children,
-  tone,
-}: {
-  readonly children: React.ReactNode;
-  readonly tone: "error" | "success";
-}) {
+function Notice({ children }: { readonly children: React.ReactNode }) {
   return (
     <div
-      className={`mt-4 rounded-lg border px-3 py-2 text-xs ${
-        tone === "error"
-          ? "border-rose-400/20 bg-rose-400/10 text-rose-200"
-          : "border-emerald-400/20 bg-emerald-400/10 text-emerald-200"
-      }`}
+      className="mt-4 rounded-lg border border-rose-400/20 bg-rose-400/10 px-3 py-2 text-xs text-rose-200"
       role="status"
     >
       {children}
@@ -491,9 +188,8 @@ function shortenAddress(address: string): string {
 }
 
 function errorMessage(cause: unknown): string {
-  if (cause instanceof ApiRequestError) {
-    if (cause.status === 400) return "入力した条件を確認してください。";
-    if (cause.status === 404) return "監視中のアドレスが見つかりません。";
+  if (cause instanceof ApiRequestError && cause.status === 401) {
+    return "ログイン状態を確認してください。";
   }
-  return "処理に失敗しました。時間をおいて再度お試しください。";
+  return "ランキングを読み込めませんでした。時間をおいて再度お試しください。";
 }

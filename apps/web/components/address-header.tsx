@@ -47,13 +47,13 @@ export function AddressHeader({ email }: { readonly email: string }) {
               優良アドレスを探す
             </Link>
             <Link
-              aria-label="参考アドレス"
+              aria-label="自動ランキング"
               className="hidden items-center gap-1.5 text-xs text-slate-500 transition hover:text-cyan-200 lg:flex"
               href="/dashboard/selection"
-              title="参考アドレス"
+              title="自動ランキング"
             >
               <UsersRound aria-hidden="true" className="size-3.5" />
-              参考アドレス
+              自動ランキング
             </Link>
           </nav>
         </div>

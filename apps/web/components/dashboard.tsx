@@ -28,14 +28,14 @@ interface DashboardProps {
 
 const navigation = [
   { active: true, href: "/dashboard", icon: LayoutDashboard, label: "ホーム" },
+  { href: "/dashboard/selection", icon: UsersRound, label: "自動ランキング" },
   {
     href: "/dashboard/addresses",
     icon: UserRoundSearch,
     label: "監視中のアドレス",
   },
   { href: "/dashboard/discovery", icon: Telescope, label: "優良アドレスを探す" },
-  { href: "/dashboard/selection", icon: UsersRound, label: "参考アドレス" },
-  { href: "#planned-sections", icon: BarChart3, label: "ランキング" },
+  { href: "#planned-sections", icon: BarChart3, label: "カテゴリ別ランキング" },
   { href: "#planned-sections", icon: BellRing, label: "売買シグナル" },
   { href: "#planned-sections", icon: Bot, label: "デモトレード" },
   { href: "#planned-sections", icon: ServerCog, label: "システム状態" },

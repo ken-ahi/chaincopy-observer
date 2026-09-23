@@ -38,13 +38,16 @@ describe("PerformanceJobProcessor", () => {
         status: "SUCCEEDED" as const,
       };
       const process = vi.fn(async () => result);
+      const afterPerformance = vi.fn(async () => ({ selectionRunId: "selection-run-1" }));
       const processor = new PerformanceJobProcessor(
         { process } as unknown as PerformanceCalculationService,
         pino({ level: "silent" }),
+        { afterPerformance },
       );
 
       await expect(processor.process(createJob(name))).resolves.toEqual(result);
       expect(process).toHaveBeenCalledWith(jobData);
+      expect(afterPerformance).toHaveBeenCalledWith(result);
     },
   );
 
@@ -72,6 +75,29 @@ describe("PerformanceJobProcessor", () => {
 
     await expect(processor.process(createJob(performanceJobNames.calculate))).rejects.toThrow(
       "calculation unavailable",
+    );
+  });
+
+  it("rethrows automatic Selection failures so the idempotent performance job can retry", async () => {
+    const process = vi.fn(async () => ({
+      calculationRunId: "run-1",
+      inputFingerprint: "fingerprint-1",
+      metricCount: 12,
+      reused: false,
+      status: "SUCCEEDED" as const,
+    }));
+    const processor = new PerformanceJobProcessor(
+      { process } as unknown as PerformanceCalculationService,
+      pino({ level: "silent" }),
+      {
+        afterPerformance: async () => {
+          throw new Error("selection unavailable");
+        },
+      },
+    );
+
+    await expect(processor.process(createJob(performanceJobNames.calculate))).rejects.toThrow(
+      "selection unavailable",
     );
   });
 });

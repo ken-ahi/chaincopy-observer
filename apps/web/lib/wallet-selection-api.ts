@@ -32,6 +32,29 @@ export interface WalletSelectionResponse {
   readonly items: ReadonlyArray<WalletSelectionItem>;
 }
 
+export interface WalletRankingItem {
+  readonly walletAddressId: string;
+  readonly address: string;
+  readonly automaticStatus: "SELECTED" | "QUALIFIED";
+  readonly rank: number;
+  readonly performanceRunId: string;
+  readonly latestActivityAt: string;
+  readonly lastSyncAt: string;
+  readonly trustedClosedCycleCount: number;
+  readonly metrics: Readonly<Record<string, string>>;
+}
+
+export interface WalletRankingResponse {
+  readonly run: {
+    readonly id: string;
+    readonly policyVersion: string;
+    readonly evaluatedAt: string;
+    readonly eligibleCount: number;
+    readonly selectedCount: number;
+  } | null;
+  readonly items: ReadonlyArray<WalletRankingItem>;
+}
+
 export interface WalletSelectionSettings {
   readonly policyVersion: "wallet-selection-v1";
   readonly maxAutoSelected: number;

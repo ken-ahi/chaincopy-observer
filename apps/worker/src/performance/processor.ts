@@ -10,12 +10,17 @@ import { type Logger } from "pino";
 import type { PerformanceCalculationService } from "./service.js";
 import type { PerformanceProcessResult } from "./types.js";
 
+interface PerformanceCompletionCoordinator {
+  afterPerformance(result: PerformanceProcessResult): Promise<unknown>;
+}
+
 const supportedJobNames = new Set<string>(Object.values(performanceJobNames));
 
 export class PerformanceJobProcessor {
   public constructor(
     private readonly service: PerformanceCalculationService,
     private readonly logger: Logger,
+    private readonly completionCoordinator?: PerformanceCompletionCoordinator,
   ) {}
 
   public async process(job: Job<PerformanceJobData>): Promise<PerformanceProcessResult> {
@@ -40,12 +45,14 @@ export class PerformanceJobProcessor {
 
     try {
       const result = await this.service.process(job.data);
+      const downstream = await this.completionCoordinator?.afterPerformance(result);
       this.logger.info(
         {
           event: "address_performance_calculation_completed",
           jobId: job.id,
           jobName,
           result,
+          downstream,
           walletAddressId: job.data.walletAddressId,
         },
         "Address performance calculation completed",

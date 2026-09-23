@@ -37,6 +37,7 @@ import { HyperliquidScheduler } from "./hyperliquid/scheduler.js";
 import { HyperliquidSyncService } from "./hyperliquid/sync-service.js";
 import { HyperliquidWebSocketSupervisor } from "./hyperliquid/websocket-supervisor.js";
 import { PerformanceJobProcessor } from "./performance/processor.js";
+import { AutomaticSelectionCoordinator } from "./performance/automatic-selection.js";
 import { PerformanceRepository } from "./performance/repository.js";
 import { PerformanceCalculationService } from "./performance/service.js";
 import { PerformanceJobScheduler } from "./performance/scheduler.js";
@@ -215,11 +216,14 @@ const discoveryProcessor = new HyperliquidDiscoveryJobProcessor(
 );
 const performanceRepository = new PerformanceRepository(prisma);
 const performanceService = new PerformanceCalculationService(performanceRepository, logger);
-const performanceProcessor = new PerformanceJobProcessor(performanceService, logger);
-const behaviorRepository = new BehaviorRepository(prisma, sourceId);
-const behaviorSelectionSource = new WalletSelectionBehaviorSource(
-  new PrismaWalletSelectionService(prisma),
+const walletSelectionService = new PrismaWalletSelectionService(prisma);
+const performanceProcessor = new PerformanceJobProcessor(
+  performanceService,
+  logger,
+  new AutomaticSelectionCoordinator(walletSelectionService, behaviorQueue),
 );
+const behaviorRepository = new BehaviorRepository(prisma, sourceId);
+const behaviorSelectionSource = new WalletSelectionBehaviorSource(walletSelectionService);
 const behaviorService = new BehaviorNormalizationService(
   behaviorRepository,
   behaviorSelectionSource,

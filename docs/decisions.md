@@ -334,3 +334,13 @@
 - cost/approval: estimatorはinventoryとOwnerが確認したAWS単価をDecimal文字列で計算する。Requester Pays LIST / HEAD / GET、実DB migration、historical ingestionはOwner承認前に実行しない。
 - 非変更: completeness基準、`performance-v3`、`wallet-selection-v1`、threshold、manual override、Behavior SSoTは変更しない。
 - 詳細: `docs/hyperliquid-history-recovery-spec.md`を正本とする。
+
+## ADR-037: 参考walletの正常系をDiscovery起点の自動rankingへ変更する
+
+- 状態: 採用
+- 背景: `wallet-selection-v1`のhard gate・決定論的順位・run snapshotは既に正式化されている一方、universeが手動`isWatched`に限定され、Candidate promotionとSelection評価も手動操作を必要としていた。これは「自動発見からBehaviorまで」の製品正常系と一致しない。
+- Universe: automatic Selection universeは、Hyperliquid Discovery Candidateから正式にpromotionされた`WalletAddress`だけで構築する。`isWatched`は既存sync購読の実装状態として残すが、Selection query条件にしない。手動watch登録はautomatic universeを拡張しない。
+- Orchestration: full enrichmentが`ELIGIBLE`になればidempotent promotionをenqueueする。DQ後に成功した`performance-v3`はSelectionを自動評価し、current Selection Run確定後にBehavior controlをenqueueする。downstream失敗とBehavior backpressureは上流jobへ返し、retry可能性を保持する。
+- Ranking: hard gateと順位は`wallet-selection-v1`を変更せず再利用する。年率収益率、最大ドローダウン、trusted closed cycle count、addressの正式順序を維持し、閾値・Performance計算式・欠損処理を変えない。勝率、累積収益率、Profit Factorはtrusted保存値をUIへ表示するが、新しい重みや閾値にはしない。
+- UX/API: 通常画面はeligibleな`SELECTED / QUALIFIED`だけを表示する専用ranking projectionを使い、REVIEW / EXCLUDED / reason / manual INCLUDE操作を表示しない。full Selection APIと結果は監査・管理用途に保持する。EXCLUDEはdenylistとして有効、INCLUDEは後方互換の管理機能だが通常rankingを迂回できない。
+- Safety: current selected 0は正常状態であり、Behaviorはwatched fallbackなしのno-opとする。無料source限定、trusted run / quarantine / completeness / staleness / DQ gateを維持し、schema migrationや実DB操作を必要としない。
