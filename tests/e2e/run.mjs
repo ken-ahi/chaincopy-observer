@@ -9,14 +9,16 @@ const root = resolve(import.meta.dirname, "../..");
 const workerRequire = createRequire(resolve(root, "apps/worker/package.json"));
 const { Redis } = workerRequire("ioredis");
 const databaseUrl =
+  process.env.E2E_DATABASE_URL ??
   "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=chaincopy_e2e";
+const redisUrl = process.env.E2E_REDIS_URL ?? "redis://127.0.0.1:6379/15";
 const commonEnvironment = {
   ...process.env,
   DATABASE_URL: databaseUrl,
   INTERNAL_API_SECRET: "e2e-internal-secret-at-least-32-chars",
   LOG_LEVEL: "warn",
   NODE_ENV: "test",
-  REDIS_URL: "redis://127.0.0.1:6379/15",
+  REDIS_URL: redisUrl,
   TZ: "Asia/Tokyo",
 };
 const children = [];
@@ -79,10 +81,12 @@ async function resetTestRedis() {
 }
 
 async function removeTestSchema() {
+  const administrationUrl = new URL(databaseUrl);
+  administrationUrl.searchParams.set("schema", "public");
   const administration = new PrismaClient({
     datasources: {
       db: {
-        url: "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public",
+        url: administrationUrl.toString(),
       },
     },
   });

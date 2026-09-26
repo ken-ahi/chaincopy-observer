@@ -5,7 +5,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import { PERFORMANCE_CALCULATION_VERSION } from "./constants.js";
 import type { PerformanceRepositoryPort } from "./repository.js";
-import { metricPeriod, PerformanceCalculationService } from "./service.js";
+import {
+  assessHistoryCompleteness,
+  metricPeriod,
+  PerformanceCalculationService,
+} from "./service.js";
 import type {
   CreateRunInput,
   PerformanceCalculationInput,
@@ -241,6 +245,39 @@ describe("PerformanceCalculationService", () => {
       from: new Date("2024-01-01T00:00:00.000Z"),
       to: new Date(Date.UTC(2024, 0, 1) + 199_999 * 1_000),
     });
+  });
+
+  it("classifies an internal UTC Daily NAV gap as GAP_DETECTED", () => {
+    const input = createInput(fixtureAddresses[0]);
+    const withoutOneRequiredDay = {
+      ...input,
+      navSnapshots: input.navSnapshots.filter(
+        (snapshot) => !snapshot.occurredAt.startsWith("2024-01-15"),
+      ),
+    };
+
+    expect(
+      assessHistoryCompleteness(
+        withoutOneRequiredDay,
+        "2024-01-01T00:00:00.000Z",
+        "2024-01-31T23:59:59.999Z",
+      ),
+    ).toBe("GAP_DETECTED");
+  });
+
+  it("requires Daily NAV coverage through calculationTo for COMPLETE", () => {
+    const input = createInput(fixtureAddresses[0]);
+
+    expect(
+      assessHistoryCompleteness(
+        { ...input, navSnapshots: input.navSnapshots.slice(0, -1) },
+        "2024-01-01T00:00:00.000Z",
+        "2024-01-31T23:59:59.999Z",
+      ),
+    ).toBe("PARTIAL");
+    expect(
+      assessHistoryCompleteness(input, "2024-01-01T00:00:00.000Z", "2024-01-31T23:59:59.999Z"),
+    ).toBe("COMPLETE");
   });
 
   it("processes 200,000 position cycles for one coin without exceeding the argument limit", async () => {
@@ -663,6 +700,7 @@ describe("PerformanceCalculationService", () => {
     const result = await new PerformanceCalculationService(repository).process(createJob(input));
 
     expect(result.status).toBe("SUCCEEDED");
+    expect(repository.saved[0]?.completeness).toBe("GAP_DETECTED");
     expect(repository.saved[0]?.result.metrics.map((metric) => metric.metricKey)).toContain(
       "winRate",
     );

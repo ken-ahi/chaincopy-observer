@@ -344,3 +344,12 @@
 - Ranking: hard gateと順位は`wallet-selection-v1`を変更せず再利用する。年率収益率、最大ドローダウン、trusted closed cycle count、addressの正式順序を維持し、閾値・Performance計算式・欠損処理を変えない。勝率、累積収益率、Profit Factorはtrusted保存値をUIへ表示するが、新しい重みや閾値にはしない。
 - UX/API: 通常画面はeligibleな`SELECTED / QUALIFIED`だけを表示する専用ranking projectionを使い、REVIEW / EXCLUDED / reason / manual INCLUDE操作を表示しない。full Selection APIと結果は監査・管理用途に保持する。EXCLUDEはdenylistとして有効、INCLUDEは後方互換の管理機能だが通常rankingを迂回できない。
 - Safety: current selected 0は正常状態であり、Behaviorはwatched fallbackなしのno-opとする。無料source限定、trusted run / quarantine / completeness / staleness / DQ gateを維持し、schema migrationや実DB操作を必要としない。
+
+## ADR-038: Daily NAV completenessは公式Perp periodのunionとUTC日次coverageで判定する
+
+- 状態: 採用
+- 背景: Hyperliquid `portfolio` responseは直近期間を高密度な`perpDay` / `perpWeek` / `perpMonth`、長期を疎な`perpAllTime`で返すが、従来実装は`perpAllTime`だけを正規化していた。また`performance-v3`の`COMPLETE`判定は開始日のNAVだけを確認し、内部のUTC日次gapを検査していなかった。このため、正式sourceに存在する短期pointを失い、233–247日の評価窓に180–203日の欠損があるRunまで`COMPLETE`と表示していた。
+- Source normalization: 4つのPerpetuals periodをtimestampでunionする。同一timestampのDecimal値が一致するときだけ1点として保存し、競合時は保存を停止する。spot/vaultを含み得る`day` / `week` / `month` / `allTime`はPerpetuals NAVへ混在させない。
+- Daily NAV: UTC日ごとに最後の正のsnapshotを選ぶ。同日に後続の0以下snapshotがあっても先行する正の正式pointを捨てないが、その日に正のpointが1件もなければ`NON_POSITIVE_NAV`でReturn Laneを停止する。forward-fill、zero-fill、補間は行わない。
+- Completeness: `calculationFrom`から`calculationTo`までの保存済みUTC日を検査し、prefix / suffix不足は`PARTIAL`、取得範囲内部の欠損は`GAP_DETECTED`とする。NAV固有gapはReturn Laneを停止する一方、ADR-028に従い独立して検証可能なTrade / Exposure Laneまで破棄しない。source全体のgap DQ / cursorは従来どおり全関連Laneをfail closedにする。
+- Version: 金融式、Selection threshold、Metric定義を変更せず、既存`docs/calculations.md`の実装不整合を修正するため`performance-v3`を維持する。追加pointと修正後completenessはinput fingerprintを変えるため、新規Runとして監査可能であり、既存Runを更新・削除しない。

@@ -363,7 +363,8 @@ async function cleanupExclusionCandidate(candidateId: string): Promise<void> {
       "--eval",
       [
         'import { Queue } from "bullmq";',
-        'const queue = new Queue("hyperliquid-discovery", { connection: { db: 15, host: "127.0.0.1", port: 6379 } });',
+        'const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379/15");',
+        'const queue = new Queue("hyperliquid-discovery", { connection: { db: Number(redisUrl.pathname.slice(1) || "0"), host: redisUrl.hostname, password: redisUrl.password || undefined, port: Number(redisUrl.port || "6379"), username: redisUrl.username || undefined } });',
         'const jobs = await queue.getJobs(["waiting", "delayed", "prioritized", "completed", "failed"]);',
         'await Promise.all(jobs.filter((job) => job.data?.kind === "candidate" && job.data?.candidateId === process.env.E2E_CANDIDATE_ID).map((job) => job.remove()));',
         "await queue.close();",
