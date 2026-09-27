@@ -99,12 +99,14 @@ export interface NormalizedOrder {
 }
 
 export function mapFill(walletAddress: string, fill: HyperliquidFill): NormalizedFill {
-  const externalTradeId = `${fill.time}:${fill.coin}:${fill.tid}`;
+  const tradeIdentity = `${fill.time}:${fill.coin}:${fill.tid}`;
   return {
-    externalTradeId,
+    // A match has two wallet participants. The legacy source-wide key lost one side.
+    externalTradeId: `${walletAddress.toLowerCase()}:${tradeIdentity}`,
     sourceTradeId: fill.tid,
     fingerprint: createEventFingerprint("fill", walletAddress, {
-      externalTradeId,
+      // Keep legacy fingerprints stable so replay preserves existing rows and their FKs.
+      externalTradeId: tradeIdentity,
       hash: fill.hash,
       oid: fill.oid,
     }),

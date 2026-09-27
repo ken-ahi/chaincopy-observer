@@ -672,6 +672,8 @@ Runと全Resultは単一transactionで作成する。同じsource、policy、入
 
 ### NormalizedTrade（`normalized_trades`）
 
+新規wallet Fillの`external_trade_id`は`canonicalAddress:time:coin:tid`とする（ADR-040）。legacy `time:coin:tid` rowは更新しない。walletを含む既存fingerprintを維持し、同一walletの再取得はfingerprint uniqueで冪等化する。これにより同一matchの別wallet participantがsource-wide uniqueで脱落することを防ぐ。DiscoveryTradeのglobal match IDとは別契約である。schema/migration変更は不要。
+
 | 項目           | 定義                                                                     |
 | -------------- | ------------------------------------------------------------------------ |
 | 日本語論理名   | 正規化約定（Fill）                                                       |

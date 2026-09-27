@@ -172,6 +172,8 @@ function createHarness(
   let nextRunNumber = 1;
   let failResultPersistence = false;
   let lastUniverseWhere: unknown = null;
+  let latestFillAt: Date | null = new Date("2026-07-31T13:21:27.107Z");
+  let latestFillQuery: unknown = null;
 
   function hydratedRun(run: StoredRun | undefined) {
     if (!run) return null;
@@ -260,6 +262,12 @@ function createHarness(
     },
     dataSource: {
       upsert: async () => ({ id: "source-1" }),
+    },
+    normalizedTrade: {
+      findFirst: async (input: unknown) => {
+        latestFillQuery = input;
+        return latestFillAt ? { occurredAt: latestFillAt } : null;
+      },
     },
     metricCalculationRun: {
       findMany: async (input: {
@@ -370,6 +378,10 @@ function createHarness(
 
   return {
     currentRunId: () => settings.currentSelectionRunId,
+    latestFillQuery: () => latestFillQuery,
+    setLatestFill: (value: Date | null) => {
+      latestFillAt = value;
+    },
     lastUniverseWhere: () => lastUniverseWhere,
     failNextResultPersistence: () => {
       failResultPersistence = true;
@@ -609,6 +621,23 @@ describe("PrismaWalletSelectionService current run", () => {
       items: [],
       run: { eligibleCount: 0, selectedCount: 0 },
     });
+  });
+
+  it("reports observed source fill time, never calculation, sync, or current time", async () => {
+    await harness.service.evaluate();
+    const result = await harness.service.getCurrentRanking();
+    expect(result.items[0]?.latestActivityAt).toBe("2026-07-31T13:21:27.107Z");
+    expect(harness.latestFillQuery()).toEqual({
+      select: { occurredAt: true },
+      orderBy: { occurredAt: "desc" },
+      where: {
+        walletAddressId: "wallet-1",
+        source: { key: "hyperliquid-mainnet" },
+        walletAddress: { address: walletAddress, source: { key: "hyperliquid-mainnet" } },
+      },
+    });
+    harness.setLatestFill(null);
+    expect((await harness.service.getCurrentRanking()).items[0]?.latestActivityAt).toBeNull();
   });
 
   it("does not expose a manually included REVIEW wallet in the automatic ranking", async () => {

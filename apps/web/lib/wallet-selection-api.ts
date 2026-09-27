@@ -38,7 +38,7 @@ export interface WalletRankingItem {
   readonly automaticStatus: "SELECTED" | "QUALIFIED";
   readonly rank: number;
   readonly performanceRunId: string;
-  readonly latestActivityAt: string;
+  readonly latestActivityAt: string | null;
   readonly lastSyncAt: string;
   readonly trustedClosedCycleCount: number;
   readonly metrics: Readonly<Record<string, string>>;

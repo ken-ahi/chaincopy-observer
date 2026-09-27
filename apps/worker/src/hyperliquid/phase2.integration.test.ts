@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 
-import { fillSchema } from "@chaincopy/blockchain-adapters";
+import { fillSchema, mapFill } from "@chaincopy/blockchain-adapters";
 import { loadRootEnvironment } from "@chaincopy/config";
 import { PrismaClient } from "@chaincopy/database";
 import { hyperliquidJobNames, type HyperliquidJobData } from "@chaincopy/domain";
@@ -23,6 +23,7 @@ const runId = randomUUID();
 const sourceKey = `phase2-integration-${runId}`;
 const queueName = `phase2-integration-${runId}`;
 const address = `0x${runId.replaceAll("-", "").slice(0, 32)}00000000`;
+const counterpartyAddress = `${address.slice(0, -1)}1`;
 
 const database = new PrismaClient({
   datasources: { db: { url: databaseUrl } },
@@ -49,7 +50,9 @@ describe.sequential("Phase 2 PostgreSQL and Redis integration", () => {
 
   afterAll(async () => {
     await queue.obliterate({ force: true });
-    await database.walletAddress.deleteMany({ where: { address } });
+    await database.walletAddress.deleteMany({
+      where: { address: { in: [address, counterpartyAddress] } },
+    });
     await database.dataSource.deleteMany({ where: { key: sourceKey } });
     await queue.close();
     await redis.quit();
@@ -128,6 +131,61 @@ describe.sequential("Phase 2 PostgreSQL and Redis integration", () => {
     await expect(repository.getCursor(wallet.id, "fills", "timestamp")).resolves.toEqual({
       lastExternalId: "newer",
       lastTimestamp: newer,
+    });
+  });
+
+  it("retains both sides of a shared trade and preserves legacy identity on replay", async () => {
+    const wallet = await database.walletAddress.findFirstOrThrow({
+      where: { address, source: { key: sourceKey } },
+    });
+    const other = await database.walletAddress.create({
+      data: { address: counterpartyAddress, sourceId: wallet.sourceId },
+    });
+    const repository = new HyperliquidRepository(database, sourceKey, "Phase 2 integration");
+    const buy = fillSchema.parse({
+      closedPnl: "0",
+      coin: "BTC",
+      crossed: true,
+      dir: "Open Long",
+      fee: "0.443467",
+      feeToken: "USDC",
+      hash: "0xd475fcf931aefb69d5ef044170510e02043c00decca21a3b783ea84bf0a2d554",
+      oid: "509958558519",
+      px: "64119.0",
+      side: "B",
+      startPosition: "0.0",
+      sz: "0.01601",
+      tid: "908928218771332",
+      time: 1785858599780,
+    });
+    const sell = {
+      ...buy,
+      side: "A" as const,
+      startPosition: "-3.70177",
+      dir: "Open Short",
+      oid: "other-order",
+    };
+    const legacy = await database.normalizedTrade.create({
+      data: {
+        ...mapFill(counterpartyAddress, sell),
+        externalTradeId: "1785858599780:BTC:908928218771332",
+        walletAddressId: other.id,
+        sourceId: wallet.sourceId,
+      },
+    });
+    expect(await repository.saveFills(wallet.id, address, [buy, buy])).toBe(1);
+    expect(await repository.saveFills(wallet.id, address, [buy])).toBe(0);
+    expect(await repository.saveFills(other.id, counterpartyAddress, [sell])).toBe(0);
+    expect(await database.normalizedTrade.findUniqueOrThrow({ where: { id: legacy.id } })).toEqual(
+      legacy,
+    );
+    const rows = await database.normalizedTrade.findMany({
+      where: { sourceId: wallet.sourceId, sourceTradeId: buy.tid },
+    });
+    expect(rows).toHaveLength(2);
+    expect(rows.find((row) => row.walletAddressId === wallet.id)).toMatchObject({
+      externalTradeId: `${address}:1785858599780:BTC:908928218771332`,
+      side: "BUY",
     });
   });
 
