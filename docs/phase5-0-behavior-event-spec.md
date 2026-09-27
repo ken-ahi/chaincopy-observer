@@ -251,6 +251,8 @@ canonical formは次のとおりとする。
 
 標準Hyperliquid USDC建てPerpetualsはこの契約を満たすものとして扱える。custom DEX / custom marketは`quoteAsset`、`collateralAsset`、`contractMultiplier`、`marketDefinitionVersion`のprovenanceを必須とする。
 
+ADR-041の`xyz:CL`限定の正式実装契約は`docs/hyperliquid-xyz-cl-quote-provenance.md`を参照する。同期時に未保存のmetadataをnormalization時に取得する場合、取得時刻を過去へ偽装せず、登録時collateralとnative contractによる歴史的notionalの適用根拠を明示する。論理source snapshotのquote情報は、既存physical schemaではEvent→Normalization Run→一意な保護対象RawEvent envelopeで不変に参照する。Event本体への列追加や既存行の書換えは不要とし、完全な証拠の永続化前にはEventを生成しない。
+
 quoteがUSD相当と証明できない場合の候補は、(A) Eventを保存して`notionalDeltaUsd = null`とする、(B) Event全体をfail closedにする、の2案である。Phase 5.1以降がwallet countだけを誤って有効集合へ含める危険を避けるため、**behavior-v1は(B)を採用し、`UNSUPPORTED_QUOTE`でEvent全体をfail closedにする。**
 
 Fill価格が欠損、不正、非正の場合も`MISSING_OR_INVALID_FILL_PRICE`でfail closedとする。`SelectedWalletBehaviorEvent`には`quoteAsset`、`contractMultiplier`、`marketDefinitionVersion`を必須source snapshotとして保持する。

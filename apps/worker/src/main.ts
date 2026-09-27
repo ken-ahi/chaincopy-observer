@@ -20,6 +20,7 @@ import { Redis } from "ioredis";
 import { PrismaWalletSelectionService } from "../../api/src/wallet-selection-service.js";
 import { startHealthServer } from "./health-server.js";
 import { BehaviorJobProcessor } from "./behavior/processor.js";
+import { HyperliquidBehaviorMarketResolver } from "./behavior/market-provenance.js";
 import { enqueueBehaviorJob } from "./behavior/queue.js";
 import { BehaviorRepository } from "./behavior/repository.js";
 import { WalletSelectionBehaviorSource } from "./behavior/selection-source.js";
@@ -228,6 +229,10 @@ const behaviorService = new BehaviorNormalizationService(
   behaviorRepository,
   behaviorSelectionSource,
   behaviorQueue,
+  new HyperliquidBehaviorMarketResolver(env.HYPERLIQUID_API_URL, {
+    rateLimiter,
+    timeoutMs: env.HYPERLIQUID_HTTP_TIMEOUT_MS,
+  }),
 );
 const behaviorProcessor = new BehaviorJobProcessor(behaviorService, logger);
 

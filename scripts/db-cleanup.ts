@@ -17,7 +17,10 @@ function whereClause(rule: CleanupRule): {
         sql: 'status = $1::"SyncJobStatus" AND created_at < $2',
       };
     case "raw_events":
-      return { parameters: [rule.cutoff], sql: "received_at < $1 AND transport = 'HTTP'" };
+      return {
+        parameters: [rule.cutoff],
+        sql: "received_at < $1 AND transport = 'HTTP' AND event_type <> 'behavior-market-provenance-v1'",
+      };
     case "order_history":
       return {
         parameters: [rule.status, rule.cutoff],

@@ -6,6 +6,15 @@ import { createCleanupQuery, createDeleteBatchSql } from "./db-cleanup-query.js"
 const cutoff = new Date("2026-08-01T00:00:00.000Z");
 
 describe("cleanup batch SQL", () => {
+  it("retains durable Behavior quote evidence beyond ordinary HTTP retention", () => {
+    const rule: CleanupRule = { cutoff, table: "raw_events" };
+    expect(createCleanupQuery(rule).selectionSql).toContain(
+      "event_type <> 'behavior-market-provenance-v1'",
+    );
+    expect(createDeleteBatchSql(rule).sql).toContain(
+      "event_type <> 'behavior-market-provenance-v1'",
+    );
+  });
   it("selects sync jobs in the existing retention index order", () => {
     const rule: CleanupRule = { cutoff, status: "SUCCEEDED", table: "sync_jobs" };
     const query = createCleanupQuery(rule);

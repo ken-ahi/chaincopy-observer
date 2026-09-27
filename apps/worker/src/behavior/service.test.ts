@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { XYZ_CL_QUOTE_CONTRACT } from "@chaincopy/blockchain-adapters";
 
 import type { Queue } from "bullmq";
 import type { BehaviorJobData } from "@chaincopy/domain";
@@ -6,6 +7,7 @@ import type { BehaviorJobData } from "@chaincopy/domain";
 import type { BehaviorFillRow, BehaviorRepository } from "./repository.js";
 import type { BehaviorSelectionSource } from "./selection-source.js";
 import { BehaviorNormalizationService } from "./service.js";
+import type { BehaviorMarketResolver } from "./market-provenance.js";
 
 const selected = {
   evaluatedAt: new Date("2026-08-23T00:00:00Z"),
@@ -39,6 +41,7 @@ function repository(overrides: Record<string, unknown> = {}) {
       incompleteTimestampGroupAt: null,
     }),
     recordIssue: vi.fn(),
+    recordQuoteEvidence: vi.fn(),
     rewindForLateFill: vi.fn(),
     saveSuccessfulGroup: vi.fn(),
     ...overrides,
@@ -93,13 +96,89 @@ describe("BehaviorNormalizationService", () => {
       ),
     });
   }
-  function serviceFor(repo: ReturnType<typeof repository>) {
+  function serviceFor(repo: ReturnType<typeof repository>, resolver?: BehaviorMarketResolver) {
     return new BehaviorNormalizationService(
       repo as unknown as BehaviorRepository,
       selectionSource(),
       queue(),
+      resolver,
     );
   }
+
+  const provenMarket = {
+    quoteAsset: "USD",
+    usdEquivalent: true,
+    evidence: { contract: XYZ_CL_QUOTE_CONTRACT, fingerprint: "metadata-1", responses: [] },
+  };
+
+  it("appends proven custom events with durable provenance without changing event identity", async () => {
+    const repo = withFills([
+      input({ coin: "xyz:CL", feeToken: "USDC", size: "1.499", price: "72.246" }),
+    ]);
+    const resolver = { resolve: vi.fn().mockResolvedValue(provenMarket) };
+    const service = serviceFor(repo, resolver);
+    const customJob = { ...job, coin: "xyz:CL" };
+    expect(await service.processWalletCoin(customJob)).toEqual({
+      outcome: "completed",
+      processedEvents: 1,
+    });
+    const first = repo.saveSuccessfulGroup.mock.calls[0]![0].events[0];
+    expect(first).toMatchObject({
+      notionalDeltaUsd: "108.296754",
+      sourceEventId: "fill-1",
+      behaviorVersion: "behavior-v1",
+    });
+    expect(repo.recordQuoteEvidence.mock.invocationCallOrder[0]).toBeLessThan(
+      repo.saveSuccessfulGroup.mock.invocationCallOrder[0]!,
+    );
+    const fingerprint = repo.createRun.mock.calls[0]![0].inputFingerprint;
+    resolver.resolve.mockResolvedValue({
+      ...provenMarket,
+      evidence: { ...provenMarket.evidence, fingerprint: "metadata-2" },
+    });
+    await service.processWalletCoin(customJob);
+    expect(repo.createRun.mock.calls[1]![0].inputFingerprint).not.toBe(fingerprint);
+    expect(repo.saveSuccessfulGroup.mock.calls[1]![0].events[0]).toEqual(first);
+    repo.loadFillPage.mockResolvedValue({
+      fills: [],
+      hasMore: false,
+      incompleteTimestampGroupAt: null,
+    });
+    expect(await service.processWalletCoin(customJob)).toEqual({
+      outcome: "completed",
+      processedEvents: 0,
+    });
+    expect(repo.saveSuccessfulGroup).toHaveBeenCalledTimes(2);
+    expect(repo.rewindForLateFill).not.toHaveBeenCalled();
+  });
+
+  it("does not emit an event if proof persistence fails", async () => {
+    const repo = withFills([input({ coin: "xyz:CL", feeToken: "USDC" })]);
+    repo.recordQuoteEvidence.mockRejectedValue(new Error("evidence storage unavailable"));
+    await expect(
+      serviceFor(repo, { resolve: async () => provenMarket }).processWalletCoin({
+        ...job,
+        coin: "xyz:CL",
+      }),
+    ).rejects.toThrow("evidence storage unavailable");
+    expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+  });
+
+  it("rejects conflicting or missing per-fill collateral evidence", async () => {
+    for (const feeToken of ["OTHER", undefined]) {
+      const repo = withFills([
+        input({ coin: "xyz:CL", ...(feeToken === undefined ? {} : { feeToken }) }),
+      ]);
+      await serviceFor(repo, { resolve: async () => provenMarket }).processWalletCoin({
+        ...job,
+        coin: "xyz:CL",
+      });
+      expect(repo.recordIssue).toHaveBeenCalledWith(
+        expect.objectContaining({ reason: "SOURCE_INCONSISTENT" }),
+      );
+      expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+    }
+  });
 
   it("reports unsupported quote, not missing boundary, for a source-proven xyz FLAT opening", async () => {
     const repo = withFills([
