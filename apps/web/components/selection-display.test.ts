@@ -52,6 +52,7 @@ describe("automatic wallet ranking display", () => {
     expect(formatSelectionPercent(undefined)).toBe("-");
     expect(formatSelectionDecimal("2.345")).toBe("2.35");
     expect(formatSelectionDate("invalid")).toBe("-");
+    expect(formatSelectionDate(null)).toBe("-");
   });
 
   it("uses the eligible-only ranking API and omits review, rejection, and manual inclusion UX", () => {
@@ -64,6 +65,8 @@ describe("automatic wallet ranking display", () => {
     expect(source).toContain("平均勝ち");
     expect(source).toContain("平均負け");
     expect(source).toContain("最大利益依存");
+    expect(source).toContain("最終約定（取得済み）");
+    expect(source).not.toContain("最終活動");
     expect(source).not.toContain("年率収益率");
     expect(source).not.toContain("最大ドローダウン");
     expect(source).not.toContain("REVIEW");

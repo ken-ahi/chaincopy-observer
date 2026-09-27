@@ -2,6 +2,8 @@
 
 最終更新: 2026-08-22（実装前設計監査反映版）
 
+2026-09-27実装整合補足（ADR-040）: 初期groupは公式FLATを必須とし、quote/ordering/source failureをMISSING_BOUNDARYへ置換しない。未知prefix・不連続を後続FLATへ黙ってskipしない。wallet Fillの新規external IDはwallet-scopedとし、既存fingerprint/event identityは保持する。詳細は`docs/selected-wallet-behavior-correctness.md`。event意味論の変更や新しいsegment restart規則は導入しない。
+
 ## 1. 目的と適用範囲
 
 Phase 5.0は、Phase 4.3でeffective selectedとなったHyperliquid walletの保存済み正規化FillとPosition境界を、決定論的、冪等かつ追跡可能なBehavior Eventへ正規化する。

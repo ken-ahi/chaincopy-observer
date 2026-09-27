@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { Queue } from "bullmq";
 import type { BehaviorJobData } from "@chaincopy/domain";
 
-import type { BehaviorRepository } from "./repository.js";
+import type { BehaviorFillRow, BehaviorRepository } from "./repository.js";
 import type { BehaviorSelectionSource } from "./selection-source.js";
 import { BehaviorNormalizationService } from "./service.js";
 
@@ -59,6 +59,164 @@ function queue() {
 }
 
 describe("BehaviorNormalizationService", () => {
+  const job = {
+    coin: "BTC",
+    kind: "wallet-coin" as const,
+    requestedAt: "2026-09-27T00:00:00Z",
+    walletAddressId: "wallet-1",
+  };
+  function input(overrides: Partial<BehaviorFillRow> = {}): BehaviorFillRow {
+    return {
+      id: "fill-1",
+      coin: "BTC",
+      sourceTradeId: "99",
+      side: "BUY",
+      startPosition: "0",
+      size: "1",
+      price: "100",
+      occurredAt: new Date("2026-08-04T19:16:40.471Z"),
+      ...overrides,
+    };
+  }
+  function withFills(fills: readonly BehaviorFillRow[], cursorPosition: string | null = null) {
+    return repository({
+      loadFillPage: vi
+        .fn()
+        .mockResolvedValue({ fills, hasMore: false, incompleteTimestampGroupAt: null }),
+      loadCursor: vi.fn().mockResolvedValue(
+        cursorPosition === null
+          ? null
+          : {
+              boundaryAfterPosition: cursorPosition,
+              lastCompletedTimestamp: new Date("2026-08-03T00:38:33.720Z"),
+            },
+      ),
+    });
+  }
+  function serviceFor(repo: ReturnType<typeof repository>) {
+    return new BehaviorNormalizationService(
+      repo as unknown as BehaviorRepository,
+      selectionSource(),
+      queue(),
+    );
+  }
+
+  it("reports unsupported quote, not missing boundary, for a source-proven xyz FLAT opening", async () => {
+    const repo = withFills([
+      input({ coin: "xyz:CL", startPosition: "0.0", size: "1.499", price: "72.246" }),
+    ]);
+    expect(await serviceFor(repo).processWalletCoin({ ...job, coin: "xyz:CL" })).toEqual({
+      outcome: "blocked",
+      processedEvents: 0,
+    });
+    expect(repo.recordIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "UNSUPPORTED_QUOTE" }),
+    );
+    expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["NaN", "INVALID_DECIMAL"],
+    ["0.01601", "MISSING_BOUNDARY"],
+  ])(
+    "fails closed for initial position %s without inventing a boundary",
+    async (startPosition, reason) => {
+      const repo = withFills([input({ startPosition, side: "SELL", size: "0.01601" })]);
+      await serviceFor(repo).processWalletCoin(job);
+      expect(repo.recordIssue).toHaveBeenCalledWith(expect.objectContaining({ reason }));
+      expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+    },
+  );
+
+  it("does not skip an unknown prefix even when a later FLAT segment exists", async () => {
+    const repo = withFills([
+      input({ startPosition: "1", side: "SELL" }),
+      input({ id: "later-open", occurredAt: new Date("2026-08-05T00:00:00Z") }),
+    ]);
+    await serviceFor(repo).processWalletCoin(job);
+    expect(repo.recordIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "MISSING_BOUNDARY" }),
+    );
+    expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+    expect(repo.rewindForLateFill).not.toHaveBeenCalled();
+  });
+
+  it("preserves same-timestamp ambiguity rather than relabeling it as a missing boundary", async () => {
+    const repo = withFills([
+      input(),
+      input({ id: "close1", side: "SELL", startPosition: "1" }),
+      input({ id: "open2", size: "2" }),
+      input({ id: "close2", side: "SELL", startPosition: "2", size: "2" }),
+    ]);
+    await serviceFor(repo).processWalletCoin(job);
+    expect(repo.recordIssue).toHaveBeenCalledWith(
+      expect.objectContaining({ reason: "ORDERING_AMBIGUOUS" }),
+    );
+    expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+  });
+
+  it("keeps BTC stopped at the exact discontinuity, without skipping to a later FLAT", async () => {
+    const repo = withFills(
+      [
+        input({ startPosition: "0.01601", side: "SELL", size: "0.01601", price: "64293" }),
+        input({ id: "later-open", occurredAt: new Date("2026-08-05T00:00:00Z") }),
+      ],
+      "0",
+    );
+    await serviceFor(repo).processWalletCoin(job);
+    expect(repo.recordIssue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "IMPOSSIBLE_TRANSITION",
+        sourceGroupAt: new Date("2026-08-04T19:16:40.471Z"),
+      }),
+    );
+    expect(repo.saveSuccessfulGroup).not.toHaveBeenCalled();
+    expect(repo.loadFillPage).toHaveBeenCalledWith(
+      "wallet-1",
+      "BTC",
+      new Date("2026-08-03T00:38:33.720Z"),
+    );
+  });
+
+  it("resumes BTC after the real missing opening is ingested, without a cursor rewind", async () => {
+    const repo = withFills(
+      [
+        input({
+          id: "recovered-open",
+          size: "0.01601",
+          price: "64119",
+          occurredAt: new Date(1785858599780),
+        }),
+        input({ startPosition: "0.01601", side: "SELL", size: "0.01601", price: "64293" }),
+      ],
+      "0",
+    );
+    expect(await serviceFor(repo).processWalletCoin(job)).toEqual({
+      outcome: "completed",
+      processedEvents: 2,
+    });
+    expect(repo.recordIssue).not.toHaveBeenCalled();
+    expect(repo.rewindForLateFill).not.toHaveBeenCalled();
+    expect(repo.saveSuccessfulGroup).toHaveBeenLastCalledWith(
+      expect.objectContaining({ afterPosition: "0" }),
+    );
+  });
+
+  it("isolates an unsupported coin from a healthy coin", async () => {
+    const repo = withFills([input({ coin: "xyz:CL" })]);
+    const service = serviceFor(repo);
+    await service.processWalletCoin({ ...job, coin: "xyz:CL" });
+    repo.loadFillPage.mockResolvedValue({
+      fills: [input()],
+      hasMore: false,
+      incompleteTimestampGroupAt: null,
+    });
+    expect(await service.processWalletCoin(job)).toEqual({
+      outcome: "completed",
+      processedEvents: 1,
+    });
+    expect(repo.saveSuccessfulGroup).toHaveBeenCalledTimes(1);
+  });
   it("is a normal no-op when no current Selection Run exists", async () => {
     const repo = repository();
     const result = await new BehaviorNormalizationService(

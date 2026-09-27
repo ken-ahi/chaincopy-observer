@@ -8,12 +8,20 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/v2-operational-refresh`（運用結果の文書記録用）
-- branch base / `origin/main`: `06d3c26b2f964b584a0f68a681a8f97b635ca91d`（PR #32 merge）
+- branch: `codex/selected-wallet-behavior-correctness`
+- branch base: `79af442cd3abc1fc5ee901deee21b167521635d5`（PR #33 merge）
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- PR #29はmainへmerge済みであり、無料データ限定recovery / Discovery作業は完了した。本branchは、既存46 walletのv2 operational refresh結果とOwnerによるincident判定を記録する文書専用branchである。
+- PR #29〜#33はmainへmerge済み。46 wallet refresh / incidentのcontained判定は完了済みで繰り返さない。現在はOwner承認済みのselected-wallet Behavior correctness工程。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- PR #30 / #31 / #32はOwnerによりmainへmerge済み。下記の過去工程のPR open表記は当時の記録であり、現在状態ではない。Ownerは本branchの文書のみのcommit / push / PR作成を承認し、CI成功かつPR差分がoperational/state文書だけの場合に限り自動mergeを承認した。この承認はコード変更・運用再実行には拡張しない。
+- 下記の過去工程のPR open表記・承認境界は当時の記録。現在のOwner契約はselected 1 walletのBehavior監査/修正/限定検証、PR/CI成功後の安全境界内自動mergeを許可する。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+
+## Selected-wallet Behavior correctness（2026-09-27）
+
+- 対象: `0x34112cf6672cbad0f44b5a77857099417dc686af`だけ。詳細証拠: `docs/selected-wallet-behavior-correctness.md`、判断: ADR-040。
+- BTC: 不連続検出は正しいが、欠けたOPEN 2件はcanonical rawに存在。walletを含まないexternal ID uniqueに別walletのparticipantが衝突していた。新規wallet-scoped external IDと既存fingerprint維持でmigration/既存行更新なしに修正。
+- xyz:CL: 先頭startPosition=0。quote未証明のエラーをMISSING_BOUNDARYに隠す診断不備を修正。unsupported quoteは引き続きfail closed。後続FLATへのskipを導入しない。
+- latestActivityAt: Performance計算日時からcanonical保存済み最終Fill時刻へ修正。UIは「最終約定（取得済み）」、未取得はnull。
+- 初回隔離validation: format/lint/typecheck PASS、71 files / 671 tests PASS。専用ports 55433 / 56380の新規PostgreSQL/Redisだけをtest対象に指定した。build/E2E/限定運用検証は進行中。
 
 ## 完了済みで再実行しない作業
 

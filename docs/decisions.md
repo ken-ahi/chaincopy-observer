@@ -364,3 +364,13 @@
 - Ranking: win rate降順、closed cycle降順、Profit Factor降順、top trade contribution昇順、canonical address昇順とする。30-cycle gateがsmall-sampleをranking前に除外する。Decimal比較を使いweighted scoreは導入しない。
 - Flow / UI: Discovery promotion、sync / DQ、trusted Performance、Selection Run、EXCLUDE denylist、`listEffectiveSelectedWallets()`、Behavior no-op契約を再利用する。通常UIはNAV指標でなく、cycle数、win rate、Profit Factor、average win/loss、top contribution、latest activityを表示する。
 - 詳細: `docs/free-data-wallet-selection-v2.md`を正本とする。
+
+## ADR-040: Wallet Fill identityとBehavior診断・最終約定時刻の整合
+
+- 状態: 採用
+- 根拠: selected walletのBTC OPENが公式rawに存在する一方、別walletの同一time/coin/tidがexternal IDを先に占有し、`skipDuplicates`で脱落していた。Behaviorの不連続検出自体は正しかった。
+- Identity: 新規wallet Fillのexternal IDにcanonical wallet addressを含める。既存wallet-scoped fingerprintのpayloadは変更せず、legacy rowの再取得はfingerprint uniqueで抑止する。既存行/FK/eventを更新・削除せず、migration不要。Discovery market trade identityは変更しない。
+- Boundary/diagnostics: 初期groupの公式FLATを必須とし、UNSUPPORTED_QUOTE/ORDERING_AMBIGUOUS等をMISSING_BOUNDARYへ置換しない。未知prefixや不可能遷移を後続FLATへskipしない。custom quoteは未証明ならfail closed。旧誤診断DQは手動解消しない。
+- Activity: rankingのlatestActivityAtはeligible trusted walletのcanonical保存済みFillの最大occurredAt（なければnull）。計算日時・sync日時・nowを代用しない。UIは「最終約定（取得済み）」と明示し、rank/thresholdには使わない。
+- Version: 既存Phase 5.0仕様への整合修正でありevent identity/金融式を変えないためbehavior-v1維持。performance-v3/wallet-selection-v2を変更しない。
+- 詳細: `docs/selected-wallet-behavior-correctness.md`。

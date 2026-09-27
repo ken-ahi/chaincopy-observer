@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 
 import {
   BEHAVIOR_VERSION,
+  canonicalDecimal,
   normalizeTimestampGroup,
   type BehaviorFillInput,
   type BehaviorGroupResult,
@@ -156,22 +157,24 @@ function normalize(
 }
 
 function resolveInitialBoundary(group: readonly BehaviorFillRow[]): BehaviorGroupResult {
-  const candidates = [...new Set(group.map((fill) => fill.startPosition))];
-  const successes = candidates
-    .map((boundary) => normalize(group, boundary))
-    .filter((result): result is Extract<BehaviorGroupResult, { ok: true }> => result.ok);
-  if (successes.length === 1) return successes[0]!;
-  return successes.length > 1
-    ? {
-        ok: false,
-        reason: "ORDERING_AMBIGUOUS",
-        detail: "The initial timestamp group has multiple valid boundary chains.",
-      }
-    : {
-        ok: false,
-        reason: "MISSING_BOUNDARY",
-        detail: "No trusted initial boundary produces a complete chain.",
-      };
+  let positions: string[];
+  try {
+    positions = group.map((fill) => canonicalDecimal(fill.startPosition));
+  } catch (error) {
+    return {
+      ok: false,
+      reason: "INVALID_DECIMAL",
+      detail: error instanceof Error ? error.message : "Invalid initial position Decimal.",
+    };
+  }
+  if (!positions.includes("0"))
+    return {
+      ok: false,
+      reason: "MISSING_BOUNDARY",
+      detail: "The initial timestamp group has no source-proven FLAT boundary.",
+    };
+  // Do not infer a nonzero boundary, or mask quote/order/source errors as missing history.
+  return normalize(group, "0");
 }
 
 function marketForCoin(coin: string) {

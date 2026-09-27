@@ -98,7 +98,8 @@ export interface WalletRankingItemDto {
   readonly automaticStatus: Extract<WalletSelectionAutomaticStatus, "SELECTED" | "QUALIFIED">;
   readonly rank: number;
   readonly performanceRunId: string;
-  readonly latestActivityAt: string;
+  /** Latest observed canonical Hyperliquid fill, not calculation/synchronization time. */
+  readonly latestActivityAt: string | null;
   readonly lastSyncAt: string;
   readonly trustedClosedCycleCount: number;
   readonly metrics: Readonly<Record<string, string>>;
@@ -213,24 +214,31 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
   public async getCurrentRanking(): Promise<WalletRankingDto> {
     const current = await this.getCurrentSelection();
     if (!current.run) return { items: [], run: null };
-    const items = current.items
-      .flatMap<WalletRankingItemDto>((item) => {
-        if (!isAutomaticRankingItem(item)) return [];
-        return [
-          {
-            address: item.address,
-            automaticStatus: item.automaticStatus,
-            lastSyncAt: item.lastSyncAt,
-            latestActivityAt: item.performanceCalculationTo,
-            metrics: item.metrics,
-            performanceRunId: item.performanceRunId,
-            rank: item.rank,
-            trustedClosedCycleCount: item.trustedClosedCycleCount,
-            walletAddressId: item.walletAddressId,
-          },
-        ];
-      })
-      .sort((left, right) => left.rank - right.rank);
+    const items: WalletRankingItemDto[] = [];
+    // Bound each indexed lookup to one eligible wallet; do not load fill histories.
+    for (const item of current.items.filter(isAutomaticRankingItem)) {
+      const latestFill = await this.database.normalizedTrade.findFirst({
+        select: { occurredAt: true },
+        orderBy: { occurredAt: "desc" },
+        where: {
+          walletAddressId: item.walletAddressId,
+          source: { key: "hyperliquid-mainnet" },
+          walletAddress: { address: item.address, source: { key: "hyperliquid-mainnet" } },
+        },
+      });
+      items.push({
+        address: item.address,
+        automaticStatus: item.automaticStatus,
+        lastSyncAt: item.lastSyncAt,
+        latestActivityAt: latestFill?.occurredAt.toISOString() ?? null,
+        metrics: item.metrics,
+        performanceRunId: item.performanceRunId,
+        rank: item.rank,
+        trustedClosedCycleCount: item.trustedClosedCycleCount,
+        walletAddressId: item.walletAddressId,
+      });
+    }
+    items.sort((left, right) => left.rank - right.rank);
     return {
       items,
       run: {

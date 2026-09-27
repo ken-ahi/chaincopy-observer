@@ -28,7 +28,8 @@ export function formatSelectionDecimal(value: string | undefined): string {
   return new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 2 }).format(numeric);
 }
 
-export function formatSelectionDate(value: string): string {
+export function formatSelectionDate(value: string | null): string {
+  if (value === null) return "-";
   const date = new Date(value);
   if (!Number.isFinite(date.getTime())) return "-";
   return new Intl.DateTimeFormat("ja-JP", {

@@ -79,6 +79,22 @@ describe("Hyperliquid response mapping", () => {
       sourceTradeId: "9007199254740994",
     });
     expect(first.fingerprint).toBe(second.fingerprint);
+    expect(first.externalTradeId).toBe(`${address}:1721862400000:BTC:9007199254740994`);
+    expect(first.fingerprint).toBe(
+      createEventFingerprint("fill", address, {
+        externalTradeId: "1721862400000:BTC:9007199254740994",
+        hash: fill.hash,
+        oid: fill.oid,
+      }),
+    );
+    const counterparty = mapFill("0x2222222222222222222222222222222222222222", {
+      ...fill,
+      side: "A",
+      startPosition: "3",
+    });
+    expect(counterparty.externalTradeId).not.toBe(first.externalTradeId);
+    expect(counterparty.fingerprint).not.toBe(first.fingerprint);
+    expect(mapFill(address.toUpperCase(), fill)).toEqual(first);
   });
 
   it("extracts ledger decimals only from validated string values", () => {

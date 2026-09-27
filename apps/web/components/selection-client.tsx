@@ -108,7 +108,7 @@ export function SelectionClient() {
                     <th>平均勝ち</th>
                     <th>平均負け</th>
                     <th>最大利益依存</th>
-                    <th>最終活動</th>
+                    <th>最終約定（取得済み）</th>
                   </tr>
                 </thead>
                 <tbody>
