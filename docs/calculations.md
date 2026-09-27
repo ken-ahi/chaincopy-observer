@@ -116,6 +116,8 @@ totalAccountNav =
 
 日次NAVはraw `PortfolioSnapshot`由来であり、UTC日ごとに最後の正のPerpetuals account valueを選ぶ。表示・監査・永続化用のraw系列として維持し、Cash Flow調整済み系列へ書き換えない。最寄りsnapshotの流用や線形補間はしない。snapshot間の不規則系列は日次系列と区別する。
 
+Hyperliquid `portfolio` responseは`perpDay`、`perpWeek`、`perpMonth`、`perpAllTime`で同じPerpetuals account valueを異なる解像度で返す。正規化時は4 periodの公式pointをtimestampでunionし、同一timestampの値が一致する場合だけ1件として保存する。値が競合する場合はsource inconsistencyとして保存を停止する。いずれのperiodも全評価期間の日次coverageを保証するものとは扱わず、`calculationFrom`から`calculationTo`までのUTC日を実際の保存pointで検証する。内部欠損があればRunは`GAP_DETECTED`であり、密な短期periodを使って欠損期間を補間しない。
+
 ### 5.1 TWR
 
 外部cash flowの各発生時刻で期間を分割し、cash flow直前・直後のNAVを要求する。

@@ -538,7 +538,7 @@ describe("NAV, cash flow, and returns", () => {
       }),
     ).toEqual({ amount: "10", boundary: "UNKNOWN" });
   });
-  it("selects the latest same-day snapshot and marks Perp-only precision", () => {
+  it("selects the latest positive same-day snapshot and marks Perp-only precision", () => {
     const result = calculateDailyNav(
       [
         {
@@ -554,6 +554,12 @@ describe("NAV, cash flow, and returns", () => {
           scope: "PERP",
         },
         {
+          externalId: "later-zero",
+          nav: "0",
+          occurredAt: "2024-01-01T23:30:00.000Z",
+          scope: "PERP",
+        },
+        {
           externalId: "next",
           nav: "120",
           occurredAt: "2024-01-02T23:00:00.000Z",
@@ -564,6 +570,31 @@ describe("NAV, cash flow, and returns", () => {
     );
     expect(result.ok && result.value.map((point) => point.nav)).toEqual(["110", "120"]);
     expect(result.ok && result.value[0]?.navScope).toBe("PERP_ACCOUNT_NAV");
+  });
+
+  it("uses UTC day boundaries without merging adjacent dates", () => {
+    const result = calculateDailyNav(
+      [
+        {
+          externalId: "before-midnight",
+          nav: "100",
+          occurredAt: "2024-01-01T23:59:59.999Z",
+          scope: "PERP",
+        },
+        {
+          externalId: "after-midnight",
+          nav: "101",
+          occurredAt: "2024-01-02T00:00:00.000Z",
+          scope: "PERP",
+        },
+      ],
+      completeCoverage,
+    );
+
+    expect(result.ok && result.value.map((point) => point.date)).toEqual([
+      "2024-01-01",
+      "2024-01-02",
+    ]);
   });
 
   it.each(["0", "-1"])("rejects non-positive NAV %s", (nav) => {

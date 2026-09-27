@@ -476,7 +476,14 @@ export class HyperliquidRepository {
   ): Promise<void> {
     const points = new Map<number, string>();
     for (const [periodName, period] of portfolio) {
-      if (periodName !== "perpAllTime") continue;
+      if (
+        periodName !== "perpDay" &&
+        periodName !== "perpWeek" &&
+        periodName !== "perpMonth" &&
+        periodName !== "perpAllTime"
+      ) {
+        continue;
+      }
       for (const [timestamp, accountValue] of period.accountValueHistory) {
         const existing = points.get(timestamp);
         if (existing && !new FinancialDecimal(existing).equals(accountValue)) {

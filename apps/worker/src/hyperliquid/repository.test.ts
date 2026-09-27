@@ -10,7 +10,7 @@ interface CursorUpsertInput {
 
 describe("HyperliquidRepository cursors", () => {
   it("persists portfolio account-value history as deterministic NAV inputs", async () => {
-    const createMany = vi.fn(async (_input: unknown) => ({ count: 3 }));
+    const createMany = vi.fn(async (_input: unknown) => ({ count: 4 }));
     const database = {
       dataSource: { upsert: vi.fn(async () => ({ id: "source-1" })) },
       portfolioSnapshot: { createMany },
@@ -37,9 +37,12 @@ describe("HyperliquidRepository cursors", () => {
           },
         ],
         [
-          "perpAllTime",
+          "perpMonth",
           {
-            accountValueHistory: [[1_721_862_400_000, "100.00"]],
+            accountValueHistory: [
+              [1_721_862_400_000, "100.00"],
+              [1_722_035_200_000, "120"],
+            ],
             pnlHistory: [],
             vlm: "1",
           },
@@ -60,6 +63,11 @@ describe("HyperliquidRepository cursors", () => {
           expect.objectContaining({
             accountValue: "110",
             capturedAt: new Date(1_721_948_800_000),
+            snapshotType: "portfolio-history",
+          }),
+          expect.objectContaining({
+            accountValue: "120",
+            capturedAt: new Date(1_722_035_200_000),
             snapshotType: "portfolio-history",
           }),
         ]),
@@ -90,7 +98,7 @@ describe("HyperliquidRepository cursors", () => {
         "0x1111111111111111111111111111111111111111",
         [
           ["perpAllTime", period("100")],
-          ["perpAllTime", period("101")],
+          ["perpMonth", period("101")],
         ],
         "[]",
         new Date("2026-07-25T12:00:00.000Z"),

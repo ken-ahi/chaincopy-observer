@@ -186,12 +186,73 @@
 - feature branch検証はformat / lint PASS、typecheck 11/11 PASS、test 70 files / 639 PASS、build 11/11 PASS、E2E 22/22 PASS、`pnpm audit --audit-level high`はhigh以上0、`git diff --check` PASSである。PR #30のGitHub Actions `verify`も全step PASSした。
 - integration / E2Eは永続volumeなしの隔離PostgreSQL 16 / Redis 7コンテナだけで実行し、完了後に停止・自動破棄した。実DB / 実Redisへのmutationは0件である。
 
+## PR #30 post-merge automatic flow canary（2026-09-25）
+
+### Stage 1 read-only preflight
+
+- `codex/post-merge-ranking-canary`は`origin/main`のPR #30 merge commit `940b638e27f6f6b2f5b5b691bde8b04fd97a83ec`から開始した。PR #30にはPrisma schema / migration変更がなく、実DBは10 migration適用済み、未完了0件、最新は`20260824120000_performance_run_quarantine`だったため、追加migrationは不要と確認した。
+- PostgreSQL / Redisはいずれもhealthyで、Worker / consumerは停止していた。開始時DB sizeは58,291,730,099 bytes。Redisは`noeviction`で、異常なmemory pressureはなかった。
+- Hyperliquid Mainnet Candidateは`PENDING 68,801 / LIGHT_ELIGIBLE 8,831 / INSUFFICIENT_HISTORY 12,623 / ELIGIBLE 2,915 / EXCLUDED 214 / PROMOTED 26`。automatic universeは26 walletだった。
+- automatic universeの最新trusted `performance-v3`は`COMPLETE 5 / PARTIAL 15 / GAP_DETECTED 6`。current Selection Runは`cmue526af006bu1ckq8xpvbzr`、universe 29 / selected 0 / qualified 0 / review 29 / excluded 0、ranking entry 0だった。Behavior run / event / scope / OPEN DQはすべて0件だった。
+- production Redisには`hyperliquid-candidate-enrichment`のprioritized 8,427件とactive 1件、計8,428件のbacklogがあった。`hyperliquid-discovery`と`address-performance`にもprioritized各1件が残っていた。DBには30分超の歴史的`RUNNING` SyncJobがcandidate enrichment 894件、candidate upsert 3件、DQ audit 168件、fill 168件、funding 118件、ledger 89件、position snapshot 334件、wallet backfill 1件残っており、live consumer不在のためactive/stale stateとして扱った。
+
+### Stage 2 bounded canary
+
+- 既存の`ELIGIBLE / enrichment SUCCEEDED / history COMPLETE / dataQualityScore 100 / not truncated`から、90日以上のevaluation期間、recent activity、2,500 fills以下を満たす固定20 Candidateを決定論的manifestとして選んだ。candidate IDは`cms1oc02y0guqlg0i0xl9b1l2`, `cms2036bb411lms0iam457nn0`, `cms8t2jvdfqa0n90ilq6qg2vp`, `cms4qlludns8ar40i4ucwoois`, `cms4umawgdezgp70i6r9q1een`, `cms1wbhogkmjqla0i2xpp13d0`, `cms7zi9v40lq5n90i6imy8vyd`, `cms2fjz3qn0q0ms0i5ymvaszh`, `cms38up3g3shimx0i7joti2c1`, `cms9syyjjg5qan90ijwvkwfuq`, `cms1q1n540jceqn0ia23crhq1`, `cms2lnyxbpg3oms0i99ktivql`, `cms4rvk5pchagp70immz2r54e`, `cms1vj76sg0fzla0inpwbx1pv`, `cms4631r9n3cvqo0ihnob6x6o`, `cms2cecarroodms0i1o1b99n5`, `cms2cgi4esvfyms0ix3jsq9rt`, `cms2bc00ul6cums0ibmiubq7q`, `cms2693wuzju0ms0i8z4a672b`, `cms2oc6or146xms0i44ivgpf5`である。
+- PR #30 merge commitからbuildしたWorker imageと、既存processor / repository / serviceだけを使った。BullMQ prefixを`post-merge-ranking-canary`へ分離し、concurrency 1、schedulerなし、WebSocket discovery startupなしで実行したため、production backlogは消費していない。無料のHyperliquid Info API以外は使用していない。
+- inspected 20 / filter gate通過20 / auto-promoted 20。最終状態は20/20 `PROMOTED / enrichment SUCCEEDED`で、automatic universeは26から46へ増えた。`isWatched`手動設定、manual INCLUDE、threshold変更は行っていない。
+- 最新の正式syncは20/20 walletで成功した。監査履歴には各主要laneの成功20件と、最初のwalletで一時的なformal lock残存により失敗した6 laneが残るが、lock expiry後に同じ正式backfill契約をfresh job IDで1回再実行し、6 laneすべて成功へ回復した。失敗履歴やDQを直接変更・削除していない。
+- canary 20 walletの最新trusted Performanceは`SUCCEEDED / PARTIAL 17`、`INSUFFICIENT_DATA / PARTIAL 2`、`INSUFFICIENT_DATA / INSUFFICIENT_HISTORY 1`で、`COMPLETE 0 / GAP_DETECTED 0`。必須metricは`annualizedReturn 0/20 / maxDrawdown 0/20 / topTradeContribution 16/20`、3 metric完備は0/20だった。
+- 最終current Selection Runは`cmuh2mdhf03z4le0y8nuyvfzy`、評価時刻`2026-09-25T14:43:28.001Z`、universe 46 / selected 0 / qualified 0 / review 46 / excluded 0、ranking entry 0。canary分は`HISTORY_INCOMPLETE + TOO_FEW_COMPLETED_TRADES + REQUIRED_METRIC_MISSING` 11件、`HISTORY_INCOMPLETE + REQUIRED_METRIC_MISSING` 6件、`NO_PERFORMANCE_V3` 3件だった。
+- Selection後のBehavior control jobはすべて正常`no-op / processedEvents 0`。Behavior run / event / scope / OPEN DQは0件を維持し、watched wallet fallbackは発生していない。
+- canary中に検出された`HYPERLIQUID_PARTIAL_API_FAILURE` 10件は正式sync成功によりすべて`RESOLVED`となった。`HYPERLIQUID_INCOMPLETE_INITIAL_SYNC`は1件解消、1件がwallet `0xd55c64116bd7ca822ced2f95ec20768574ef54e4`でOPENのまま残り、未完了scopeはfills / funding / ledger / account-snapshotである。
+
+### 判定と終了状態
+
+- canaryだけを見ると20/20がPerformance `COMPLETE`を証明できず、case 1（無料sourceでhistory completenessを証明できない）が支配的だった。同時にautomatic universe全46 walletでは最新trusted Performanceが`SUCCEEDED COMPLETE 5 / SUCCEEDED PARTIAL 32 / SUCCEEDED GAP_DETECTED 6 / INSUFFICIENT_DATA 3`だが、`COMPLETE` 5 walletを含め必須3 metric完備は0/46だった。したがってdecision ruleのcase 2（COMPLETEでもrequired Performance metricが生成されない）が存在し、Discovery量拡大前の次engineering blockerと確定した。
+- `selected 0`は投資gate不合格と確定した結果ではない。metric生成経路を直す前に候補数を増やしたり、閾値を緩和したり、manual INCLUDEしたりしない。
+- production backlogは開始時と終了時で`hyperliquid-candidate-enrichment prioritized 8,427 + active 1`、`hyperliquid-discovery prioritized 1`、`address-performance prioritized 1`のままで、canary隔離queueはwait / active / delayed / prioritizedがすべて0になった。全canary Workerを停止し、稼働containerはPostgreSQL / Redisだけに戻した。
+- 観測peakはcanary Worker約291 MiB / 35% CPU、PostgreSQL約192 MiB / 19% CPU、Redis約44 MiB / 1%未満CPU。OOM、retry storm、無制限backlogはなかった。終了時Redisはused memory約24 MiB、RSS約53 MiB、`noeviction`である。
+- destructive DB操作、Redis key / queue削除、手動cursor / DQ変更、quarantine解除、有料source、Requester Pays、実注文・署名・資金移動は0件。最終判定は`CANARY COMPLETE — NEXT BLOCKER IDENTIFIED`である。
+
+## Daily NAV / required metric root-cause repair（2026-09-26）
+
+### Read-only root-cause audit
+
+- `PortfolioSnapshot → PerformanceRepository → calculateDailyNav → DailyNav → Return Lane → annualizedReturn / maxDrawdown`を実コード・実DB・公式responseで追跡した。従来repositoryは公式`portfolio` responseのうち疎な`perpAllTime`だけを保存し、`perpDay / perpWeek / perpMonth`の正式pointを破棄していた。
+- 旧`COMPLETE` 5 walletの評価窓は233–247日だったが、保存済みNAVのdistinct UTC日は42–53日、内部欠損は180–203日、DailyNavは全Run 0件だった。`assessHistoryCompleteness()`は開始日のprefixだけを確認し、内部gapとsuffixを確認していなかったため`COMPLETE`が事実と矛盾していた。
+- 公式Info APIをread-onlyで再確認したところ、5/5 walletの`perpMonth`は直近32 UTC日を連続して提供した一方、`perpAllTime`は2026年1月から9月に43–55 UTC日しかなく疎だった。公式4 Perp periodをunionしても、評価期間全体の日次coverageは証明できない。denseな短期区間を過去へ補間したり、最初のgap後からReturn Laneを再開したりしない。
+- 5 walletのうち2件はvault cash flowを含み、現行classifierでは別途UNKNOWN cash flowとなる。これはReturn Laneをfail closedにする独立理由であり、日次coverage不足を解消したものとして扱わない。
+
+### 契約修正
+
+- portfolio正規化は`perpDay / perpWeek / perpMonth / perpAllTime`をtimestampでunionし、同時刻のDecimal値が一致するときだけ1点として保存する。競合はsource inconsistencyとして保存を停止し、spot/vaultを含み得る非Perp periodは混在させない。
+- UTC日ごとに最後の正のNAVを決定論的に選ぶ。同日に正のpointがなければ`NON_POSITIVE_NAV`、日次gapはそのまま保持し、forward-fill / zero-fill / interpolationは行わない。
+- `calculationFrom`より後から始まるprefix不足と`calculationTo`より前で終わるsuffix不足は`PARTIAL`、範囲内部のUTC日次欠損は`GAP_DETECTED`とする。NAV固有gapはReturn Laneを停止するが、ADR-028に従い独立して検証可能なTrade / Exposure Laneは継続する。source全体のgap DQ / cursorは従来どおり関連Laneをfail closedにする。
+- 金融式、metric定義、Selection policy / thresholdを変更していないため`performance-v3`を維持する。入力pointとcompletenessはfingerprintを変え、新規Runへappend-onlyで保存し、旧Runを更新・削除しない。判断はADR-038へ記録した。
+- E2E runnerへ既定値を変えない`E2E_DATABASE_URL / E2E_REDIS_URL` overrideを追加し、永続ローカルDB/Redisをflushせずvolumeなし隔離containerでE2Eを実行可能にした。
+
+### Bounded real-data verification
+
+- 実装commit `01aaf5933a0b61ac8ba8a19112018ec7f5a6bee7`のGit archiveだけからWorker image `chaincopy-worker:daily-nav-01aaf59`をbuildした。image digestは`sha256:2a394bb55c5e5eeca576c45621dfa3c8abe1bce447132d65e845020e21b55d2f`である。
+- 対象は旧`COMPLETE` 5 walletと前回canaryの固定3 wallet、合計8件だけとした。専用BullMQ prefix、concurrency 1、scheduler / discovery consumerなしで、正式portfolio syncを8/8成功させた。production backlogは消費・削除していない。
+- `portfolio-history`は各walletで72–88点増え、最終件数は124–183点となった。しかし長期日次coverageは成立せず、force再計算した`performance-v3`は7 `SUCCEEDED` / 1 `INSUFFICIENT_DATA`、8/8 `GAP_DETECTED`だった。旧`COMPLETE` 5件も全件`GAP_DETECTED`へ正しく置き換わった。
+- 対象8件の新Runでは`annualizedReturn` 0/8、`maxDrawdown` 0/8、`topTradeContribution` 5/8、DailyNav 0/8だった。Trade / Exposureの独立metricは7件で保存され、Return Laneだけがfail closedした。
+- current Selection Runは`cmuhtckgd00y6my1o09dvalza`、評価時刻`2026-09-26T03:11:40.081Z`、universe 46 / selected 0 / qualified 0 / review 46 / excluded 0である。current trusted completenessは`GAP_DETECTED 13 / PARTIAL 31 / trusted runなし 2 / COMPLETE 0`、required metricは`annualizedReturn 0/46 / maxDrawdown 0/46 / topTradeContribution 36/46`である。
+- Behavior controlは`no-op / processedEvents 0`、新規Behavior run / eventは0件だった。新規OPEN DQは0件。Selection threshold変更、manual INCLUDE、DQ / cursor直接変更、quarantine解除、destructive DB/Redis操作、有料source、Requester Paysは0件である。
+- 実行は約6秒で完了し、終了確認時PostgreSQLはCPU 0.84% / 151.8 MiB、RedisはCPU 0.27% / 47.46 MiBだった。検証containerと隔離test containerは停止・削除し、常設Workerは停止状態、PostgreSQL / Redisのみhealthyである。
+
+### 判定
+
+- 旧case 2「`COMPLETE`なのにrequired metricが生成されない」は、内部gapを見落としていたcompleteness分類不具合であり修正済みである。修正後は実データに`COMPLETE` walletがなく、required Return metricを生成しないことがformal contractと一致する。
+- 現在のselected 0は投資gateの不合格を示さず、無料Hyperliquid Info APIだけでは評価窓全体の連続Daily NAVを証明できないことによるfail-closed `REVIEW`である。Discovery volumeや閾値では解消せず、最終状態は`SOURCE_DATA_INSUFFICIENT_FOR_REQUIRED_NAV_METRICS`とする。
+
 ## 次の優先作業
 
-1. PR #30のmain mergeはOwner承認を待つ。merge前に新しいreview / CI failureが発生した場合だけfeature branchで修正する。
-2. merge後の正式Worker imageで、通常DiscoveryからCandidate auto-promotion、Performance、Selection、Behaviorの自動連鎖を運用監視する。実DB migrationは不要である。
-3. 既存`hyperliquid-candidate-enrichment` backlog 8,425件は、queue retention / enqueue抑制 / bounded drainの正式運用判断を別Issueで行う。直接DEL / ZREMや無制限consumer起動は行わない。
-4. 有料sourceを再検討しない限り、10,000 Fill以前やInfo APIでcoverageを証明できないgapは`HISTORY_INCOMPLETE / REVIEW`のまま維持する。
+1. Ownerの無料source限定方針を維持する限り、連続90日以上の公式Daily NAV coverageを実測で証明できるwallet/sourceが現れるまで`HISTORY_INCOMPLETE / REVIEW`を維持する。欠損補間や短期segmentへの評価窓切替は行わない。
+2. 既存`hyperliquid-candidate-enrichment` backlog 8,428件を拡大・無制限drainしない。候補量を増やしてもInfo APIのNAV coverage契約は変わらない。
+3. 無料かつ信頼できる別sourceを採用する場合は、provenance、wallet identity、UTC日次coverage、cash flow分類、dedupを先に正式設計し、実DB ingestion前のOwner境界を維持する。
+4. 10,000 Fill以前やInfo APIでcoverageを証明できないgapは`HISTORY_INCOMPLETE / REVIEW`のまま維持し、Selection thresholdやmanual INCLUDEで代替しない。
 
 ## Hyperliquid history recovery設計・実装（2026-09-14）
 
@@ -206,7 +267,7 @@
 ## Blockerと承認境界
 
 - Info APIでcoverageを証明できなかった441 gapと3 walletの10,000 Fill以前は、現行の無料source限定方針では証明できない。これらのwalletは`HISTORY_INCOMPLETE / REVIEW`を維持し、救済自体を目的化しない。
-- 無料Discovery候補100件の最終監査ではmanifest v7通過が0件だった。selected 0の直接原因は投資閾値ではなく、30 wallet全件のrequired metric不足である。
+- 無料Discovery候補100件の最終監査ではmanifest v7通過が0件だった。Daily NAV修正後のautomatic universe 46 walletは`COMPLETE` 0件であり、selected 0の直接原因は投資閾値ではなく、全件のrequired metric不足である。
 - AWS Requester Pays、有料API、有料データ契約は不採用であり、Ownerの新たな明示判断なしに調査実行・download・ingestionへ進まない。
 - DQやhistory completenessを件数合わせ・手動更新で解消済みにしない。既存のfail-closed契約を維持する。
 - Issue 15 Stage 4 canary/backfillは、effective selected walletが1件以上あり、対象walletのhistory/DQ/quote条件が契約を満たし、必要なOwner承認が揃うまで実行しない。
@@ -216,6 +277,6 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- PR #30はGitHub APIで作成済み、GitHub Actions `verify`はPASS。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
+- PR #30はmainへmerge済み。現在のfeature branchは`codex/daily-nav-required-metrics`、実装commitは`01aaf5933a0b61ac8ba8a19112018ec7f5a6bee7`である。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
-- この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateの正式promotion / sync、30 walletのPerformance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。
+- この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateと20-wallet canaryの正式promotion / sync、限定8 walletのportfolio sync / Performance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。

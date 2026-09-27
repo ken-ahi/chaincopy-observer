@@ -74,7 +74,7 @@ export class PerformanceCalculationService {
       },
       "Address performance input loaded",
     );
-    const completeness = assessHistoryCompleteness(input, job.calculationFrom);
+    const completeness = assessHistoryCompleteness(input, job.calculationFrom, job.calculationTo);
     const inputFingerprint = createPerformanceInputFingerprint({
       calculationFrom: job.calculationFrom,
       calculationTo: job.calculationTo,
@@ -187,12 +187,14 @@ function calculatePerformance(
   completeness: DataCompleteness,
   onLaneStart: (lane: "exposure" | "return" | "trade") => void = () => undefined,
 ): PerformanceCalculationOutcome {
+  const independentLaneCompleteness =
+    completeness === "GAP_DETECTED" && !hasExplicitSourceGap(input) ? "PARTIAL" : completeness;
   onLaneStart("trade");
-  const trade = calculateTradeLane(input, job, completeness);
+  const trade = calculateTradeLane(input, job, independentLaneCompleteness);
   onLaneStart("return");
   const returns = calculateReturnLane(input, job, completeness);
   onLaneStart("exposure");
-  const exposure = calculateExposureLane(input, job, completeness);
+  const exposure = calculateExposureLane(input, job, independentLaneCompleteness);
   const metrics = [...trade.metrics, ...returns.metrics, ...exposure.metrics];
   const warnings = [...trade.warnings, ...returns.warnings, ...exposure.warnings];
 
@@ -705,11 +707,9 @@ function laneCoverage(
 export function assessHistoryCompleteness(
   input: PerformanceCalculationInput,
   calculationFrom: string,
+  calculationTo: string,
 ): DataCompleteness {
-  if (
-    input.syncCursorStatuses.includes("GAP_DETECTED") ||
-    input.openIssueTypes.some((issue) => issue.includes("GAP"))
-  ) {
+  if (hasExplicitSourceGap(input)) {
     return "GAP_DETECTED";
   }
   if (
@@ -724,6 +724,30 @@ export function assessHistoryCompleteness(
   }
   if (input.fills.length === 0 || input.navSnapshots.length < 2) {
     return "INSUFFICIENT_HISTORY";
+  }
+
+  const requestedFromDate = utcDate(calculationFrom);
+  const requestedToDate = utcDate(calculationTo);
+  const navDates = [
+    ...new Set(
+      input.navSnapshots
+        .map((snapshot) => utcDate(snapshot.occurredAt))
+        .filter((date): date is string => date !== null),
+    ),
+  ].sort();
+  if (!requestedFromDate || !requestedToDate || navDates.length < 2) {
+    return "INSUFFICIENT_HISTORY";
+  }
+  for (let index = 1; index < navDates.length; index += 1) {
+    const previous = navDates[index - 1];
+    const current = navDates[index];
+    if (
+      previous &&
+      current &&
+      Date.parse(`${current}T00:00:00.000Z`) - Date.parse(`${previous}T00:00:00.000Z`) > 86_400_000
+    ) {
+      return "GAP_DETECTED";
+    }
   }
   if (
     input.syncCursorStatuses.includes("FAILED") ||
@@ -750,11 +774,29 @@ export function assessHistoryCompleteness(
     return "PARTIAL";
   }
 
-  const firstNav = [...input.navSnapshots].sort(compareEvents)[0];
-  if (!firstNav || firstNav.occurredAt.slice(0, 10) > calculationFrom.slice(0, 10)) {
+  const firstNavDate = navDates[0];
+  const lastNavDate = navDates.at(-1);
+  if (
+    !firstNavDate ||
+    !lastNavDate ||
+    firstNavDate > requestedFromDate ||
+    lastNavDate < requestedToDate
+  ) {
     return "PARTIAL";
   }
   return "COMPLETE";
+}
+
+function hasExplicitSourceGap(input: PerformanceCalculationInput): boolean {
+  return (
+    input.syncCursorStatuses.includes("GAP_DETECTED") ||
+    input.openIssueTypes.some((issue) => issue.includes("GAP"))
+  );
+}
+
+function utcDate(value: string): string | null {
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString().slice(0, 10) : null;
 }
 
 function validateJob(job: PerformanceJobData): void {

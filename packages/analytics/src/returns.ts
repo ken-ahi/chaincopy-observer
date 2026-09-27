@@ -68,32 +68,39 @@ export function calculateDailyNav(
       throw new CalculationException("INVALID_INPUT", "NAV snapshots must use one account scope.");
     }
 
-    const byDate = new Map<string, (typeof parsed)[number]>();
+    const byDate = new Map<string, Array<(typeof parsed)[number]>>();
     const warnings: CalculationWarning[] = [];
     for (const item of parsed) {
       const date = new Date(item.time).toISOString().slice(0, 10);
-      if (byDate.has(date)) {
-        warnings.push(
-          warning(
-            "MULTIPLE_SNAPSHOTS_SAME_DAY",
-            `Selected the latest normalized snapshot for UTC date ${date}.`,
-          ),
-        );
-      }
-      byDate.set(date, item);
+      const dateSnapshots = byDate.get(date) ?? [];
+      dateSnapshots.push(item);
+      byDate.set(date, dateSnapshots);
     }
 
-    const selected = [...byDate.entries()].sort(([left], [right]) => compareText(left, right));
+    const selected = [...byDate.entries()]
+      .sort(([left], [right]) => compareText(left, right))
+      .map(([date, dateSnapshots]) => {
+        if (dateSnapshots.length > 1) {
+          warnings.push(
+            warning(
+              "MULTIPLE_SNAPSHOTS_SAME_DAY",
+              `Selected the latest positive normalized snapshot for UTC date ${date}.`,
+            ),
+          );
+        }
+        const latestPositive = dateSnapshots.findLast((item) => item.nav.gt(0));
+        if (!latestPositive) {
+          throw new CalculationException(
+            "NON_POSITIVE_NAV",
+            `UTC date ${date} has no positive NAV snapshot.`,
+          );
+        }
+        return [date, latestPositive] as const;
+      });
     for (let index = 0; index < selected.length; index += 1) {
       const current = selected[index];
       if (!current) {
         continue;
-      }
-      if (current[1].nav.lte(0)) {
-        throw new CalculationException(
-          "NON_POSITIVE_NAV",
-          `NAV for ${current[0]} must be positive.`,
-        );
       }
       const previous = selected[index - 1];
       if (
