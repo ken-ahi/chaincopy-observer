@@ -8,12 +8,24 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/selected-wallet-behavior-correctness`
-- branch base: `79af442cd3abc1fc5ee901deee21b167521635d5`（PR #33 merge）
+- branch: `codex/xyz-cl-quote-provenance`
+- branch base: `b66e1f723dcc4d60c561013505b965562bcaed4b`（PR #34 merge）
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- PR #29〜#33はmainへmerge済み。46 wallet refresh / incidentのcontained判定は完了済みで繰り返さない。現在はOwner承認済みのselected-wallet Behavior correctness工程。
+- PR #29〜#34はmainへmerge済み。46 wallet refresh / incidentのcontained判定、BTC recoveryは完了済みで繰り返さない。現在はOwner承認済みのxyz:CL quote provenance工程。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- 下記の過去工程のPR open表記・承認境界は当時の記録。現在のOwner契約はselected 1 walletのBehavior監査/修正/限定検証、PR/CI成功後の安全境界内自動mergeを許可する。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+- 下記の過去工程のPR open表記・承認境界は当時の記録。現在のOwner契約はselected 1 walletのxyz:CLだけの監査/修正/限定検証、PR/CI成功後の安全境界内自動mergeを許可する。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+
+## xyz:CL canonical quote provenance（2026-09-27）
+
+- 正式契約/証拠/運用結果: `docs/hyperliquid-xyz-cl-quote-provenance.md`、ADR-041。公式無料Info APIのDEX、market index、canonical USDC token ID、USD/barrel annotationをexact joinする。symbolやfeeToken単独から推測しない。未知/競合/欠損customは引き続きfail closed。
+- 実装commit `2f5a33c63a6ea30f4cdcb57efda2ea378a328af6`のexact Worker imageで、selected wallet `0x34112cf6672cbad0f44b5a77857099417dc686af`のxyz:CLだけを処理。33 Fill → 33 event追加、最終FLAT。合計1,979 → 2,012、既存1,979行は全列SHA-256完全一致。
+- Run `cmujv08ku000dl401j8yurrcb`、証拠RawEvent `cmujv08me000gl401kw4uvk0k`。完全な公式response/hash/取得時刻を保存し、通常HTTP retentionからこの証拠種別を除外する。schema/migration不要。event identity/金融式は不変。
+- OPEN Behavior DQ 2 → 0。UNSUPPORTED_QUOTEと同一groupの旧MISSING_BOUNDARYは既存successful-group lifecycleで自然解消し、旧診断の行・内容・Run linkを保持した。手動DQ変更なし。BTCや他coinは未処理。
+- Selection Run `cmujbqjbu2af4nq01zg56l0vc`、policy v2、selected 1/rank 1、Performance Run、全wallet/override/source DQ/cursor、quarantine 14は不変。latestActivity `2026-09-24T13:21:27.107Z`も不変。再実行は0 eventのno-op。
+- queue counts/active identityは前後不変。enrichment prioritized 8,427 + 既存stale/unlocked active 1を消費・削除しない。常駐Worker停止のまま、実PostgreSQL/Redis healthy。sync、Performance/Selection再評価、Discoveryは実行しない。
+- validation: format/lint、typecheck 11/11、tests 73 files/694、build 11/11、isolated E2E 22/22、audit high以上0、diff check PASS。integration/E2Eは明示した隔離55433/56380へ接続し、終了後に隔離containerだけ停止した。
+- PR #35: feature branch push済み。運用文書追加後のfinal-head CI/mergeabilityを確認し、今回のOwner承認条件を満たした場合のみmergeする。結果が既に保存済みなのでcanary/syncを繰り返さない。
+- 次工程: このselected walletについて既知Behavior blockerは解消。未知custom marketへの一般化、Discovery拡張、過去データ書換えや実取引には進まない。将来のcollateral migration/market定義変更は別途再監査する。
 
 ## Selected-wallet Behavior correctness（2026-09-27）
 

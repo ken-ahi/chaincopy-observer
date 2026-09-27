@@ -129,4 +129,115 @@ below after isolated validation and the bounded execution.
 
 ## Operational result
 
-Pending bounded verification; no live Behavior execution yet.
+Completed `2026-09-27T13:33:37.785Z` using code commit
+`2f5a33c63a6ea30f4cdcb57efda2ea378a328af6` (base main / PR #34 merge
+`b66e1f723dcc4d60c561013505b965562bcaed4b`). Worker image
+`chaincopy-worker:quote-2f5a33c`, OCI revision equals that full code commit,
+image digest `sha256:15451cbb7ec21477cea9952da1e110034fa9d034db3dee47740f9c8031aeb062`.
+The build used `git archive <commit> | docker build --target worker ... -`.
+
+A temporary, read-only-mounted runner first checked the exact scope and performed
+a Decimal normalization preview; then called the existing `processWalletCoin`
+once for this wallet/coin, without `rebuildFrom`. Container limits: 1 CPU / 1 GiB.
+No consumer, scheduler, other wallet/coin job, sync, Performance or Selection
+evaluation was started. A second cursor-resume call returned completed / 0 events.
+The temporary runner was removed after verification, not added to the PR.
+
+| Check                            | Before                   | After                            |
+| -------------------------------- | ------------------------ | -------------------------------- |
+| Source xyz:CL fills              | 33                       | 33, unchanged                    |
+| xyz:CL Behavior events           | 0                        | 33                               |
+| Total Behavior events            | 1,979                    | 2,012                            |
+| Existing valid event rows        | 1,979                    | 1,979, all columns/IDs identical |
+| OPEN selected-wallet Behavior DQ | 2                        | 0                                |
+| Selected wallets / rank          | 1 / 1                    | 1 / 1, unchanged                 |
+| latestActivityAt                 | 2026-09-24T13:21:27.107Z | unchanged                        |
+| Quarantined incident Runs        | 14                       | 14, unchanged                    |
+
+- First appended event: `cmujv08nk000hl401lxaix54g`, LONG POSITION_OPEN,
+  `2026-03-02T11:14:24.461Z`, `0 → 1.499`, source price `72.246`,
+  computed notional `108.296754`.
+- Last appended event: `cmujv08sa002zl401zrjjij5y`, LONG POSITION_CLOSE,
+  `2026-04-06T22:43:58.553Z`, `0.49 → 0`, source price `112.78`,
+  computed notional `55.2622`. Final cursor boundary is FLAT.
+- Normalization Run: `cmujv08ku000dl401j8yurrcb`; appended fingerprints exactly
+  match the read-only deterministic preview. No previously valid event changed.
+- Existing event SHA-256 before/after, over ID-ordered JSON with every column:
+  `ec45ef175d96f92a93df593bc92eae20eb290b8853d5f3d6d4b8c8c3c6fdbb57`.
+- Source Fill page SHA-256:
+  `dcfd56e8d5f70f1aa481f9ba91e7fd53d33d47a680c9b59dfd5b723fc472646f`.
+- Protected-state SHA-256 before/after:
+  `521950e6f663c90f2ab9b7140b7a985481b053b0b8cabd92390fa70e6a6579b7`.
+  This includes all WalletAddress rows, Selection settings/runs/results/overrides,
+  selected-wallet fills/source DQ/sync cursors, all quarantined Runs, and unrelated
+  Behavior cursors/runs/DQ. All were row-identical.
+- Current Selection Run remains `cmujbqjbu2af4nq01zg56l0vc`, policy
+  `wallet-selection-v2`, trusted Performance Run `cmujbpj6527jdnq01t6zuxi9u`.
+  Full normal ranking API projection was identical before/after.
+
+### Durable receipt and DQ lifecycle
+
+New RawEvent `cmujv08me000gl401kw4uvk0k` contains the full official responses and
+contract, with evidence fingerprint
+`f5b29f86aa6b1822d8ebe8100d94c380c768e70ac085b093866cdae975029f85`.
+All four saved raw-text hashes were revalidated after persistence.
+
+| Request                     | Persisted observedAt (UTC) | Response SHA-256                                                   |
+| --------------------------- | -------------------------- | ------------------------------------------------------------------ |
+| perpDexs                    | 2026-09-27T13:33:36.565Z   | `d0825f924a67bcba0bd6c4e2902511c5e7861e7e9e710b6b7706396ca34d5ecb` |
+| meta, dex xyz               | 2026-09-27T13:33:36.615Z   | `3e6d5ee25d955a6bcedfd8dfb0d873aee6d8099b4e36a78bf3ea01735dbb3c74` |
+| spotMeta                    | 2026-09-27T13:33:36.704Z   | `a84545ef4addc99185c5124f216902af6375ea43e8c64637bb546e3738863fc5` |
+| perpAnnotation, coin xyz:CL | 2026-09-27T13:33:36.748Z   | `0de3259ca0e5339ff223296c72351e1d3ba1b0f375e73bad6562f04f150a2254` |
+
+`perpDexs` contains changing fields unrelated to the pinned definition; its full
+response hash changed between the initial audit and execution. The exact reviewed
+identity/quote fields passed both times. No newly fetched price was used.
+
+At `2026-09-27T13:33:36.863Z`, the unchanged successful-group lifecycle resolved:
+
+- UNSUPPORTED_QUOTE `cmujrop0f008ojw01vqlf59d3`;
+- legacy MISSING_BOUNDARY `cmujbqvnn2elbnq01tjgsjrh5`.
+
+Both refer to the same now-successful first timestamp group. Row IDs, original
+details, fingerprints, first/last-observed times and original blocked-Run links
+remain intact. Only normal status/resolvedAt/updatedAt changed; no manual DQ edit.
+BTC was not processed and its prior resolved issue was unchanged.
+
+### Queues and resource checks
+
+All queue values below and all active-job identities were unchanged. Waiting,
+paused, delayed and waiting-children were zero for every listed queue.
+
+| Queue                            | Prioritized |           Active | Completed | Failed |
+| -------------------------------- | ----------: | ---------------: | --------: | -----: |
+| hyperliquid-sync                 |           0 |                0 |       318 |    444 |
+| address-performance              |           1 |                0 |        66 |     14 |
+| behavior-normalization           |           0 |                0 |        24 |      0 |
+| hyperliquid-discovery            |           1 |                0 |        17 |    609 |
+| hyperliquid-candidate-enrichment |       8,427 | 1 stale/unlocked |        20 |      5 |
+
+The existing stale enrichment job
+`enrich-cms9j6kxp1mskn90i477x9hxy-1627804426372-1785570826372` remained untouched;
+no lock or consumer existed. No queue/Redis write was required.
+
+Post-check: PostgreSQL healthy, CPU 0.03%, memory 75.81 MiB; Redis healthy,
+CPU 0.38%, memory 46.71 MiB (point-in-time Docker samples, not peak measurements).
+Runner reported RSS 209,293,312 bytes / heap used 72,088,704 bytes and exited.
+All persistent Workers remain stopped. Isolated test containers were stopped,
+not deleted; real PostgreSQL/Redis remain healthy/running.
+
+### Validation / delivery
+
+- `pnpm format:check`, `pnpm lint`: PASS.
+- `pnpm typecheck`: 11/11 PASS.
+- `pnpm test`: 73 files / 694 tests PASS.
+- `pnpm build`: 11/11 PASS.
+- `pnpm test:e2e`: 22/22 PASS.
+- `pnpm audit --audit-level high`: PASS, 0 high/critical, 4 existing moderate.
+- `git diff --check`: PASS.
+- Integration/E2E targets were explicitly isolated PostgreSQL `55433`, Redis
+  `56380` (E2E schema `chaincopy_e2e`, Redis DB 15). No tests used runtime targets.
+- PR: [#35](https://github.com/ken-ahi/chaincopy-observer/pull/35).
+  Owner authorizes merge after final-head CI passes and mergeability is confirmed.
+  No destructive operation, paid source, resync, threshold/manual INCLUDE change,
+  manual DQ/cursor edit, signing, trade or fund movement occurred.
