@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 
 import { PrismaClient } from "@prisma/client";
 import { expect, test, type Page } from "@playwright/test";
+import { isolatedTargets } from "../isolated-targets.mjs";
 
 import {
   e2eDiscoveryAddress,
@@ -306,15 +307,7 @@ function e2eDatabase(): PrismaClient {
 }
 
 function e2eDatabaseUrl(): string {
-  const url = new URL(
-    process.env.DATABASE_URL ??
-      "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public",
-  );
-  if (url.hostname === "postgres") {
-    url.hostname = "127.0.0.1";
-  }
-  url.searchParams.set("schema", "chaincopy_e2e");
-  return url.toString();
+  return isolatedTargets(process.env, "E2E").databaseUrl;
 }
 
 async function seedExclusionCandidate(): Promise<string> {
@@ -363,7 +356,7 @@ async function cleanupExclusionCandidate(candidateId: string): Promise<void> {
       "--eval",
       [
         'import { Queue } from "bullmq";',
-        'const redisUrl = new URL(process.env.REDIS_URL ?? "redis://127.0.0.1:6379/15");',
+        "const redisUrl = new URL(process.env.E2E_REDIS_URL);",
         'const queue = new Queue("hyperliquid-discovery", { connection: { db: Number(redisUrl.pathname.slice(1) || "0"), host: redisUrl.hostname, password: redisUrl.password || undefined, port: Number(redisUrl.port || "6379"), username: redisUrl.username || undefined } });',
         'const jobs = await queue.getJobs(["waiting", "delayed", "prioritized", "completed", "failed"]);',
         'await Promise.all(jobs.filter((job) => job.data?.kind === "candidate" && job.data?.candidateId === process.env.E2E_CANDIDATE_ID).map((job) => job.remove()));',

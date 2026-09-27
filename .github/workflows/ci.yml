@@ -26,7 +26,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
         ports:
-          - 5432:5432
+          - 55433:5432
       redis:
         image: redis:8-alpine
         options: >-
@@ -35,7 +35,7 @@ jobs:
           --health-timeout 5s
           --health-retries 20
         ports:
-          - 6379:6379
+          - 56380:6379
     env:
       ALLOWED_ADMIN_EMAIL: owner@example.com
       API_BASE_URL: http://127.0.0.1:3001
@@ -43,14 +43,18 @@ jobs:
       API_PORT: 3001
       APP_BASE_URL: http://127.0.0.1:3000
       AUTH_SECRET: ci-auth-secret-value-that-is-at-least-32-characters
-      DATABASE_URL: postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public
+      DATABASE_URL: postgresql://chaincopy:chaincopy@127.0.0.1:55433/chaincopy?schema=public
+      TEST_DATABASE_URL: postgresql://chaincopy:chaincopy@127.0.0.1:55433/chaincopy?schema=public
+      TEST_REDIS_URL: redis://127.0.0.1:56380/0
+      E2E_DATABASE_URL: postgresql://chaincopy:chaincopy@127.0.0.1:55433/chaincopy?schema=chaincopy_e2e
+      E2E_REDIS_URL: redis://127.0.0.1:56380/15
       GOOGLE_CLIENT_ID: ci-client-id.apps.googleusercontent.com
       GOOGLE_CLIENT_SECRET: ci-google-client-secret
       INTERNAL_API_SECRET: ci-internal-secret-value-at-least-32-characters
       LOG_LEVEL: warn
       NEXTAUTH_URL: http://127.0.0.1:3000
       NODE_ENV: test
-      REDIS_URL: redis://127.0.0.1:6379
+      REDIS_URL: redis://127.0.0.1:56380/0
       TZ: Asia/Tokyo
       WORKER_HEALTH_PORT: 3002
     steps:

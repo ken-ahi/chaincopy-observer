@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 
 import { fillSchema, mapFill } from "@chaincopy/blockchain-adapters";
-import { loadRootEnvironment } from "@chaincopy/config";
 import { PrismaClient } from "@chaincopy/database";
 import { hyperliquidJobNames, type HyperliquidJobData } from "@chaincopy/domain";
 import { Queue } from "bullmq";
@@ -11,14 +10,9 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AddressConflictError, PrismaAddressService } from "../../../api/src/address-service.js";
 import { enqueueHyperliquidJob } from "./queue.js";
 import { HyperliquidRepository } from "./repository.js";
+import { isolatedTargets } from "../../../../tests/isolated-targets.mjs";
 
-loadRootEnvironment();
-
-const databaseUrl = localServiceUrl(
-  process.env.DATABASE_URL ??
-    "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public",
-);
-const redisUrl = localServiceUrl(process.env.REDIS_URL ?? "redis://127.0.0.1:6379");
+const { databaseUrl, redisUrl } = isolatedTargets(process.env, "TEST");
 const runId = randomUUID();
 const sourceKey = `phase2-integration-${runId}`;
 const queueName = `phase2-integration-${runId}`;
@@ -34,14 +28,6 @@ const redis = new Redis(redisUrl, {
 const queue = new Queue<HyperliquidJobData>(queueName, {
   connection: redis,
 });
-
-function localServiceUrl(value: string): string {
-  const url = new URL(value);
-  if (url.hostname === "postgres" || url.hostname === "redis") {
-    url.hostname = "127.0.0.1";
-  }
-  return url.toString();
-}
 
 describe.sequential("Phase 2 PostgreSQL and Redis integration", () => {
   beforeAll(async () => {

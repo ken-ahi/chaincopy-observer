@@ -383,3 +383,13 @@
 - 保存: schema変更を避け、完全な公式responseとhash/取得時刻をRunへ紐づくappend-only RawEventに保存する。通常HTTP retentionから当該証拠種別を除外する。Run inputには証拠hashを含め、event identity/既存event/金融式/Selectionは変えない。
 - DQ: 既存successful-group lifecycleのみ使用し、手動解消しない。unknown boundary/不可能遷移をskipしない。
 - 詳細と期間上の限界: `docs/hyperliquid-xyz-cl-quote-provenance.md`。
+
+## ADR-042: Phase 5.1は15分UTC・現在選定cohortの再現可能なBehavior集約
+
+- 状態: 採用。2,012 eventsの密度とSPECの将来30分consensus windowから15分UTC半開区間を選択。
+- 金融計算: Decimal precision 80。LONG/SHORT × OPEN/INCREASE/REDUCE/CLOSEの8意味区分へ既存eventを直接写像し、event数・wallet集合・notionalを分離。fill数をwallet票数にしない。
+- Provenance: 現在のeffective-selected SSoTと生成時Selection/Performanceを区別。過去BLOCKED Runの正常commit済みprefixは現在DQとcursor/source整合が確認できれば有効。Run statusだけで688 BTC eventsを消さない。
+- 永続化: 新規bucket＋immutable revisionの2 table。input fingerprintによる冪等性とlate bucket単位の再計算。Behavior/source行は変更しない。新規tableのみの実migrationはOwner個別承認済み。
+- 完全性: VALIDは保存済みBehaviorとの照合済み集約であり取引所全履歴の完全性主張ではない。DQ/gap/未処理Fill/不正provenanceはBLOCKED/null totals。read時の入力変更はSTALEとして非表示。
+- 実行: 明示coin/期間のbounded CLI、consumer/scheduler自動有効化なし。APIは認証付きread-only。Phase 5.2の設計をv2 closed-cycle metricsに合わせるまでweight/Signalへ進めない。
+- テスト: TEST/E2E専用接続先を必須化、通常runtime接続先・fallbackを拒否。実データの検証は現在selected 1 walletだけ。

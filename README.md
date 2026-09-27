@@ -274,6 +274,33 @@ CI は PostgreSQL/Redis service container を使い、Migration、lint、typeche
 
 実データ取得には公式 API へのネットワーク接続が必要ですが、通常の unit/integration test は外部本番 API に依存しません。Playwright は PostgreSQL/Redis を使用します。
 
+Integration/E2Eは専用の使い捨てPostgreSQL/Redisを起動し、以下を明示すること。
+通常の `DATABASE_URL` / `REDIS_URL` はテスト接続先として継承しません。
+未指定・通常runtime port・別host・不正schemaは接続前にfail closedします。
+CIも専用portを使用します。migrationは隔離DBへ明示的に適用してください。
+
+```bash
+export TEST_DATABASE_URL='postgresql://chaincopy:chaincopy@127.0.0.1:55433/chaincopy?schema=public'
+export TEST_REDIS_URL='redis://127.0.0.1:56380/0'
+export E2E_DATABASE_URL='postgresql://chaincopy:chaincopy@127.0.0.1:55433/chaincopy?schema=chaincopy_e2e'
+export E2E_REDIS_URL='redis://127.0.0.1:56380/15'
+DATABASE_URL="$TEST_DATABASE_URL" pnpm db:migrate:deploy
+pnpm test
+pnpm test:e2e
+```
+
+### Phase 5.1 Behavior aggregation
+
+`behavior-aggregation-v1`は現在のeffective-selected cohortの保存済みBehaviorを
+15分UTCで集約します。weight/BUY/SELL Signalではありません。
+`pnpm behavior:aggregate --coin BTC --from 2026-09-01T00:00:00.000Z --to 2026-09-02T00:00:00.000Z`
+はdry-run、`--execute`を明示すると新規集約tableにだけ永続化します。
+late inputは`--coin BTC --bucket 2026-09-01T00:00:00.000Z --execute`で該当bucketだけ再計算できます。
+自動consumer/schedulerは有効化しません。認証付き`GET /api/behavior/aggregations?coin=BTC&from=...&to=...&limit=100`
+は最大31日・100bucketのcurrent-cohort projectionを返し、古い入力のtotalsはSTALE/nullにします。
+次ページは最後のbucketEndをfromとして指定します。
+詳細は[正式仕様](docs/phase5-1-behavior-aggregation-spec.md)を参照してください。
+
 ## Prisma
 
 ```powershell

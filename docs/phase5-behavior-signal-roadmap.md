@@ -130,6 +130,13 @@ Phase 5.0のウォレット単位Behavior Eventを、coin単位・時間bucket�
 
 ## 6. Phase 5.2: Wallet Weighting
 
+> Phase 5.1 compatibility follow-up (2026-09-27): Phase 5.2 must be redesigned
+> against wallet-selection-v2 and trusted closed-cycle metrics before implementation.
+> The historical annualizedReturn/maxDrawdown/data-completeness candidates below
+> are not mandatory free-data inputs. Audit win rate, trusted closed cycle count,
+> Profit Factor and top trade contribution; no weighting formula is approved here.
+> Selection thresholds remain unchanged. See `phase5-1-behavior-aggregation-spec.md`.
+
 ### 6.1 責務
 
 すべてのeffective selected walletを同じ1票として扱わず、保存済みPerformance情報を使って決定論的なweightを割り当てる。

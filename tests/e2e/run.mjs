@@ -4,14 +4,12 @@ import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
 import { PrismaClient } from "@prisma/client";
+import { isolatedTargets } from "../isolated-targets.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const workerRequire = createRequire(resolve(root, "apps/worker/package.json"));
 const { Redis } = workerRequire("ioredis");
-const databaseUrl =
-  process.env.E2E_DATABASE_URL ??
-  "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=chaincopy_e2e";
-const redisUrl = process.env.E2E_REDIS_URL ?? "redis://127.0.0.1:6379/15";
+const { databaseUrl, redisUrl } = isolatedTargets(process.env, "E2E");
 const commonEnvironment = {
   ...process.env,
   DATABASE_URL: databaseUrl,
