@@ -16,6 +16,8 @@ interface MetricFixture {
   readonly calculationTo: Date;
   readonly metricKey: string;
   readonly metricValue: Prisma.Decimal;
+  readonly metricVersion: string;
+  readonly status: "AVAILABLE" | "REFERENCE_ONLY";
 }
 
 interface PerformanceFixture {
@@ -96,7 +98,7 @@ function performanceFixture(
   annualizedReturnTo: Date,
 ): PerformanceFixture {
   return {
-    _count: { positionCycles: 20 },
+    _count: { positionCycles: 30 },
     calculationFrom: new Date("2025-08-01T00:00:00.000Z"),
     calculationTo: new Date("2026-08-01T00:00:00.000Z"),
     calculationVersion: "performance-v3",
@@ -104,8 +106,13 @@ function performanceFixture(
     id: "performance-run-1",
     performanceMetrics: [
       metric("annualizedReturn", "0.2", annualizedReturnFrom, annualizedReturnTo),
+      metric("averageLoss", "-10"),
+      metric("averageWin", "20"),
+      metric("maxLosingStreak", "3"),
       metric("maxDrawdown", "-0.1"),
+      metric("profitFactor", "1.5"),
       metric("topTradeContribution", "0.2"),
+      metric("winRate", "0.6"),
     ],
     trustRevision: 0,
     trustState: "TRUSTED",
@@ -124,6 +131,8 @@ function metric(
     calculationTo,
     metricKey,
     metricValue: new Prisma.Decimal(metricValue),
+    metricVersion: "performance-v3",
+    status: "AVAILABLE",
   };
 }
 
@@ -132,6 +141,7 @@ function createHarness(
     new Date("2026-04-01T00:00:00.000Z"),
     new Date("2026-08-01T00:00:00.000Z"),
   ),
+  activePolicyVersion: "wallet-selection-v1" | "wallet-selection-v2" = "wallet-selection-v1",
 ) {
   const wallets: readonly WalletFixture[] = [
     {
@@ -364,7 +374,11 @@ function createHarness(
     failNextResultPersistence: () => {
       failResultPersistence = true;
     },
-    service: new PrismaWalletSelectionService(database as unknown as PrismaClient, () => now),
+    service: new PrismaWalletSelectionService(
+      database as unknown as PrismaClient,
+      () => now,
+      activePolicyVersion,
+    ),
   };
 }
 
@@ -461,6 +475,76 @@ describe("PrismaWalletSelectionService evaluation period", () => {
       automaticStatus: "REVIEW",
       reasonCodes: ["EVALUATION_PERIOD_TOO_SHORT"],
     });
+  });
+});
+
+describe("PrismaWalletSelectionService wallet-selection-v2", () => {
+  it("uses the complete AVAILABLE trade metric set without requiring NAV metrics", async () => {
+    const performance = performanceFixture(
+      new Date("2026-06-02T00:00:00.000Z"),
+      new Date("2026-08-01T00:00:00.000Z"),
+    );
+    const harness = createHarness(
+      {
+        ...performance,
+        historyCompleteness: "PARTIAL",
+        performanceMetrics: performance.performanceMetrics.filter(
+          (item) => !["annualizedReturn", "maxDrawdown"].includes(item.metricKey),
+        ),
+      },
+      "wallet-selection-v2",
+    );
+
+    const evaluated = await harness.service.evaluate();
+
+    expect(evaluated.run).toMatchObject({ policyVersion: "wallet-selection-v2" });
+    expect(evaluated.items[0]).toMatchObject({
+      automaticStatus: "SELECTED",
+      rank: 1,
+      reasonCodes: [],
+    });
+  });
+
+  it("fails closed when one trade metric is not AVAILABLE", async () => {
+    const performance = performanceFixture(
+      new Date("2026-05-03T00:00:00.000Z"),
+      new Date("2026-08-01T00:00:00.000Z"),
+    );
+    const harness = createHarness(
+      {
+        ...performance,
+        performanceMetrics: performance.performanceMetrics.map((item) =>
+          item.metricKey === "profitFactor" ? { ...item, status: "REFERENCE_ONLY" as const } : item,
+        ),
+      },
+      "wallet-selection-v2",
+    );
+
+    await expect(harness.service.evaluate()).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({
+          automaticStatus: "REVIEW",
+          reasonCodes: expect.arrayContaining(["TRADE_HISTORY_NOT_EVALUABLE"]),
+        }),
+      ],
+    });
+  });
+
+  it("does not let manual INCLUDE bypass a v2 hard gate", async () => {
+    const performance = performanceFixture(
+      new Date("2026-05-03T00:00:00.000Z"),
+      new Date("2026-08-01T00:00:00.000Z"),
+    );
+    const harness = createHarness(
+      { ...performance, _count: { positionCycles: 29 } },
+      "wallet-selection-v2",
+    );
+    await harness.service.evaluate();
+
+    await expect(
+      harness.service.setOverride(walletAddress, "INCLUDE", "must not bypass v2"),
+    ).resolves.toMatchObject({ automaticStatus: "REVIEW", effectiveStatus: "REVIEW" });
+    await expect(harness.service.listEffectiveSelectedWallets()).resolves.toEqual([]);
   });
 });
 

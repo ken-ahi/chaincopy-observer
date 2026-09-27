@@ -158,7 +158,10 @@ export default async function globalSetup() {
   await database.addressPerformanceMetric.createMany({
     data: [
       ["annualizedReturn", "0.34"],
+      ["averageLoss", "-10"],
+      ["averageWin", "20"],
       ["cumulativeReturn", "0.58"],
+      ["maxLosingStreak", "3"],
       ["maxDrawdown", "-0.12"],
       ["profitFactor", "2.1"],
       ["topTradeContribution", "0.21"],
@@ -177,7 +180,7 @@ export default async function globalSetup() {
     })),
   });
   await database.positionCycle.createMany({
-    data: Array.from({ length: 20 }, (_, index) => ({
+    data: Array.from({ length: 30 }, (_, index) => ({
       averageEntryPrice: "100",
       averageExitPrice: "110",
       calculationRunId: selectionPerformanceRun.id,

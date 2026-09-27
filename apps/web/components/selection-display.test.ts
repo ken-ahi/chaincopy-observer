@@ -18,10 +18,10 @@ function item(overrides: Partial<WalletRankingItem> = {}): WalletRankingItem {
     lastSyncAt: "2026-09-23T00:00:00.000Z",
     latestActivityAt: "2026-09-22T23:00:00.000Z",
     metrics: {
-      annualizedReturn: "0.2",
-      cumulativeReturn: "0.4",
-      maxDrawdown: "-0.1",
+      averageLoss: "-10",
+      averageWin: "20",
       profitFactor: "2.5",
+      topTradeContribution: "0.2",
       winRate: "0.6",
     },
     performanceRunId: "performance-run-1",
@@ -61,6 +61,11 @@ describe("automatic wallet ranking display", () => {
     expect(source).toContain("完了取引");
     expect(source).toContain("勝率");
     expect(source).toContain("Profit Factor");
+    expect(source).toContain("平均勝ち");
+    expect(source).toContain("平均負け");
+    expect(source).toContain("最大利益依存");
+    expect(source).not.toContain("年率収益率");
+    expect(source).not.toContain("最大ドローダウン");
     expect(source).not.toContain("REVIEW");
     expect(source).not.toContain("EXCLUDED");
     expect(source).not.toContain("理由を見る");

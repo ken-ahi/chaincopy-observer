@@ -53,10 +53,12 @@ test.describe("Wallet selection browser E2E", () => {
         has: page.locator(`a[href="/dashboard/addresses/${e2eSelectionAddress}"]`),
       });
       await expect(selectedRow.getByText("参考対象", { exact: true })).toBeVisible();
-      await expect(selectedRow).toContainText("+34%");
       await expect(selectedRow).toContainText("55%");
       await expect(selectedRow).toContainText("2.1");
-      await expect(selectedRow).toContainText("20件");
+      await expect(selectedRow).toContainText("20");
+      await expect(selectedRow).toContainText("-10");
+      await expect(selectedRow).toContainText("21%");
+      await expect(selectedRow).toContainText("30件");
 
       await expect(
         page.locator(`a[href="/dashboard/addresses/${e2eManualPerformanceAddress}"]`),
@@ -93,7 +95,7 @@ test.describe("Wallet selection browser E2E", () => {
       expect(exclude.ok()).toBe(true);
       await page.goto("/dashboard/selection");
       await expect(
-        page.getByText("現在、履歴・成績・リスクの全条件を通過したウォレットはありません。"),
+        page.getByText("現在、取引履歴・取引品質・鮮度の全条件を通過したウォレットはありません。"),
       ).toBeVisible();
 
       const restore = await page.request.patch(
