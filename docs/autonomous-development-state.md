@@ -300,3 +300,4 @@
 - v2は投資gateを評価できるデータ経路を確立したが、live selected 0の直接理由は44 walletのstalenessと、残る2 walletのPerformance欠損である。閾値を下げず、次のbounded工程はautomatic universe 46だけを正式syncし、trusted `performance-v3`を更新後にv2を再評価することである。
 - 実DB変更はappend-onlyなv2 Selection Run / Resultとcurrent pointer更新だけ。sync、DQ、Performance、Behavior event、manual override、cursor、quarantine、Discovery backlog、Redisを変更していない。destructive operationは0件である。
 - 最終validationはformat、lint、typecheck 11/11、71 files / 661 tests、build 11/11、E2E 22/22、audit high以上0件（既知のmoderate 4件）、`git diff --check`を実施した。integration / E2Eはvolumeなしの一時PostgreSQL / Redisで実行し、常設DB / Redisのtest mutationは0件である。
+- 実装commitは`17834bae6c02d85247738b94c9cc059e05e3048e`。PR #32（`codex/free-data-wallet-selection-v2` -> `main`）を作成し、実装commitに対するGitHub Actions CI run #78 / `verify`は全step PASSした。PRはopenであり、main mergeはOwner承認境界として未実施である。
