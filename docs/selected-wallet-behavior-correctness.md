@@ -112,5 +112,103 @@ operation, manual DQ/cursor edit, or quarantine change.
 
 ## Bounded verification
 
-Operational verification results will be appended after execution. Root-cause
-evidence above is read-only and does not imply replay has occurred.
+### Execution and provenance
+
+- Implementation commit: `4f73756fca8ef560145276a44fc7f6461ee67b50`.
+- Image built from that exact `git archive`, not the dirty working directory:
+  `chaincopy-worker:behavior-4f73756`, digest
+  `sha256:eb3f24b3a7d6022308e4718beaa5473fad1ece77f5d6492cf02dd11b2b528ce2`.
+  OCI revision label matches the implementation commit. Subsequent commit is documentation only.
+- Temporary bounded runner SHA-256 at execution:
+  `348689dacda3f5988513f0b0380fe99e7935165b8c81b9fcdd8cf01716fd23ad`.
+  Runner was mounted read-only and removed from the worktree afterward.
+- Preflight: exact current selected wallet, source/address, event count, cursor,
+  idle sync/Behavior queues and free API interval evidence checked before mutation.
+- Normal `HyperliquidJobProcessor` / `HyperliquidSyncService.syncFills` invoked once,
+  new job ID `selected-behavior-fill-d9b5170c-2520-441f-807b-6d7ee239bfe1`.
+  Interval `2026-08-04T15:49:59.780Z`–`2026-08-08T19:41:19.285Z`.
+  Free official Info API: 9 fills fetched, coverage proven, no history cap, 2 inserted.
+  New rows: `cmujroo6r0009jw01gtxlndch`, `cmujroo6r000hjw017tfwkxyn`.
+- Normal `BehaviorNormalizationService.processWalletCoin` invoked sequentially for
+  the selected wallet's 7 coins. No `rebuildFrom`; no queue consumer/scheduler
+  started, no extra wallet, no Performance or Selection recalculation.
+- Redis changes were only the normal sync processor's owned ephemeral lock
+  acquisition/renewal/release; no manual key/queue deletion or backlog consumption.
+  Verification container limited to 1 CPU / 768 MiB and exited afterward.
+
+### Results
+
+| Check                       | Before                                    | After                                       |
+| --------------------------- | ----------------------------------------- | ------------------------------------------- |
+| Saved selected-wallet fills | 2,009                                     | 2,011 (BTC 777 → 779)                       |
+| Total Behavior events       | 1,888                                     | 1,979                                       |
+| BTC events / result         | 688 / blocked                             | 779 / completed, 91 added                   |
+| BTC cursor                  | 2026-08-03 00:38:33.720, FLAT             | 2026-09-24 13:21:27.107, FLAT               |
+| xyz:CL                      | 0 events / misclassified missing boundary | 0 / UNSUPPORTED_QUOTE, blocked              |
+| Other 5 coins               | completed                                 | completed, 0 new events                     |
+| OPEN Behavior DQ            | 2                                         | 2, both xyz:CL                              |
+| Selected-wallet source DQ   | 0                                         | 0                                           |
+| Quarantined runs            | 14                                        | 14, trust state/revision unchanged          |
+| latestActivityAt            | 2026-09-27 04:26:55.552 (wrong semantic)  | 2026-09-24 13:21:27.107 (actual saved fill) |
+
+BTC issue `cmujbqpi82c31nq01w9uvy3j4` was automatically RESOLVED by successful
+group persistence at `2026-09-27T12:00:38.482Z`, not by manual DQ mutation.
+xyz legacy `MISSING_BOUNDARY` issue `cmujbqvnn2elbnq01tjgsjrh5` remains OPEN as
+misclassified historical evidence. Current correct `UNSUPPORTED_QUOTE` issue is
+`cmujrop0f008ojw01vqlf59d3`. These are two records for one blocked coin, not two
+independent history defects. No quote provenance was invented to resolve them.
+
+All 1,888 previously persisted events and all 2,009 prior selected-wallet fills
+are byte-equivalent under the same ordered JSON serialization (including IDs,
+source snapshots, timestamps and run references). SHA-256 before = after:
+
+- Existing events: `313f0e93f04c2190054756e278b21f4ffcd05a3dd9b3192e3e8eb141b229b2b1`.
+- Existing fills: `209c9e211ca9d967beb3d3ddde6080168485be1de16e54145e5f5a61c6732cf4`.
+
+Other participant rows, source DQ, quarantine state and Selection settings
+compared equal before/after. Ranking still contains only the same SELECTED
+wallet at rank 1, current Selection Run `cmujbqjbu2af4nq01zg56l0vc`, trusted
+Performance Run `cmujbpj6527jdnq01t6zuxi9u`, 57 closed cycles. No policy change.
+
+The operational runner completed all processing, then failed an over-strict
+postcheck requiring the entire wallet row to remain unchanged. Inspection of
+`completeCursor()` confirmed that normal successful sync updates `lastSyncAt`
+(`04:24:54.176Z` → `12:00:38.293Z`) and `updatedAt`; identity/watch/ownership did
+not change. This was a validation assumption error, not a manual timestamp edit.
+No replay was repeated. A separate read-only snapshot/postcheck plus the normal
+ranking read completed all remaining checks successfully. Sync cursor timestamps
+were not manually modified or rewound.
+
+### Queue/resource state
+
+Every queue count and existing active job identity was identical before/after:
+
+| Queue                            | Prioritized |                   Active | Completed | Failed |
+| -------------------------------- | ----------: | -----------------------: | --------: | -----: |
+| hyperliquid-sync                 |           0 |                        0 |       318 |    444 |
+| address-performance              |           1 |                        0 |        66 |     14 |
+| behavior-normalization           |           0 |                        0 |        24 |      0 |
+| hyperliquid-discovery            |           1 |                        0 |        17 |    609 |
+| hyperliquid-candidate-enrichment |       8,427 | 1 pre-existing stale job |        20 |      5 |
+
+Waiting/delayed/paused/waiting-children counts were 0 throughout. No backlog drain
+or stale-job recovery attempted. Sampled idle real Postgres: 0% CPU / 49.25 MiB;
+Redis: 0.13% / 44.57 MiB (not claimed as workload peak). No persistent Worker was
+started. The bounded run finished in seconds, without retries or continuation jobs.
+
+### Validation / remaining work
+
+- `pnpm format:check`, `pnpm lint`, `pnpm typecheck`: PASS (11/11 typecheck).
+- `pnpm test`: 71 files / 671 tests PASS on explicitly isolated PostgreSQL/Redis
+  containers, ports 55433/56380. No real DB/Redis test fixtures.
+- `pnpm build`: 11/11 PASS. `pnpm test:e2e`: 22/22 PASS on isolated services.
+  Initial E2E was launched before the concurrent build completed and failed on
+  missing `.next` build; rerun after build passed. No test or validation weakened.
+- `pnpm audit --audit-level high`: PASS, high+ 0; 4 unrelated moderate findings.
+- `git diff --check`: PASS. PR #34 initial implementation CI passed; final
+  documentation commit CI must pass before Owner-authorized merge.
+- xyz:CL remains intentionally partial: canonical custom-market quote provenance
+  is the next blocker. Do not process more candidates or relax gates to bypass it.
+- Source-wide collision may have affected other wallets, but this task neither
+  recovers nor audits their full histories. Future recovery needs a separately
+  bounded scope; no global replay is implied by this fix.
