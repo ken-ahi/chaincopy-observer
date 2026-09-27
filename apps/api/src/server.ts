@@ -18,6 +18,7 @@ import { PrismaDiscoveryService } from "./discovery-service.js";
 import { DatabaseRedisHealthService } from "./health.js";
 import { PrismaPerformanceService } from "./performance-service.js";
 import { PrismaWalletSelectionService } from "./wallet-selection-service.js";
+import { PrismaBehaviorAggregationService } from "./behavior-aggregation-service.js";
 
 loadRootEnvironment();
 
@@ -45,6 +46,7 @@ const discoveryService = new PrismaDiscoveryService(prisma, discoveryQueue, cand
 const performanceService = new PrismaPerformanceService(prisma, performanceQueue);
 const walletSelectionService = new PrismaWalletSelectionService(prisma);
 const app = await createApi({
+  behaviorAggregationService: new PrismaBehaviorAggregationService(prisma),
   addressService,
   discoveryService,
   env,

@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { isolatedTargets } from "../isolated-targets.mjs";
 
 import {
   e2eInsufficientPerformanceAddress,
@@ -296,9 +297,7 @@ function databaseClient(): PrismaClient {
   return new PrismaClient({
     datasources: {
       db: {
-        url:
-          process.env.DATABASE_URL ??
-          "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=chaincopy_e2e",
+        url: isolatedTargets(process.env, "E2E").databaseUrl,
       },
     },
   });

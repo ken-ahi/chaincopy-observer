@@ -221,6 +221,7 @@ async function createTestApi(
   walletSelection: WalletSelectionService = walletSelectionService,
 ) {
   const app = await createApi({
+    behaviorAggregationService: { read: async () => ({ status: "NOT_COMPUTED", items: [] }) },
     addressService: service,
     discoveryService: discovery,
     env,
@@ -240,6 +241,17 @@ afterEach(async () => {
 });
 
 describe("API health routes", () => {
+  it("authenticates and bounds the aggregation inspection endpoint", async () => {
+    const app = await createTestApi();
+    const url =
+      "/api/behavior/aggregations?coin=BTC&from=2026-01-01T00:00:00.000Z&to=2026-01-01T00:15:00.000Z";
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+    const result = await authorizedGet(app, url);
+    expect(result.statusCode).toBe(200);
+    expect(result.headers["cache-control"]).toBe("no-store");
+    expect(result.json()).toEqual({ status: "NOT_COMPUTED", items: [] });
+    expect((await authorizedGet(app, `${url}&limit=101`)).statusCode).toBe(400);
+  });
   it("returns liveness without querying dependencies", async () => {
     const app = await createTestApi();
 

@@ -1522,33 +1522,34 @@ model WalletSelectionSettings {
 /// 参考ウォレット選定実行
 model WalletSelectionRun {
   /// ID
-  id                      String                   @id @default(cuid())
+  id                      String                      @id @default(cuid())
   /// データソースID
-  sourceId                String                   @map("source_id")
-  source                  DataSource               @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  sourceId                String                      @map("source_id")
+  source                  DataSource                  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
   /// 選定ポリシーバージョン
-  policyVersion           String                   @map("policy_version")
+  policyVersion           String                      @map("policy_version")
   /// 入力フィンガープリント
-  inputFingerprint        String                   @map("input_fingerprint")
+  inputFingerprint        String                      @map("input_fingerprint")
   /// 選定設定スナップショット
-  policySnapshot          Json                     @map("policy_snapshot")
+  policySnapshot          Json                        @map("policy_snapshot")
   /// 評価日時
-  evaluatedAt             DateTime                 @map("evaluated_at")
+  evaluatedAt             DateTime                    @map("evaluated_at")
   /// 評価対象件数
-  universeCount           Int                      @map("universe_count")
+  universeCount           Int                         @map("universe_count")
   /// 参考対象件数
-  selectedCount           Int                      @map("selected_count")
+  selectedCount           Int                         @map("selected_count")
   /// 候補件数
-  qualifiedCount          Int                      @map("qualified_count")
+  qualifiedCount          Int                         @map("qualified_count")
   /// 要確認件数
-  reviewCount             Int                      @map("review_count")
+  reviewCount             Int                         @map("review_count")
   /// 対象外件数
-  excludedCount           Int                      @map("excluded_count")
+  excludedCount           Int                         @map("excluded_count")
   results                 WalletSelectionResult[]
-  currentForSettings      WalletSelectionSettings? @relation("CurrentWalletSelectionRun")
+  currentForSettings      WalletSelectionSettings?    @relation("CurrentWalletSelectionRun")
+  aggregationBuckets      BehaviorAggregationBucket[]
   behaviorSelectionScopes BehaviorSelectionScope[]
   /// 登録日時
-  createdAt               DateTime                 @default(now()) @map("created_at")
+  createdAt               DateTime                    @default(now()) @map("created_at")
 
   @@unique([sourceId, policyVersion, inputFingerprint], map: "wallet_selection_runs_input_key")
   @@index([sourceId, evaluatedAt], map: "wallet_selection_runs_source_evaluated_idx")
@@ -1791,4 +1792,44 @@ model BehaviorDataQualityIssue {
   @@index([walletAddressId, coin, status, reason], map: "behavior_dq_wallet_coin_status_idx")
   @@index([normalizationRunId, status], map: "behavior_dq_run_status_idx")
   @@map("behavior_data_quality_issues")
+}
+
+/// Phase 5.1 logical coin bucket. Only the derived current-revision pointer is mutable.
+model BehaviorAggregationBucket {
+  id                 String                        @id
+  aggregationVersion String                        @map("aggregation_version")
+  behaviorVersion    String                        @map("behavior_version")
+  selectionRunId     String                        @map("selection_run_id")
+  selectionRun       WalletSelectionRun            @relation(fields: [selectionRunId], references: [id], onDelete: Restrict)
+  scopeFingerprint   String                        @map("scope_fingerprint")
+  coin               String
+  bucketStart        DateTime                      @map("bucket_start")
+  bucketEnd          DateTime                      @map("bucket_end")
+  currentRevisionId  String?                       @map("current_revision_id")
+  currentRevision    BehaviorAggregationRevision?  @relation("CurrentAggregationRevision", fields: [currentRevisionId], references: [id], onDelete: Restrict)
+  revisions          BehaviorAggregationRevision[] @relation("AggregationBucketRevisions")
+  createdAt          DateTime                      @default(now()) @map("created_at")
+
+  @@unique([selectionRunId, scopeFingerprint, aggregationVersion, behaviorVersion, coin, bucketStart], map: "behavior_aggregation_bucket_key")
+  @@index([coin, bucketStart, selectionRunId, scopeFingerprint], map: "behavior_aggregation_coin_time_idx")
+  @@map("behavior_aggregation_buckets")
+}
+
+/// Immutable, reproducible observation; null totals mean blocked, never neutral.
+model BehaviorAggregationRevision {
+  id                String                      @id
+  bucketId          String                      @map("bucket_id")
+  bucket            BehaviorAggregationBucket   @relation("AggregationBucketRevisions", fields: [bucketId], references: [id], onDelete: Restrict)
+  currentFor        BehaviorAggregationBucket[] @relation("CurrentAggregationRevision")
+  inputFingerprint  String                      @map("input_fingerprint")
+  status            String
+  inputSnapshot     Json                        @map("input_snapshot")
+  totals            Json?
+  eventCount        Int?                        @map("event_count")
+  uniqueWalletCount Int?                        @map("unique_wallet_count")
+  notionalUsd       Decimal?                    @map("notional_usd") @db.Decimal(50, 18)
+  createdAt         DateTime                    @default(now()) @map("created_at")
+
+  @@unique([bucketId, inputFingerprint], map: "behavior_aggregation_revision_key")
+  @@map("behavior_aggregation_revisions")
 }

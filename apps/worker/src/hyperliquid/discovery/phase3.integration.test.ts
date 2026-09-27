@@ -1,17 +1,12 @@
 import { randomUUID } from "node:crypto";
 
-import { loadRootEnvironment } from "@chaincopy/config";
 import { PrismaClient } from "@chaincopy/database";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { HyperliquidDiscoveryRepository } from "./repository.js";
+import { isolatedTargets } from "../../../../../tests/isolated-targets.mjs";
 
-loadRootEnvironment();
-
-const databaseUrl = localServiceUrl(
-  process.env.DATABASE_URL ??
-    "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public",
-);
+const { databaseUrl } = isolatedTargets(process.env, "TEST");
 const database = new PrismaClient({
   datasources: { db: { url: databaseUrl } },
 });
@@ -697,12 +692,4 @@ function marketTrade(input: {
     size: "1",
     transactionHash: `0x${input.tradeId}`,
   };
-}
-
-function localServiceUrl(value: string): string {
-  const url = new URL(value);
-  if (url.hostname === "postgres") {
-    url.hostname = "127.0.0.1";
-  }
-  return url.toString();
 }

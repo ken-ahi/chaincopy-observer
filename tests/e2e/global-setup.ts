@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 
 import { PrismaClient } from "@prisma/client";
+import { isolatedTargets } from "../isolated-targets.mjs";
 
 import {
   e2eAddress,
@@ -18,19 +19,7 @@ import {
 } from "./fixtures";
 
 const schemaName = "chaincopy_e2e";
-const databaseUrl = e2eDatabaseUrl(
-  process.env.DATABASE_URL ??
-    "postgresql://chaincopy:chaincopy@127.0.0.1:5432/chaincopy?schema=public",
-);
-
-function e2eDatabaseUrl(value: string): string {
-  const url = new URL(value);
-  if (url.hostname === "postgres") {
-    url.hostname = "127.0.0.1";
-  }
-  url.searchParams.set("schema", schemaName);
-  return url.toString();
-}
+const { databaseUrl } = isolatedTargets(process.env, "E2E");
 
 export default async function globalSetup() {
   const administrationUrl = new URL(databaseUrl);

@@ -16,8 +16,11 @@ import { registerPerformanceRoutes } from "./performance-routes.js";
 import { type PerformanceService } from "./performance-service.js";
 import { registerWalletSelectionRoutes } from "./wallet-selection-routes.js";
 import { type WalletSelectionService } from "./wallet-selection-service.js";
+import { type PrismaBehaviorAggregationService } from "./behavior-aggregation-service.js";
+import { z } from "zod";
 
 export interface CreateApiOptions {
+  readonly behaviorAggregationService?: Pick<PrismaBehaviorAggregationService, "read">;
   readonly addressService: AddressService;
   readonly discoveryService: DiscoveryService;
   readonly env: ApiEnv;
@@ -87,6 +90,31 @@ export async function createApi(options: CreateApiOptions) {
   registerPerformanceRoutes(app, options.performanceService);
   registerDiscoveryRoutes(app, options.discoveryService);
   registerWalletSelectionRoutes(app, options.walletSelectionService);
+  if (options.behaviorAggregationService) {
+    const service = options.behaviorAggregationService;
+    app.get("/api/behavior/aggregations", async (request, reply) => {
+      const parsed = z
+        .object({
+          coin: z.string().min(1).max(100),
+          from: z.string(),
+          to: z.string(),
+          limit: z.coerce.number().int().min(1).max(100).default(100),
+        })
+        .strict()
+        .safeParse(request.query);
+      if (!parsed.success) return reply.code(400).send({ error: "invalid_aggregation_query" });
+      try {
+        const { coin, from, to, limit } = parsed.data;
+        return reply
+          .header("Cache-Control", "no-store")
+          .send(await service.read(coin, from, to, limit));
+      } catch (error) {
+        if (error instanceof RangeError)
+          return reply.code(400).send({ error: "invalid_aggregation_range" });
+        throw error;
+      }
+    });
+  }
 
   app.setErrorHandler((error, request, reply) => {
     if (isClientError(error)) {

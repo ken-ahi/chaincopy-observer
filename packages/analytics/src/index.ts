@@ -92,3 +92,4 @@ export type {
   WalletSelectionV2Result,
 } from "./wallet-selection-v2.js";
 export type * from "./types.js";
+export * from "./behavior-aggregation.js";

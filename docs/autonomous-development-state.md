@@ -8,12 +8,24 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/xyz-cl-quote-provenance`
-- branch base: `b66e1f723dcc4d60c561013505b965562bcaed4b`（PR #34 merge）
+- branch: `codex/phase5-1-behavior-aggregation`
+- branch base: `5f220cfee4b3df2a7dadf2f890c94101fa183121`（PR #35 merge）
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- PR #29〜#34はmainへmerge済み。46 wallet refresh / incidentのcontained判定、BTC recoveryは完了済みで繰り返さない。現在はOwner承認済みのxyz:CL quote provenance工程。
+- PR #29〜#35はmainへmerge済み。46 wallet refresh / incidentのcontained判定、BTC/xyz:CL recoveryは完了済みで繰り返さない。現在はPhase 5.1 coin-level aggregation工程。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- 下記の過去工程のPR open表記・承認境界は当時の記録。現在のOwner契約はselected 1 walletのxyz:CLだけの監査/修正/限定検証、PR/CI成功後の安全境界内自動mergeを許可する。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+- 下記の過去工程のPR open表記・承認境界は当時の記録。現在のOwner契約はselected walletの既存2,012 Behavior eventsの集約実装・限定検証とPR/CI成功後の安全境界内自動mergeを許可する。新規aggregation 2 tableのみの実migrationはOwner追加承認済み。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+
+## Phase 5.1 aggregation（実装・限定運用検証完了）
+
+- 正式契約: `docs/phase5-1-behavior-aggregation-spec.md` / ADR-042。
+- 15分UTC、8 semantic cells、unique wallet participationとevent/notional分離。SSoTから現在cohortを取り、生成時provenance・DQ・cursor・保存Fillとの整合を確認する。weight/Signalなし。
+- 新規bucket/revision 2 table、immutable snapshot/fingerprint、late bucket再計算、STALE read抑止。常駐consumer/schedulerは追加しない。
+- 明示TEST/E2E専用接続先を必須化。通常runtime URLからのfallback禁止。隔離55433/56380でmigration、76 files/730 tests、E2E 22/22、typecheck/build 11/11、format/lint、audit high以上0（unrelated moderate 4）、diff checkを確認。
+- Owner承認済みの新規2 table migrationを実DBへ適用、status up to date。実行commit `a14777d6e6c6fb071470d3899779ee2d23872178`の正式CLIでselected 1 wallet、既存2,012 events → 7 coin / 1,332 VALID buckets / 1,332 immutable revisions。合計notional `593728.292566`は元イベントと厳密一致。各bucketのuniqueWalletCountは1。
+- SHORTの負のゼロをflipと誤認した新規照合バグはdry-runで停止・回帰修正し、永続集約前に解消。既存Behavior変更なし。再実行2bucketは追加0行、全bucket/revision hash不変。
+- 全2,012 Behavior row SHA-256 `f8a450777e4a64d085edd13634150d1328f8b9e5b8ce239550910dc7db20739a`前後一致。Behavior OPEN DQ 0→0、source DQ/Selection/override/全wallet/cursor/既存Run/scope/selected Fill/quarantine 14のhashも一致。queue state不変、8,427 enrichment backlogと既存unlocked activeは未操作。常駐Worker停止のまま、隔離test containersも停止。
+- 詳細: `docs/phase5-1-operational-verification.md`。PR作成・final-head CI確認後、今回のOwner standing authorizationに従い安全境界内でmergeする。完了済みのsync/Behavior/限定集約を繰り返さない。
+- 次Phase 5.2はwallet-selection-v2のtrusted closed-cycle metricsに合わせた再設計が先。NAV metricを必須化する古いweight候補をそのまま実装しない。
 
 ## xyz:CL canonical quote provenance（2026-09-27）
 
