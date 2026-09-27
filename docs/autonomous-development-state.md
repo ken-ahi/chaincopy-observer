@@ -8,12 +8,12 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/automatic-wallet-ranking`
-- branch base / `origin/main`: `22ad55f` (`Merge pull request #29 from ken-ahi/codex/free-data-discovery-recovery`)
+- branch: `codex/v2-operational-refresh`（運用結果の文書記録用）
+- branch base / `origin/main`: `06d3c26b2f964b584a0f68a681a8f97b635ca91d`（PR #32 merge）
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- PR #29はmainへmerge済みであり、無料データ限定recovery / Discovery作業は完了した。本branchは、DiscoveryからBehaviorまでの自動ranking / reference-wallet flowを実装・記録する。
+- PR #29はmainへmerge済みであり、無料データ限定recovery / Discovery作業は完了した。本branchは、既存46 walletのv2 operational refresh結果とOwnerによるincident判定を記録する文書専用branchである。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- branchは`origin/codex/automatic-wallet-ranking`へpush済み。PR #30はopenで、GitHub Actions `verify`はPASSした。main mergeはOwner承認境界である。
+- PR #30 / #31 / #32はOwnerによりmainへmerge済み。下記の過去工程のPR open表記は当時の記録であり、現在状態ではない。Ownerは本branchの文書のみのcommit / push / PR作成を承認し、CI成功かつPR差分がoperational/state文書だけの場合に限り自動mergeを承認した。この承認はコード変更・運用再実行には拡張しない。
 
 ## 完了済みで再実行しない作業
 
@@ -247,7 +247,7 @@
 - 旧case 2「`COMPLETE`なのにrequired metricが生成されない」は、内部gapを見落としていたcompleteness分類不具合であり修正済みである。修正後は実データに`COMPLETE` walletがなく、required Return metricを生成しないことがformal contractと一致する。
 - 現在のselected 0は投資gateの不合格を示さず、無料Hyperliquid Info APIだけでは評価窓全体の連続Daily NAVを証明できないことによるfail-closed `REVIEW`である。Discovery volumeや閾値では解消せず、最終状態は`SOURCE_DATA_INSUFFICIENT_FOR_REQUIRED_NAV_METRICS`とする。
 
-## 次の優先作業
+## NAV-based v1の残課題（v2採用前の記録）
 
 1. Ownerの無料source限定方針を維持する限り、連続90日以上の公式Daily NAV coverageを実測で証明できるwallet/sourceが現れるまで`HISTORY_INCOMPLETE / REVIEW`を維持する。欠損補間や短期segmentへの評価窓切替は行わない。
 2. 既存`hyperliquid-candidate-enrichment` backlog 8,428件を拡大・無制限drainしない。候補量を増やしてもInfo APIのNAV coverage契約は変わらない。
@@ -277,9 +277,9 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- PR #31はmainへmerge済み。現在のfeature branchは`codex/free-data-wallet-selection-v2`で、起点はmain merge commit `eb10656d9f7fa6347ba4271703292065a8b98f07`である。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
+- PR #32までmainへmerge済み。現在の文書用feature branchは`codex/v2-operational-refresh`で、起点は`06d3c26b2f964b584a0f68a681a8f97b635ca91d`である。今回の限定運用結果は末尾を正とし、過去のv1/NAV不足によるselected 0判定と混同しない。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
-- この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateと20-wallet canaryの正式promotion / sync、限定8 walletのportfolio sync / Performance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。
+- 過去工程の許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateと20-wallet canaryの正式promotion / sync、限定8 walletのportfolio sync / Performance計算、Selection run作成、Behavior control no-op。今回の46-wallet refreshとvalidation時の安全境界例外は末尾に分離して記録する。
 
 ## Free-data Wallet Selection v2（2026-09-27）
 
@@ -301,3 +301,106 @@
 - 実DB変更はappend-onlyなv2 Selection Run / Resultとcurrent pointer更新だけ。sync、DQ、Performance、Behavior event、manual override、cursor、quarantine、Discovery backlog、Redisを変更していない。destructive operationは0件である。
 - 最終validationはformat、lint、typecheck 11/11、71 files / 661 tests、build 11/11、E2E 22/22、audit high以上0件（既知のmoderate 4件）、`git diff --check`を実施した。integration / E2Eはvolumeなしの一時PostgreSQL / Redisで実行し、常設DB / Redisのtest mutationは0件である。
 - 実装commitは`17834bae6c02d85247738b94c9cc059e05e3048e`。PR #32（`codex/free-data-wallet-selection-v2` -> `main`）を作成し、実装commitに対するGitHub Actions CI run #78 / `verify`は全step PASSした。PRはopenであり、main mergeはOwner承認境界として未実施である。
+
+## PR #32 post-merge: bounded v2 operational refresh（2026-09-27）
+
+### Preflight / 実行契約
+
+- main HEADは`06d3c26b2f964b584a0f68a681a8f97b635ca91d`。このcommitのGit archiveからWorker image `chaincopy-worker:v2-refresh-06d3c26`をbuildし、revision label一致を確認した。image IDは`sha256:f3b8f8280be1a49f25cf57f031d49c5a72fee9cd36dcb496f994828a73c32be4`。
+- `2026-09-27T04:13:17.932Z`のread-only preflightでPostgreSQL / Redis healthy、Redis PONG、applied migration 10 / pending 0を確認。PR #32の実DB migrationは不要であり適用していない。
+- automatic universeは46 walletで固定。canonical DB address順の`[{id,address}]`に対するSHA-256は`17641ef8a36eb0b6c52a7c1774ac6296792809ead8663e18b2311f595fdfd632`。対象はDiscovery promotion relationのみで、watched fallbackや追加promotionは行わない。
+- preflightのstaleは46/46、current trusted Performanceは44、trade history evaluableは36。current Selectionは`cmuj9uvxn0004o30yorz192hl`、v2、selected 0 / qualified 0 / review 46 / excluded 0。Behavior run / event / DQは各0、quarantined Runは14。
+- 既存enrichment queueはprioritized 8,427 + stale active 1（lock TTL -2）。既存discovery / Performanceにもprioritized各1が残る。過去のRUNNING SyncJobはfill 168 / funding 118 / ledger 89 / position 334 / DQ 168 / backfill 1 / candidate enrichment 894 / candidate upsert 3。これらを修復・再投入・削除せず隔離する。
+- 常設Workerを起動するとDiscovery orphan maintenanceや通常schedulerが対象外jobを扱い得るため、専用BullMQ prefix `v2-refresh-06d3c26-20260927`に既存の正式processor / scheduler / serviceを接続した。各consumer concurrency 1、Worker上限2 CPU / 4 GiB、通常schedulerとDiscovery consumerとWebSocket listenerは起動しない。
+- 46件のallowlist/hashを実行直前に再確認。fill → funding → ledger → current-state → portfolio → historical-orders → DQの各laneを全46件で完了してから、DQが正式enqueueした46件のPerformanceを処理する。成功Performanceの既存AutomaticSelectionCoordinatorからv2評価とBehavior controlが自動enqueueされる。BehaviorはPerformance全件完了後に通常SSoTから処理する。
+- 無料Info APIのみ。金融式、threshold、manual override、quarantine、source identity契約を変更しない。直接DB/DQ/cursor編集、destructive DB/Redis操作、Discovery backlog drain、有料sourceは行わない。
+
+### 運用結果
+
+- 実行時刻は`04:15:47.746–04:34:49.633 UTC`。正式sync/DQは7 lane × 46 = **322/322 SUCCEEDED**、全件attempt 1、failed / partial API failure 0。同期完了は`04:32:58.820 UTC`。
+- fresh <=24hは**46/46**、staleは46 → 0。DQがenqueueしたPerformanceは46件を新規計算（reused 0）し、**SUCCEEDED 44 / INSUFFICIENT_DATA 2 / FAILED 0**、新規metric 352件。全46 RunはTRUSTEDだが、current trusted lookupの対象となるSUCCEEDEDは44件である。既存Runの上書き・quarantine解除はない。
+- 新46 Runのcompletenessはすべて`GAP_DETECTED`。current trusted分布は`COMPLETE 0 / PARTIAL 0 / GAP_DETECTED 44 / trusted SUCCEEDED Runなし 2`。これはNAVを含むRun全体のcoverageであり、v2の証明済みclosed-cycle subsetのevaluabilityとは別である。無料履歴を完全化したとは主張しない。
+- `TRADE_HISTORY_EVALUABLE`は**36/46**。metric availabilityはwinRate 40 / Profit Factor 40 / averageWin 36 / averageLoss 40 / maxLosingStreak 40 / topTradeContribution 36。欠損を0補完していない。
+- trusted closed cyclesはmin 0 / median 9 / max 928。分布は0件: 6 wallet、1–29件: 28、30–99件: 11、100–999件: 1。Runなし2 walletはSelection DTO上のcycle count 0に含まれ、評価可能とは扱わない。
+
+| gate（各walletを独立に評価、欠損は通過扱いしない）        | 通過数 / 46 |
+| --------------------------------------------------------- | ----------: |
+| closed cycles >=30                                        |          12 |
+| winRate >=0.55                                            |          11 |
+| Profit Factor >=1                                         |          15 |
+| topTradeContribution <=0.50                               |          20 |
+| freshness、evaluability、全必須metricを含む全v2 hard gate |           1 |
+
+- cycle → win rate → Profit Factor → top contributionの累積通過は**12 → 2 → 1 → 1**。freshnessを除去した後、評価可能な大標本walletの主要不通過gateはwin rateである。ただし現在はselected 0ではなく1件が自然に通過した。
+- 最終current Selection Runは**`cmujbqjbu2af4nq01zg56l0vc`**、`wallet-selection-v2`、`2026-09-27T04:34:11.287Z`。**SELECTED 1 / QUALIFIED 0 / REVIEW 34 / EXCLUDED 11**、ranking 1件、effective selected 1件。44回の成功Performance completionが通常の自動評価/control enqueueを行い、最終pointerは全46件の処理後の状態を参照する。
+- reason件数（重複あり）はTOO_FEW_COMPLETED_TRADES 32、TRADE_HISTORY_NOT_EVALUABLE 8、REQUIRED_METRIC_MISSING 8、NO_PERFORMANCE_V3 2、WIN_RATE_BELOW_MINIMUM 10、PROFIT_FACTOR_BELOW_MINIMUM 7、PROFIT_TOO_CONCENTRATED 2。DATA_STALE 0。全46 walletのoverrideはAUTOであり、manual INCLUDE / threshold変更はない。
+
+### Ranking / 通常API
+
+| rank / status | canonical address                            | closed cycles | win rate               | Profit Factor          | average win            | average loss            | top trade contribution |
+| ------------- | -------------------------------------------- | ------------: | ---------------------- | ---------------------- | ---------------------- | ----------------------- | ---------------------- |
+| 1 / SELECTED  | `0x34112cf6672cbad0f44b5a77857099417dc686af` |            57 | `0.684210526315789474` | `1.011095793418617382` | `0.538291941475826972` | `-1.153500206530958439` | `0.127714892493861886` |
+
+- Performance Run: `cmujbpj6527jdnq01t6zuxi9u`。lastSyncAtは`2026-09-27T04:24:54.176Z`。通常APIの`latestActivityAt`は現行契約上`performanceCalculationTo`であり、`2026-09-27T04:26:55.552Z`。実際の最新Fill日時は`2026-09-24T13:21:27.107Z`である。この2つを同一視しない。
+- win rate降順 → trusted cycles降順 → Profit Factor降順 → top contribution昇順 → canonical address昇順で、Decimalによる独立sortと保存rankを照合し一致した。実rankingは1件のため複数walletのtie-breakの実データ実証はできないが、既存policy testで全tie-breakを検証している。
+- exact main imageの正式`registerWalletSelectionRoutes` + `PrismaWalletSelectionService`を実DBへ接続し、Fastify HTTP injectionによる`GET /api/wallet-selection/ranking`が200、service結果と完全一致、SELECTED 1件のみであることを確認した。REVIEW / EXCLUDEDの露出は0、quarantined Run参照は0。
+
+### Behavior / DQ
+
+- 通常Behavior consumerは**1 wallet / 7 coin**を処理。44自動control + 308 wallet/coin job = **352 job**、BullMQ failed 0。outcomeはcontrol continued 44 / coin completed 220 / coin blocked 88 / no-op 0。44回のcontrolが同じ最終selected setを参照したため各coinを44回評価したが、event identityによって重複保存していない。無制限schedulerやbacklog drainではない。
+- 新規Behavior eventは**1,888**（ASTER 16 / BTC 688 / ETH 385 / HYPE 2 / SOL 670 / XPL 127）、runは8件（SUCCEEDED 5 / BLOCKED 3）。BTCは初回の処理済みprefixを含むRunと未処理suffixのRunが別に存在するため、blocked coin 2に対してblocked Runは3である。
+- 新規Behavior OPEN DQは2件。BTC: `IMPOSSIBLE_TRANSITION`、source group `2026-08-04T19:16:40.471Z`、ID `cmujbqpi82c31nq01w9uvy3j4`。trusted boundaryから完全chainを作れず、cursorは直前の`2026-08-03T00:38:33.720Z`で停止した。`xyz:CL`: `MISSING_BOUNDARY`、source group `2026-03-02T11:14:24.461Z`、ID `cmujbqvnn2elbnq01tjgsjrh5`。custom marketのeventは0件。現行初期境界解決でこのreasonに集約されており、quoteがUSDとして証明されたとは扱わない。
+- 同一source groupの再評価はDQ fingerprintで2件に集約され、各reevaluationCount 43。危険区間をスキップして後続eventを生成する変更はしていない。**Behavior全coinがcurrentになったとの判定ではなく、正常な部分処理とfail-closed動作を確認した結果である。**
+- source側の新規OPEN DQは1件: `HYPERLIQUID_FUNDING_PAGINATION_LIMIT`、wallet `0x815d735c7e52c9ccb5fd14cb52f42fd2f862b58d`、ID `cmujban4a0e8inq011jwixbxw`。Funding 9,107 unique item取得時に既存pagination上限でcoverageがUNPROVENとなった。解消を強制していない。
+- 対象46 walletの既存OPENはWebSocket gap 256 / error 73 / user limit 15を維持。INCOMPLETE_INITIAL_SYNC 4件だけが正式DQ auditにより解消され、source OPEN合計348 → 345（新規Funding 1を含む）。直接DQ更新・reopenは0。quarantined Runは14のまま、Behavior scopeからのquarantined Performance参照は0。
+
+### Queue / 負荷 / 終了状態
+
+既存`bull` queueのbefore / afterは全countとactive ID/lock状態が完全一致した。wait / delayed / paused / waiting-children / stalled setはいずれも0である。
+
+| 既存queue                        | prioritized before → after | active before → after | completed / failed（不変） |
+| -------------------------------- | -------------------------: | --------------------: | -------------------------- |
+| hyperliquid-sync                 |                      0 → 0 |                 0 → 0 | 318 / 444                  |
+| hyperliquid-discovery            |                      1 → 1 |                 0 → 0 | 17 / 609                   |
+| hyperliquid-candidate-enrichment |              8,427 → 8,427 |                 1 → 1 | 20 / 5                     |
+| address-performance              |                      1 → 1 |                 0 → 0 | 66 / 14                    |
+| behavior-normalization           |                      0 → 0 |                 0 → 0 | 24 / 0                     |
+
+- enrichmentの既存active 1件はlock不在のstale jobのまま保持した。修復・削除も消費もしていない。
+- 専用prefixは開始時empty、終了時completed sync 322 / Performance 46 / Behavior 352。wait / active / delayed / prioritized / paused / failedはいずれも0。queue削除は行わず履歴を保持した。
+- sampled peakはWorker CPU 76.48% / 588.5 MiB、PostgreSQL CPU 78.06% / 2.394 GiB、Redis CPU 2.30% / 47.54 MiB。連続profilingの絶対peakではない。PostgreSQL累積block I/Oの最終観測はread 6.25 GB / write 538 MB。OOM / retry storm / stalled eventは0。
+- 限定Workerはgraceful close後に終了。常設Workerは停止したままで、PostgreSQL / Redisのみ稼働。runtime runnerは削除し、再実行可能なone-off mutation toolを変更差分へ残さない。
+- ローカル監査証跡はgitignoredの`v2-refresh-preflight.log / v2-refresh-progress.log / v2-refresh-postflight.log / v2-refresh-results.log`。文書以外のtracked変更はない。main merge / deploy / 実DB migration / 有料sourceは0件。正式refresh自体にdestructive操作はないが、下記のtest誤接続によるfixture作成・削除を例外として明記する。
+
+### Validation / 次の工程
+
+- 運用後の最終validation: `pnpm format:check` PASS、`pnpm lint` PASS、`pnpm typecheck` 11/11 PASS、`pnpm test` 71 files / 661 tests PASS、`pnpm build` 11/11 PASS、`pnpm test:e2e` 22/22 PASS、`pnpm audit --audit-level high` exit 0（high以上0、既知moderate 4）、`git diff --check` PASS。コード/schema/migrationの変更、commit / push / PR作成はない。
+- 初回pnpm commandで非TTY installエラーが出たため`CI=true pnpm install --frozen-lockfile`で確認した（lockfile変更なし）。文書を整形後にformatを再確認した。WSL終了によるDB接続断で運用後のtest/E2Eが一度失敗したが、非表示WSL keepaliveの下で下記の隔離環境を明示し、全testを再実行してPASSした。失敗やskipを成功扱いしていない。
+- 最終testは`DATABASE_URL=postgresql://…@127.0.0.1:55433/chaincopy?schema=public`、`REDIS_URL=redis://127.0.0.1:56380/0`。E2Eは`E2E_DATABASE_URL=postgresql://…@127.0.0.1:55433/chaincopy?schema=chaincopy_e2e`、`E2E_REDIS_URL=redis://127.0.0.1:56380/15`。専用一時container上でのみtest migration/cleanupを行い、終了後にそのcontainerを停止した。
+
+### Validation時の安全境界例外（ACCEPTED AS CONTAINED）
+
+- 先行する`pnpm test`（04:18 UTC頃）で接続先を明示せず、Phase 2 / Phase 3 integration testが`.env`の実PostgreSQL/Redisへ接続した。testはランダムUUIDの専用source/address/queueにfixtureを作成し、終了処理でfixtureをDELETEし、専用queueを`obliterate`した。Phase 2は同じUUID addressのmainnet fixtureに対してwatch/cursor等もtestした。これは本依頼の実DB/Redisに対するmutation禁止境界を満たさず、隔離確認の不備である。
+- testコードの変更やDB repairで隠蔽・巻戻しをせず、以後のtest接続を隔離環境へ明示した。read-only確認で、今回のUUID契約/suffixに一致する新規fixture source / wallet残存は0、`bull:phase2-integration-*` queue key残存は0。既存phase3 fixture source 9件はすべて2026-08-02〜08-16作成分であり、削除していない。
+- 対象automatic universeは46のまま、固定allowlist hashは一致、quarantine 14、実5 queueのcount/active情報はpreflightと一致した。対象walletや本番backlogをtestが削除した証拠は見つかっていない。ただし誤接続でfixtureの実サービス内作成・削除が行われた事実を「mutation 0」とは報告しない。
+- Owner判定: **ACCEPTED AS CONTAINED**。上記の誤接続の事実は監査記録として保持し、Owner確認待ちのBLOCKED状態を解除する。
+
+| 項目                             | Owner確認済みの結論                                                                                                |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| root cause                       | integration testが初回に実サービスの`DATABASE_URL / REDIS_URL`を継承した。明示的な隔離接続先を指定していなかった。 |
+| affected objects                 | UUID-only test fixturesのみ。                                                                                      |
+| residual fixtures                | 0                                                                                                                  |
+| automatic-universe wallet impact | 0（46 wallet不変）                                                                                                 |
+| quarantine impact                | 0（14 Run不変）                                                                                                    |
+| existing queue impact            | 0（既存queue/backlog不変）                                                                                         |
+| recovery action                  | none required。追加cleanup、DB/Redis mutation、46-wallet sync再実行はしない。                                      |
+| verification                     | 明示的に隔離した環境で全validationを再実行しPASS。結果は上記Validation参照。                                       |
+
+- 再発防止要件: integration / E2Eは**明示的な隔離DB/Redis接続先を必須**とし、接続先が未指定・未検証の場合は実行前にfail closedする。通常runtimeの`DATABASE_URL / REDIS_URL`や`.env`を暗黙継承・fallbackしてはならない。隔離対象を検証できなければfixture作成・cleanup・queue操作を開始しない。
+- この文書PRは再発防止要件を記録するものであり、接続先拒否ガードのコード実装完了を意味しない。将来のguard実装は別の限定engineering作業とする。今回の文書確定ではローカルformat / diff checkだけを再確認し、文書のみのためコード系ローカルtestを再実行しない（workflow第8節）。GitHub CIはその専用service環境で実行する。
+
+### 次の工程 / 最終判定
+
+- 次はselected walletのBTC boundary不連続とcustom-market source/quote契約をread-onlyで調べ、必要なら別の限定engineering契約とする。DQ条件を緩めたり、cursorを飛ばしたりしてBehaviorを通さない。
+- Discovery拡大や8k+ backlog drainは今回の対象外。selected数最大化や新しい運用の常時起動へ拡張しない。
+- 最終運用判定: **V2 OPERATIONAL FLOW VERIFIED — SELECTED WALLETS FOUND**。自然なSELECTED 1件とBehaviorの正常な部分処理/fail-closed経路を確認し、validation incidentはOwnerによりcontainedとして受け入れ済み。未証明の2 coinのBehavior完全性は宣言しない。追加cleanup、DB/Redis mutation、同期やrecoveryの再実行はせず、Workerを停止したまま文書のみを確定する。
