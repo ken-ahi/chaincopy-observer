@@ -46,7 +46,7 @@ export function SelectionClient() {
             参考ウォレットランキング
           </h1>
           <p className="mt-2 text-sm text-slate-400">
-            完全な履歴と信頼できる成績を確認できたウォレットだけを、自動で順位付けしています。
+            境界を検証できた完了取引と信頼できる取引指標だけで、自動順位付けしています。
           </p>
         </div>
         <Button disabled={loading} onClick={() => void load()} size="sm" variant="outline">
@@ -91,12 +91,12 @@ export function SelectionClient() {
           ) : null}
           {!loading && ranking.run !== null && items.length === 0 ? (
             <EmptyState>
-              現在、履歴・成績・リスクの全条件を通過したウォレットはありません。
+              現在、取引履歴・取引品質・鮮度の全条件を通過したウォレットはありません。
             </EmptyState>
           ) : null}
           {!loading && items.length > 0 ? (
             <div className="overflow-x-auto">
-              <table className="data-table min-w-[1180px]">
+              <table className="data-table min-w-[1120px]">
                 <thead>
                   <tr>
                     <th>順位</th>
@@ -104,10 +104,10 @@ export function SelectionClient() {
                     <th>選定</th>
                     <th>完了取引</th>
                     <th>勝率</th>
-                    <th>年率収益率</th>
-                    <th>累積収益率</th>
                     <th>Profit Factor</th>
-                    <th>最大ドローダウン</th>
+                    <th>平均勝ち</th>
+                    <th>平均負け</th>
+                    <th>最大利益依存</th>
                     <th>最終活動</th>
                   </tr>
                 </thead>
@@ -144,10 +144,10 @@ function RankingRow({ item }: { readonly item: WalletRankingItem }) {
       </td>
       <td>{item.trustedClosedCycleCount}件</td>
       <td>{formatSelectionPercent(item.metrics.winRate)}</td>
-      <td>{formatSelectionPercent(item.metrics.annualizedReturn, true)}</td>
-      <td>{formatSelectionPercent(item.metrics.cumulativeReturn, true)}</td>
       <td>{formatSelectionDecimal(item.metrics.profitFactor)}</td>
-      <td>{formatSelectionPercent(item.metrics.maxDrawdown)}</td>
+      <td>{formatSelectionDecimal(item.metrics.averageWin)}</td>
+      <td>{formatSelectionDecimal(item.metrics.averageLoss)}</td>
+      <td>{formatSelectionPercent(item.metrics.topTradeContribution)}</td>
       <td>{formatSelectionDate(item.latestActivityAt)}</td>
     </tr>
   );

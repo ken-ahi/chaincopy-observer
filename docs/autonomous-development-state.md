@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-23 (Asia/Tokyo)
+最終更新: 2026-09-27 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -277,6 +277,26 @@
 
 - host: Windows PowerShell、Node.js 24.12.0、pnpm 11.9.0
 - runtime: WSL2 Docker、PostgreSQL 17、Redis 8
-- PR #30はmainへmerge済み。現在のfeature branchは`codex/daily-nav-required-metrics`、実装commitは`01aaf5933a0b61ac8ba8a19112018ec7f5a6bee7`である。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
+- PR #31はmainへmerge済み。現在のfeature branchは`codex/free-data-wallet-selection-v2`で、起点はmain merge commit `eb10656d9f7fa6347ba4271703292065a8b98f07`である。feature branch内のcommit / push / PR / CI修正は委任範囲、main mergeはOwner承認待ちである。
 - 稼働中process/container: PostgreSQL / Redisのみ。Workerは停止。
 - この作業で行った許可済みmutation: 441 gapの正式bounded recovery試行、6 candidateと20-wallet canaryの正式promotion / sync、限定8 walletのportfolio sync / Performance計算、Selection run作成、Behavior control no-op。禁止された直接DB/Redis mutationは0件。
+
+## Free-data Wallet Selection v2（2026-09-27）
+
+### Read-only auditと設計
+
+- automatic universe 46 walletを実DBで監査した。current trusted `performance-v3`は44件、Runなし2件、completenessは`COMPLETE 0 / PARTIAL 31 / GAP_DETECTED 13`だった。
+- closed cycleはmin 0 / median 8.5 / max 251、20件以上13 wallet、30件以上12、50件以上7、100件以上1だった。取引Metricはwin rate / Profit Factor / max losing streakが各40、average win / top trade contributionが各36、average lossが40 walletで存在した。
+- 6必須trade metricが同一Run・同一coverageで`AVAILABLE`の`TRADE_HISTORY_EVALUABLE`は36 wallet。30 cycles、win rate 0.55、Profit Factor 1、top contribution 0.50を順に適用すると12 -> 3 -> 2 -> 2 walletだった。監査時点で24時間freshな通過walletは0件だった。
+- 同一wallet + coin + timestamp groupは16,343 group / 83,306 fills、最大146 fills。同一startPosition分岐は0 groupだった。既存cycle builderが未知prefixをFLATまで除外し、不連続時に進行中cycleと後続coin履歴を除外するため、保存closed cycleはgap / unknown boundaryを跨がない。source全履歴をCOMPLETEへ変更していない。
+- 正式仕様は`docs/free-data-wallet-selection-v2.md`、判断はADR-039。v1はNAV-based policyとして保持し、v2を別versionで通常自動flowへ採用した。schema / migration追加はない。
+
+### 実装とbounded live validation
+
+- v2 hard gateは30 closed cycles、win rate 0.55以上、Profit Factor 1以上、top trade contribution 0.50以下、freshness 24時間、6必須trade metricとした。rankingはwin rate、cycle数、Profit Factor、低い集中度、canonical addressの辞書式順である。
+- API Selection serviceの通常policyをv2へ切り替え、v1 settings / evaluatorを後方互換で保持した。Selection Runの既存`policyVersion / policySnapshot / inputFingerprint`を再利用し、v2 evaluability boolもfingerprintへ含める。通常ranking UIはNAV列を外し、平均勝ち / 平均負け / 最大利益依存を表示する。
+- current 46だけへv2を1回評価した。Selection Runは`cmuj9uvxn0004o30yorz192hl`、評価時刻`2026-09-27T03:41:34.790Z`、universe 46 / selected 0 / qualified 0 / review 46 / excluded 0。reasonは`DATA_STALE 44 / TOO_FEW_COMPLETED_TRADES 32 / TRADE_HISTORY_NOT_EVALUABLE 8 / REQUIRED_METRIC_MISSING 8 / NO_PERFORMANCE_V3 2`だった。
+- Behavior通常control処理は`no-op / processedEvents 0`。wallet job enqueueとRedis mutationは0件。既存backlogはcandidate enrichment prioritized 8,427 + active 1、discovery prioritized 1、Performance prioritized 1、Behavior 0のまま維持した。
+- v2は投資gateを評価できるデータ経路を確立したが、live selected 0の直接理由は44 walletのstalenessと、残る2 walletのPerformance欠損である。閾値を下げず、次のbounded工程はautomatic universe 46だけを正式syncし、trusted `performance-v3`を更新後にv2を再評価することである。
+- 実DB変更はappend-onlyなv2 Selection Run / Resultとcurrent pointer更新だけ。sync、DQ、Performance、Behavior event、manual override、cursor、quarantine、Discovery backlog、Redisを変更していない。destructive operationは0件である。
+- 最終validationはformat、lint、typecheck 11/11、71 files / 661 tests、build 11/11、E2E 22/22、audit high以上0件（既知のmoderate 4件）、`git diff --check`を実施した。integration / E2Eはvolumeなしの一時PostgreSQL / Redisで実行し、常設DB / Redisのtest mutationは0件である。

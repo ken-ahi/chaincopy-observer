@@ -74,4 +74,21 @@ export type {
   WalletSelectionReasonCode,
   WalletSelectionResult,
 } from "./wallet-selection.js";
+export {
+  DEFAULT_WALLET_SELECTION_V2_POLICY,
+  evaluateWalletSelectionV2,
+  isEffectivelySelectedV2,
+  TRADE_HISTORY_EVALUABILITY_VERSION,
+  validateWalletSelectionV2Policy,
+  WALLET_SELECTION_V2_POLICY_VERSION,
+  WALLET_SELECTION_V2_REQUIRED_METRICS,
+  WalletSelectionV2PolicyError,
+} from "./wallet-selection-v2.js";
+export type {
+  WalletSelectionV2CandidateInput,
+  WalletSelectionV2PerformanceInput,
+  WalletSelectionV2Policy,
+  WalletSelectionV2ReasonCode,
+  WalletSelectionV2Result,
+} from "./wallet-selection-v2.js";
 export type * from "./types.js";

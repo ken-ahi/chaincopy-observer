@@ -3,14 +3,21 @@ import { createHash } from "node:crypto";
 import { normalizeHyperliquidAddress } from "@chaincopy/blockchain-adapters";
 import {
   DEFAULT_WALLET_SELECTION_POLICY,
+  DEFAULT_WALLET_SELECTION_V2_POLICY,
   effectiveWalletSelectionStatus,
   evaluateWalletSelection,
+  evaluateWalletSelectionV2,
+  isEffectivelySelectedV2,
   validateWalletSelectionPolicy,
+  WALLET_SELECTION_V2_POLICY_VERSION,
+  WALLET_SELECTION_V2_REQUIRED_METRICS,
   WALLET_SELECTION_POLICY_VERSION,
   type WalletSelectionAutomaticStatus,
   type WalletSelectionOverrideDecision,
   type WalletSelectionPolicy,
   type WalletSelectionReasonCode,
+  type WalletSelectionV2Policy,
+  type WalletSelectionV2ReasonCode,
 } from "@chaincopy/analytics";
 import { Prisma, type PrismaClient } from "@chaincopy/database";
 
@@ -23,8 +30,11 @@ import {
 
 const PERFORMANCE_VERSION = "performance-v3";
 const METRIC_KEYS = [
+  "averageLoss",
+  "averageWin",
   "annualizedReturn",
   "cumulativeReturn",
+  "maxLosingStreak",
   "maxDrawdown",
   "profitFactor",
   "topTradeContribution",
@@ -53,7 +63,7 @@ export interface WalletSelectionItemDto {
   readonly manualOverride: WalletSelectionOverrideDecision;
   readonly overrideNote: string | null;
   readonly rank: number | null;
-  readonly reasonCodes: readonly WalletSelectionReasonCode[];
+  readonly reasonCodes: readonly (WalletSelectionReasonCode | WalletSelectionV2ReasonCode)[];
   readonly performanceRunId: string | null;
   readonly performanceRunTrustState: "TRUSTED" | "QUARANTINED" | null;
   readonly performanceCalculationTo: string | null;
@@ -149,6 +159,8 @@ const selectionResultInclude = {
           calculationTo: true,
           metricKey: true,
           metricValue: true,
+          metricVersion: true,
+          status: true,
         },
         where: {
           metricKey: { in: [...METRIC_KEYS] },
@@ -182,6 +194,9 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
   public constructor(
     private readonly database: PrismaClient,
     private readonly now: () => Date = () => new Date(),
+    private readonly activePolicyVersion:
+      | typeof WALLET_SELECTION_POLICY_VERSION
+      | typeof WALLET_SELECTION_V2_POLICY_VERSION = WALLET_SELECTION_V2_POLICY_VERSION,
   ) {}
 
   public async getCurrentSelection(): Promise<WalletSelectionRunDto> {
@@ -268,11 +283,14 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
   public async evaluate(): Promise<WalletSelectionEvaluationDto> {
     const source = await this.ensureSource();
     const settings = await this.ensureSettings(source.id);
-    const policy = toPolicy(settings);
+    const policy: WalletSelectionPolicy | WalletSelectionV2Policy =
+      this.activePolicyVersion === WALLET_SELECTION_POLICY_VERSION
+        ? toPolicy(settings)
+        : DEFAULT_WALLET_SELECTION_V2_POLICY;
     const evaluatedAt = this.now();
     const wallets = await this.loadUniverse(source.id);
     const fingerprint = selectionFingerprint(source.id, policy, wallets, evaluatedAt);
-    const existing = await this.findRunByFingerprint(source.id, fingerprint);
+    const existing = await this.findRunByFingerprint(source.id, policy.policyVersion, fingerprint);
     if (existing) {
       await this.activateRun(settings.id, existing.id);
       return { ...toRunDto(existing), reused: true };
@@ -298,10 +316,17 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
               calculationVersion: performance.calculationVersion,
               cumulativeReturn: metrics.cumulativeReturn ?? null,
               historyCompleteness: performance.historyCompleteness,
+              averageLoss: metrics.averageLoss ?? null,
+              averageWin: metrics.averageWin ?? null,
+              maxLosingStreak: metrics.maxLosingStreak ?? null,
               maxDrawdown: metrics.maxDrawdown ?? null,
               profitFactor: metrics.profitFactor ?? null,
               runId: performance.id,
               topTradeContribution: metrics.topTradeContribution ?? null,
+              tradeHistoryEvaluable: isTradeHistoryEvaluable(
+                performance._count.positionCycles,
+                performance.performanceMetrics,
+              ),
               trustedClosedCycleCount: performance._count.positionCycles,
               winRate: metrics.winRate ?? null,
             }
@@ -309,7 +334,10 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
         walletAddressId: wallet.id,
       };
     });
-    const results = evaluateWalletSelection(inputs, policy, evaluatedAt.toISOString());
+    const results =
+      policy.policyVersion === WALLET_SELECTION_POLICY_VERSION
+        ? evaluateWalletSelection(inputs, policy, evaluatedAt.toISOString())
+        : evaluateWalletSelectionV2(inputs, policy, evaluatedAt.toISOString());
     const counts = countStatuses(results);
 
     try {
@@ -346,7 +374,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
       });
     } catch (error) {
       if (!isUniqueConstraintError(error)) throw error;
-      const reused = await this.findRunByFingerprint(source.id, fingerprint);
+      const reused = await this.findRunByFingerprint(source.id, policy.policyVersion, fingerprint);
       if (!reused) {
         throw new Error("Wallet selection run was not available after a uniqueness conflict.");
       }
@@ -354,7 +382,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
       return { ...toRunDto(reused), reused: true };
     }
 
-    const saved = await this.findRunByFingerprint(source.id, fingerprint);
+    const saved = await this.findRunByFingerprint(source.id, policy.policyVersion, fingerprint);
     if (!saved) {
       throw new Error("Wallet selection run was not available after persistence.");
     }
@@ -389,7 +417,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
       ? await this.findRunById(source.id, settings.currentSelectionRunId)
       : null;
     const row = current?.results.find((result) => result.walletAddressId === wallet.id);
-    return row ? toItemDto(row) : null;
+    return row && current ? toItemDto(row, current.policyVersion) : null;
   }
 
   public async listEffectiveSelectedWallets(): Promise<readonly EffectiveSelectedWalletDto[]> {
@@ -407,7 +435,9 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
           if (result.performanceRun.trustState !== "TRUSTED") return false;
         }
         const decision = result.walletAddress.walletSelectionOverride?.decision ?? "AUTO";
-        return effectiveWalletSelectionStatus(result.automaticStatus, decision) === "SELECTED";
+        return current.policyVersion === WALLET_SELECTION_V2_POLICY_VERSION
+          ? isEffectivelySelectedV2(result.automaticStatus, decision)
+          : effectiveWalletSelectionStatus(result.automaticStatus, decision) === "SELECTED";
       })
       .map((result) => ({
         address: result.walletAddress.address,
@@ -494,6 +524,8 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
                 calculationTo: true,
                 metricKey: true,
                 metricValue: true,
+                metricVersion: true,
+                status: true,
               },
               where: {
                 metricKey: { in: [...METRIC_KEYS] },
@@ -529,6 +561,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
 
   private findRunByFingerprint(
     sourceId: string,
+    policyVersion: string,
     inputFingerprint: string,
   ): Promise<SelectionRunRow | null> {
     return this.database.walletSelectionRun.findUnique({
@@ -536,7 +569,7 @@ export class PrismaWalletSelectionService implements WalletSelectionService {
       where: {
         sourceId_policyVersion_inputFingerprint: {
           inputFingerprint,
-          policyVersion: WALLET_SELECTION_POLICY_VERSION,
+          policyVersion,
           sourceId,
         },
       },
@@ -599,7 +632,7 @@ function toSettingsDto(
 
 function toRunDto(row: SelectionRunRow): WalletSelectionRunDto {
   return {
-    items: row.results.map(toItemDto),
+    items: row.results.map((result) => toItemDto(result, row.policyVersion)),
     run: {
       evaluatedAt: row.evaluatedAt.toISOString(),
       excludedCount: row.excludedCount,
@@ -614,12 +647,17 @@ function toRunDto(row: SelectionRunRow): WalletSelectionRunDto {
   };
 }
 
-function toItemDto(row: SelectionResultRow): WalletSelectionItemDto {
+function toItemDto(row: SelectionResultRow, policyVersion: string): WalletSelectionItemDto {
   const decision = row.walletAddress.walletSelectionOverride?.decision ?? "AUTO";
   return {
     address: row.walletAddress.address,
     automaticStatus: row.automaticStatus,
-    effectiveStatus: effectiveWalletSelectionStatus(row.automaticStatus, decision),
+    effectiveStatus:
+      policyVersion === WALLET_SELECTION_V2_POLICY_VERSION
+        ? decision === "EXCLUDE"
+          ? "EXCLUDED"
+          : row.automaticStatus
+        : effectiveWalletSelectionStatus(row.automaticStatus, decision),
     historyCompleteness: row.performanceRun?.historyCompleteness ?? null,
     lastSyncAt: row.walletAddress.lastSyncAt?.toISOString() ?? null,
     manualOverride: decision,
@@ -629,7 +667,7 @@ function toItemDto(row: SelectionResultRow): WalletSelectionItemDto {
     performanceRunTrustState: row.performanceRun?.trustState ?? null,
     performanceCalculationTo: row.performanceRun?.calculationTo.toISOString() ?? null,
     rank: row.rank,
-    reasonCodes: row.reasonCodes as WalletSelectionReasonCode[],
+    reasonCodes: row.reasonCodes as (WalletSelectionReasonCode | WalletSelectionV2ReasonCode)[],
     trustedClosedCycleCount: row.performanceRun?._count.positionCycles ?? 0,
     walletAddressId: row.walletAddressId,
   };
@@ -658,7 +696,7 @@ function countStatuses(
 
 function selectionFingerprint(
   sourceId: string,
-  policy: WalletSelectionPolicy,
+  policy: WalletSelectionPolicy | WalletSelectionV2Policy,
   wallets: Awaited<ReturnType<PrismaWalletSelectionService["loadUniverse"]>>,
   evaluatedAt: Date,
 ): string {
@@ -673,10 +711,43 @@ function selectionFingerprint(
         evaluatedAt.getTime() - wallet.lastSyncAt.getTime() > maximumAgeMs,
       lastSyncAt: wallet.lastSyncAt?.toISOString() ?? null,
       performanceRunId: wallet.metricCalculationRuns[0]?.id ?? null,
+      tradeHistoryEvaluable: wallet.metricCalculationRuns[0]
+        ? isTradeHistoryEvaluable(
+            wallet.metricCalculationRuns[0]._count.positionCycles,
+            wallet.metricCalculationRuns[0].performanceMetrics,
+          )
+        : false,
       walletAddressId: wallet.id,
     })),
   };
   return createHash("sha256").update(JSON.stringify(payload)).digest("hex");
+}
+
+export function isTradeHistoryEvaluable(
+  trustedClosedCycleCount: number,
+  metrics: readonly {
+    readonly calculationFrom: Date;
+    readonly calculationTo: Date;
+    readonly metricKey: string;
+    readonly metricVersion: string;
+    readonly status: string;
+  }[],
+): boolean {
+  if (!Number.isSafeInteger(trustedClosedCycleCount) || trustedClosedCycleCount <= 0) return false;
+  const required = WALLET_SELECTION_V2_REQUIRED_METRICS.map((metricKey) =>
+    metrics.find((metric) => metric.metricKey === metricKey),
+  );
+  if (required.some((metric) => metric === undefined)) return false;
+  const first = required[0]!;
+  if (first.calculationTo.getTime() < first.calculationFrom.getTime()) return false;
+  return required.every(
+    (metric) =>
+      metric !== undefined &&
+      metric.metricVersion === PERFORMANCE_VERSION &&
+      metric.status === "AVAILABLE" &&
+      metric.calculationFrom.getTime() === first.calculationFrom.getTime() &&
+      metric.calculationTo.getTime() === first.calculationTo.getTime(),
+  );
 }
 
 function isUniqueConstraintError(error: unknown): boolean {

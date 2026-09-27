@@ -1,5 +1,7 @@
 # Phase 4.3 参考ウォレット選定仕様
 
+> 本文は`wallet-selection-v1`の正式仕様として保持する。無料データによる通常自動flowの`wallet-selection-v2`は`docs/free-data-wallet-selection-v2.md`を正本とし、v1の計算・閾値・履歴を変更しない。
+
 最終更新: 2026-09-23
 
 ## 1. 目的

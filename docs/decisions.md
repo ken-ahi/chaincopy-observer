@@ -353,3 +353,14 @@
 - Daily NAV: UTC日ごとに最後の正のsnapshotを選ぶ。同日に後続の0以下snapshotがあっても先行する正の正式pointを捨てないが、その日に正のpointが1件もなければ`NON_POSITIVE_NAV`でReturn Laneを停止する。forward-fill、zero-fill、補間は行わない。
 - Completeness: `calculationFrom`から`calculationTo`までの保存済みUTC日を検査し、prefix / suffix不足は`PARTIAL`、取得範囲内部の欠損は`GAP_DETECTED`とする。NAV固有gapはReturn Laneを停止する一方、ADR-028に従い独立して検証可能なTrade / Exposure Laneまで破棄しない。source全体のgap DQ / cursorは従来どおり全関連Laneをfail closedにする。
 - Version: 金融式、Selection threshold、Metric定義を変更せず、既存`docs/calculations.md`の実装不整合を修正するため`performance-v3`を維持する。追加pointと修正後completenessはinput fingerprintを変えるため、新規Runとして監査可能であり、既存Runを更新・削除しない。
+
+## ADR-039: 無料データの参考wallet選定はclosed-cycle品質を使うv2へ分離する
+
+- 状態: 採用
+- 背景: 公式無料Info APIは長期の連続Daily NAVを供給せず、修正済み`wallet-selection-v1`はautomatic universe 46/46を正しくfail closedにした。一方、`performance-v3`は既知FLAT境界から連続性を証明できたclosed Position Cycleと取引指標を独立Laneとして保存している。
+- Version分離: NAV completeness、annualized return、max drawdownを要求するv1は変更・削除しない。通常自動flowは`wallet-selection-v2`を使い、v1とv2のRunを`policyVersion / policySnapshot / inputFingerprint`で共存させる。schema追加は行わない。
+- Evaluability: `closed-position-cycle-v1`はcurrent trusted `performance-v3`、closed cycle 1件以上、6つの取引Metricが同一coverageで`AVAILABLE`であることを要求する。不明prefix、gap、discontinuityを跨ぐ進行中cycleは既存builderが破棄する。過去の証明済みclosed cycleを使うことはsource履歴全体をCOMPLETEと呼ぶことではない。
+- Gate: 30 closed cycles、win rate 0.55以上、Profit Factor 1以上、top trade contribution 0.50以下、freshness 24時間、6必須metricを要求する。値は46 walletのread-only分布から選び、欠損補完、閾値緩和、manual INCLUDEを行わない。
+- Ranking: win rate降順、closed cycle降順、Profit Factor降順、top trade contribution昇順、canonical address昇順とする。30-cycle gateがsmall-sampleをranking前に除外する。Decimal比較を使いweighted scoreは導入しない。
+- Flow / UI: Discovery promotion、sync / DQ、trusted Performance、Selection Run、EXCLUDE denylist、`listEffectiveSelectedWallets()`、Behavior no-op契約を再利用する。通常UIはNAV指標でなく、cycle数、win rate、Profit Factor、average win/loss、top contribution、latest activityを表示する。
+- 詳細: `docs/free-data-wallet-selection-v2.md`を正本とする。

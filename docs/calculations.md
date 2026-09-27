@@ -260,3 +260,7 @@ leverage 95パーセンタイルは有効snapshotを昇順にし、`PERCENTILE_C
 |  15 | 履歴Gap          | 範囲内にopen `GAP_DETECTED`                                                                                         | `DATA_GAP`、path依存値なし                                                  |
 |  16 | 履歴打切り       | `TRUNCATED`かつ要求開始がavailableFrom以前                                                                          | `HISTORY_TRUNCATED`、期間値なし                                             |
 |  17 | Decimal大桁      | long size `"1000000000000000000.000000000000000001"`、entry `"1.000000000000000001"`、exit `"1.000000000000000002"` | 検算PnL `"1.000000000000000001"`                                            |
+
+## 10. Wallet Selection v2で利用する保存値
+
+`wallet-selection-v2`は本書の金融式を再計算・変更せず、同じtrusted `performance-v3` Runに保存されたclosed `PositionCycle`件数と`winRate / profitFactor / averageWin / averageLoss / maxLosingStreak / topTradeContribution`だけを読む。全6 metricが`AVAILABLE`かつ同一coverage windowであることを要求し、欠損値を0へ変換しない。NAV由来のreturn / drawdownはv2 gateへ使用しない。選定契約と閾値は`docs/free-data-wallet-selection-v2.md`を正本とする。
