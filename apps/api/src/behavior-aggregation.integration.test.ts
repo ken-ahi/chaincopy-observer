@@ -343,4 +343,35 @@ describe.sequential("aggregation isolated persistence", { timeout: 30_000 }, () 
       }),
     ).toBe(before);
   });
+  it("reconciles SHORT open/close at FLAT without interpreting negative zero as flip", async () => {
+    const at = "2026-01-01T02:00:00.000Z";
+    await addEvent("short-open", at);
+    const id = `${prefix}-short-open`;
+    await database.normalizedTrade.update({ where: { id }, data: { side: "SELL" } });
+    await database.selectedWalletBehaviorEvent.update({
+      where: { id },
+      data: { direction: "SHORT", afterPosition: "-1", quantityDelta: "-1" },
+    });
+    expect(await service.processBucket("BTC", at)).toMatchObject({
+      status: "VALID",
+      totals: { semantics: { SHORT_OPEN: { eventCount: 1 } } },
+    });
+    await database.normalizedTrade.update({
+      where: { id },
+      data: { side: "BUY", startPosition: "-1" },
+    });
+    await database.selectedWalletBehaviorEvent.update({
+      where: { id },
+      data: {
+        eventType: "POSITION_CLOSE",
+        beforePosition: "-1",
+        afterPosition: "0",
+        quantityDelta: "1",
+      },
+    });
+    expect(await service.processBucket("BTC", at)).toMatchObject({
+      status: "VALID",
+      totals: { semantics: { SHORT_CLOSE: { eventCount: 1 } } },
+    });
+  });
 });

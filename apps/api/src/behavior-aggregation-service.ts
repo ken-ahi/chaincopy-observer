@@ -154,7 +154,9 @@ export class PrismaBehaviorAggregationService {
       const before = new Exact(fill.startPosition.toString());
       const size = new Exact(fill.size.toString());
       const after = before.plus(fill.side === "BUY" ? size : size.negated());
-      const flip = before.times(after).isNegative();
+      // Decimal preserves negative zero: -position * 0 is not a reversal.
+      const flip =
+        !before.isZero() && !after.isZero() && before.isNegative() !== after.isNegative();
       if (
         fill.sourceId !== source.id ||
         size.lte(0) ||
