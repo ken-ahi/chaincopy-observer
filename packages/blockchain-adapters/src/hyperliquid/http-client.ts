@@ -8,6 +8,7 @@ import {
   isRetryableHyperliquidError,
 } from "./errors.js";
 import { WeightedRateLimiter } from "./rate-limiter.js";
+import { perpAnnotationSchema, perpDexsSchema, quoteSpotMetaSchema } from "./quote-metadata.js";
 import {
   clearinghouseStateSchema,
   frontendOpenOrdersSchema,
@@ -81,11 +82,38 @@ export class HyperliquidHttpClient {
     });
   }
 
-  public meta(): Promise<HyperliquidHttpResponse<HyperliquidPerpetualMeta>> {
+  public meta(dex?: string): Promise<HyperliquidHttpResponse<HyperliquidPerpetualMeta>> {
     return this.request({
-      body: { type: "meta" },
+      body: compact({ type: "meta", dex }),
       endpointType: "meta",
       responseSchema: perpetualMetaSchema,
+      weight: 20,
+    });
+  }
+
+  public perpDexs() {
+    return this.request({
+      body: { type: "perpDexs" },
+      endpointType: "perpDexs",
+      responseSchema: perpDexsSchema,
+      weight: 20,
+    });
+  }
+
+  public spotMeta() {
+    return this.request({
+      body: { type: "spotMeta" },
+      endpointType: "spotMeta",
+      responseSchema: quoteSpotMetaSchema,
+      weight: 20,
+    });
+  }
+
+  public perpAnnotation(coin: string) {
+    return this.request({
+      body: { type: "perpAnnotation", coin },
+      endpointType: "perpAnnotation",
+      responseSchema: perpAnnotationSchema,
       weight: 20,
     });
   }

@@ -11,6 +11,11 @@ import type { BehaviorJobData, BehaviorWalletCoinJobData } from "@chaincopy/doma
 import { type Queue } from "bullmq";
 
 import { enqueueBehaviorJob } from "./queue.js";
+import {
+  unresolvedBehaviorMarket,
+  type BehaviorMarketResolver,
+  type BehaviorMarketResolution,
+} from "./market-provenance.js";
 import type { BehaviorFillRow, BehaviorRepository } from "./repository.js";
 import type { BehaviorSelectionSource } from "./selection-source.js";
 
@@ -24,6 +29,7 @@ export class BehaviorNormalizationService {
     private readonly repository: BehaviorRepository,
     private readonly selectionSource: BehaviorSelectionSource,
     private readonly queue: Queue<BehaviorJobData>,
+    private readonly marketResolver?: BehaviorMarketResolver,
   ) {}
 
   public async processControl(requestedAt: string): Promise<BehaviorProcessResult> {
@@ -70,14 +76,19 @@ export class BehaviorNormalizationService {
       page.fills[0]?.occurredAt ?? page.incompleteTimestampGroupAt ?? new Date(data.requestedAt);
     const calculationTo =
       page.fills.at(-1)?.occurredAt ?? page.incompleteTimestampGroupAt ?? calculationFrom;
+    const market = this.marketResolver
+      ? await this.marketResolver.resolve(data.coin)
+      : unresolvedBehaviorMarket(data.coin);
+    const inputDigest = createHash("sha256").update(
+      page.fills.map((fill) => fill.id).join("\u0000"),
+    );
+    if (market.evidence) inputDigest.update(`\u0000${market.evidence.fingerprint}`);
     const run = await this.repository.createRun({
       behaviorVersion: BEHAVIOR_VERSION,
       calculationFrom,
       calculationTo,
       coin: data.coin,
-      inputFingerprint: createHash("sha256")
-        .update(page.fills.map((fill) => fill.id).join("\u0000"))
-        .digest("hex"),
+      inputFingerprint: inputDigest.digest("hex"),
       walletAddressId: data.walletAddressId,
     });
     await this.repository.addSelectionScope(run.id, wallet);
@@ -103,14 +114,35 @@ export class BehaviorNormalizationService {
       });
       return { outcome: "blocked", processedEvents: 0 };
     }
+    if (market.evidence) {
+      if (page.fills.some((fill) => fill.feeToken !== market.evidence!.contract.collateralAsset)) {
+        await this.repository.recordIssue({
+          coin: data.coin,
+          detail: "Fill fee asset conflicts with the proven collateral asset.",
+          reason: "SOURCE_INCONSISTENT",
+          runId: run.id,
+          sourceGroupAt: calculationFrom,
+          walletAddressId: data.walletAddressId,
+        });
+        return { outcome: "blocked", processedEvents: 0 };
+      }
+      // No custom event may commit until its exact official evidence is durable.
+      await this.repository.recordQuoteEvidence(run.id, data.walletAddressId, market.evidence);
+    }
     let boundary = cursor?.boundaryAfterPosition?.toString() ?? null;
     let processedEvents = 0;
     for (const group of timestampGroups(page.fills)) {
-      const result = boundary === null ? resolveInitialBoundary(group) : normalize(group, boundary);
+      const result =
+        boundary === null
+          ? resolveInitialBoundary(group, market)
+          : normalize(group, boundary, market);
       if (!result.ok) {
         await this.repository.recordIssue({
           coin: data.coin,
-          detail: result.detail,
+          detail:
+            result.reason === "UNSUPPORTED_QUOTE"
+              ? (market.detail ?? result.detail)
+              : result.detail,
           reason: result.reason,
           runId: run.id,
           sourceGroupAt: group[0]?.occurredAt ?? null,
@@ -148,15 +180,19 @@ export class BehaviorNormalizationService {
 function normalize(
   group: readonly BehaviorFillRow[],
   boundaryPosition: string,
+  market: BehaviorMarketResolution,
 ): BehaviorGroupResult {
   return normalizeTimestampGroup({
     boundaryPosition,
     fills: group.map(toInput),
-    market: marketForCoin(group[0]!.coin),
+    market,
   });
 }
 
-function resolveInitialBoundary(group: readonly BehaviorFillRow[]): BehaviorGroupResult {
+function resolveInitialBoundary(
+  group: readonly BehaviorFillRow[],
+  market: BehaviorMarketResolution,
+): BehaviorGroupResult {
   let positions: string[];
   try {
     positions = group.map((fill) => canonicalDecimal(fill.startPosition));
@@ -174,13 +210,7 @@ function resolveInitialBoundary(group: readonly BehaviorFillRow[]): BehaviorGrou
       detail: "The initial timestamp group has no source-proven FLAT boundary.",
     };
   // Do not infer a nonzero boundary, or mask quote/order/source errors as missing history.
-  return normalize(group, "0");
-}
-
-function marketForCoin(coin: string) {
-  return coin.includes(":")
-    ? { quoteAsset: "UNKNOWN", usdEquivalent: false }
-    : { quoteAsset: "USDC", usdEquivalent: true };
+  return normalize(group, "0", market);
 }
 
 function toInput(fill: BehaviorFillRow): BehaviorFillInput {

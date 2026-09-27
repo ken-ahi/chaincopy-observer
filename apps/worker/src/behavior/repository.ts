@@ -4,6 +4,7 @@ import type { SelectedWalletBehaviorEventValue } from "@chaincopy/analytics";
 import type { BehaviorDataQualityReason, Prisma, PrismaClient } from "@chaincopy/database";
 
 import type { EffectiveBehaviorWallet } from "./selection-source.js";
+import { BEHAVIOR_QUOTE_EVIDENCE_TYPE, type BehaviorQuoteEvidence } from "./market-provenance.js";
 
 export const BEHAVIOR_READ_BATCH_SIZE = 5_000;
 export const BEHAVIOR_WRITE_BATCH_SIZE = 1_000;
@@ -20,6 +21,7 @@ export interface BehaviorFillRow {
   readonly price: string;
   readonly startPosition: string;
   readonly occurredAt: Date;
+  readonly feeToken?: string;
 }
 
 export interface BehaviorFillPage {
@@ -59,6 +61,7 @@ export class BehaviorRepository {
       orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
       select: {
         coin: true,
+        feeToken: true,
         id: true,
         occurredAt: true,
         price: true,
@@ -88,6 +91,7 @@ export class BehaviorRepository {
       orderBy: { id: "asc" },
       select: {
         coin: true,
+        feeToken: true,
         id: true,
         occurredAt: true,
         price: true,
@@ -200,6 +204,40 @@ export class BehaviorRepository {
         behaviorVersion_walletAddressId_coin_calculationFrom_calculationTo_inputFingerprint: input,
       },
     });
+  }
+
+  public async recordQuoteEvidence(
+    runId: string,
+    walletAddressId: string,
+    evidence: BehaviorQuoteEvidence,
+  ): Promise<void> {
+    const externalEventId = `${BEHAVIOR_QUOTE_EVIDENCE_TYPE}:${runId}`;
+    const fingerprint = createHash("sha256")
+      .update(JSON.stringify([externalEventId, evidence.fingerprint]))
+      .digest("hex");
+    await this.database.rawEvent.createMany({
+      data: [
+        {
+          eventType: BEHAVIOR_QUOTE_EVIDENCE_TYPE,
+          externalEventId,
+          fingerprint,
+          rawPayload: JSON.stringify({ normalizationRunId: runId, ...evidence }),
+          sourceId: this.sourceId,
+          transport: "HTTP",
+          walletAddressId,
+        },
+      ],
+      skipDuplicates: true,
+    });
+    const saved = await this.database.rawEvent.findUniqueOrThrow({
+      where: { sourceId_externalEventId: { sourceId: this.sourceId, externalEventId } },
+    });
+    if (
+      saved.fingerprint !== fingerprint ||
+      saved.walletAddressId !== walletAddressId ||
+      saved.eventType !== BEHAVIOR_QUOTE_EVIDENCE_TYPE
+    )
+      throw new Error("Persisted Behavior quote evidence conflicts with the normalization run.");
   }
 
   public async saveSuccessfulGroup(input: {
@@ -344,6 +382,7 @@ function toFillRow(row: {
   price: Prisma.Decimal;
   startPosition: Prisma.Decimal;
   occurredAt: Date;
+  feeToken: string;
 }): BehaviorFillRow {
   return {
     ...row,

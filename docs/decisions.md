@@ -374,3 +374,12 @@
 - Activity: rankingのlatestActivityAtはeligible trusted walletのcanonical保存済みFillの最大occurredAt（なければnull）。計算日時・sync日時・nowを代用しない。UIは「最終約定（取得済み）」と明示し、rank/thresholdには使わない。
 - Version: 既存Phase 5.0仕様への整合修正でありevent identity/金融式を変えないためbehavior-v1維持。performance-v3/wallet-selection-v2を変更しない。
 - 詳細: `docs/selected-wallet-behavior-correctness.md`。
+
+## ADR-041: xyz:CLのquoteは公式DEX/token/annotationの厳格joinで証明する
+
+- 状態: 採用
+- 根拠: 公式Info APIのDEX `xyz`、exact universe `xyz:CL`、collateral index 0、canonical USDC token ID、WTI 1 barrel/USD annotationが一致した。symbol suffixやfeeToken単独からquoteを推定しない。
+- 契約: `hyperliquid-xyz-cl-usd-v1`だけを許可し、USD reference / USDC settlement / native multiplier 1を使う。未登録custom、欠損、重複、競合、API失敗はUNSUPPORTED_QUOTE。歴史的notionalは登録時collateralとnative size×price契約に基づき、現在のmutable annotationを過去snapshotとは呼ばない。
+- 保存: schema変更を避け、完全な公式responseとhash/取得時刻をRunへ紐づくappend-only RawEventに保存する。通常HTTP retentionから当該証拠種別を除外する。Run inputには証拠hashを含め、event identity/既存event/金融式/Selectionは変えない。
+- DQ: 既存successful-group lifecycleのみ使用し、手動解消しない。unknown boundary/不可能遷移をskipしない。
+- 詳細と期間上の限界: `docs/hyperliquid-xyz-cl-quote-provenance.md`。

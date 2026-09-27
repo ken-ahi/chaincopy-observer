@@ -23,7 +23,7 @@ export function createCleanupQuery(rule: CleanupRule): CleanupQuery {
         indexName: "raw_events_cleanup_transport_received_at_id_idx",
         parameters: [rule.cutoff],
         selectionSql:
-          "SELECT id FROM raw_events WHERE transport = 'HTTP' AND received_at < $1 ORDER BY received_at, id",
+          "SELECT id FROM raw_events WHERE transport = 'HTTP' AND received_at < $1 AND event_type <> 'behavior-market-provenance-v1' ORDER BY received_at, id",
       };
     case "order_history":
       return {
