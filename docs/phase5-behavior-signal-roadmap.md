@@ -130,12 +130,9 @@ Phase 5.0のウォレット単位Behavior Eventを、coin単位・時間bucket�
 
 ## 6. Phase 5.2: Wallet Weighting
 
-> Phase 5.1 compatibility follow-up (2026-09-27): Phase 5.2 must be redesigned
-> against wallet-selection-v2 and trusted closed-cycle metrics before implementation.
-> The historical annualizedReturn/maxDrawdown/data-completeness candidates below
-> are not mandatory free-data inputs. Audit win rate, trusted closed cycle count,
-> Profit Factor and top trade contribution; no weighting formula is approved here.
-> Selection thresholds remain unchanged. See `phase5-1-behavior-aggregation-spec.md`.
+> Phase 5.2 redesign (2026-09-28): wallet-selection-v2 / trusted closed cyclesを
+> 正とする。確定契約は `phase5-2-wallet-weight-spec.md`、判断はADR-043。
+> 実DBへの新規weight 2 table migrationはOwner別承認待ち。
 
 ### 6.1 責務
 
@@ -145,15 +142,15 @@ Selectionは「参考集合に含めるか」、Weightは「集合内でどの�
 
 ### 6.2 入出力と要件
 
-入力候補はPhase 4で既に保存されている指標に限定する。
+入力はPhase 4で既に保存されているtrusted closed-cycle指標に限定する。
 
-- `annualizedReturn`
-- `maxDrawdown`
+- `winRate`
+- `profitFactor`
 - `trustedClosedCycleCount`
 - `topTradeContribution`
-- data completeness
+- `averageWin / averageLoss / maxLosingStreak`は監査証拠として保持し、scoreには加えない。
 
-具体的な式はPhase 5.2仕様で固定する。計算はDecimalを使用し、weightを0以上の明示的な範囲に制限する。同一入力から同一weightを生成し、計算根拠とversionを保存する。欠損値を推測せず、LLMにweightを判断させない。
+`wallet-weight-v1`: quality `(winRate + PF/(1+PF))/2` × confidence `n/(n+30)` × concentration `1-topTradeContribution`。Decimalで有界raw scoreを計算し、largest remainder/address順でcohort合計を正確に1へ正規化する。Selection条件は再実装しない。immutable snapshotへ証拠・versionを保存し、欠損やall-zeroはfail closed。NAV指標・LLM・Signalは使用しない。
 
 完了条件は、各effective selected walletについて再現可能なweightを取得できることである。
 

@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-27 (Asia/Tokyo)
+最終更新: 2026-09-28 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -8,12 +8,24 @@
 
 ## 現在のGitHub状態
 
-- branch: `codex/phase5-1-behavior-aggregation`
-- branch base: `5f220cfee4b3df2a7dadf2f890c94101fa183121`（PR #35 merge）
+- branch: `codex/phase5-2-wallet-weight`
+- branch base: `db8ac2cc5160948db8b9c4a970c6d1656cb6bb3b`（PR #36 merge）
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
-- PR #29〜#35はmainへmerge済み。46 wallet refresh / incidentのcontained判定、BTC/xyz:CL recoveryは完了済みで繰り返さない。現在はPhase 5.1 coin-level aggregation工程。
+- PR #29〜#36はmainへmerge済み。46 wallet refresh、BTC/xyz:CL recovery、Phase 5.1集約は完了済みで繰り返さない。現在はPhase 5.2 deterministic wallet weight工程。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- 下記の過去工程のPR open表記・承認境界は当時の記録。現在のOwner契約はselected walletの既存2,012 Behavior eventsの集約実装・限定検証とPR/CI成功後の安全境界内自動mergeを許可する。新規aggregation 2 tableのみの実migrationはOwner追加承認済み。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+- 下記の過去工程のPR open表記・承認境界は当時の記録。現在はPhase 5.2の設計・実装・隔離検証・commit/push/PR/CIを許可。新規weight 2 tableの実migrationは**未承認**であり、Phase 5.1承認を流用しない。承認待ちの間はmain mergeもしない。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+
+## Phase 5.2 wallet-weight-v1
+
+- 正式契約: `docs/phase5-2-wallet-weight-spec.md` / ADR-043。
+- Read-only監査: automatic 46、trusted Performance 44、trade-history evaluable 36、SELECTED 1 / QUALIFIED 0。PF/cycle外れ値を踏まえbounded transformを採用。selected 1件に係数をfitしない。
+- Selection SSoT admissionを再利用。quality × sample confidence × concentration、Decimal precision 80、cohort合計正確に1。NAV指標・追加threshold・Signalは導入しない。
+- 新規immutable snapshot/entry 2 table、4 Restrict FK、既存tableへのDDL/書換えなし。SQL: `prisma/migrations/20260928000000_wallet_weight/migration.sql`。
+- PreviewはREAD ONLY、実DB永続化・migration未実施。APIはmatching current receiptのみ返す。過去snapshotは新Performance/EXCLUDE/cohort変更でも不変。
+- 検証結果とOwner承認時の次操作はPhase 5.2 verification文書へ記録する。承認まで正式CLIの実DB `--execute`、migration、main mergeには進まない。
+- 実DB read-only preview 2回一致: raw `0.339174742605900594492010777724425848` / normalized `1`、input fingerprint `df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd`。Behavior 2,012 / bucket 1,332 / revision 1,332の全列hash不変、OPEN Behavior DQ 0、Selection/queue不変。新規weight tableは未作成。
+- Validation: format/lint PASS、typecheck/build 11/11、78 files / 756 tests、隔離E2E 22/22、audit high+ 0（既存moderate 4）、diff check PASS。全DB/Redisテストは明示した隔離55433/56380のみ。実DB操作はread-only。
+- 詳細証拠・migration SQL SHA・再開手順: `docs/phase5-2-verification.md`。コード/検証完了後も `READY_FOR_MIGRATION_APPROVAL` で停止し、PR/CIを確認して承認を待つ。Phase 5.3は未着手。
 
 ## Phase 5.1 aggregation（実装・限定運用検証完了）
 

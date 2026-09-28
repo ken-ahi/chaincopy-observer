@@ -384,6 +384,17 @@
 - DQ: 既存successful-group lifecycleのみ使用し、手動解消しない。unknown boundary/不可能遷移をskipしない。
 - 詳細と期間上の限界: `docs/hyperliquid-xyz-cl-quote-provenance.md`。
 
+## ADR-043: Phase 5.2はv2のadmissionと分離した有界・不変の影響度snapshot
+
+- 状態: 実装契約採用。実DB migrationと永続化は別途Owner承認待ち（Phase 5.1承認を流用しない）。
+- 根拠: automatic 46 / evaluable 36のread-only監査でPF最大135.35、cycle最大928を確認。selected 1件だけから係数を調整しない。NAV指標・線形PF・候補母集団percentileを用いない。
+- 式: `(winRate + PF/(1+PF))/2 * n/(n+30) * (1-topTradeContribution)`。自然なbreak-even、対称平均、v2既存標本数30、最大勝ち以外の利益比率を根拠とし、追加閾値・指数なし。average win/lossはsize/payoff重複、streakは履歴長依存のため監査のみ。
+- 正規化: Decimal precision 80、raw 36桁、normalized 18桁。largest remainderとcanonical address tie-breakで合計1。all-zero/missingはfail closed、SSoT以外を救済しない。
+- Provenance: Selection/current trusted Performanceと全metric/windowをimmutable snapshotに固定。新PerformanceとSelection evidenceが不一致なら再評価待ち。過去snapshotを変更しない。
+- 永続化: 新規snapshot/entry 2 table、Restrict FK。READ ONLY preview/API、明示fingerprint付きserializable writerのみ。source、Selection、Behavior、aggregation、queueの書換えなし。
+- 下流: Phase 5.3は同一cohortのaggregation revision IDとweight snapshot IDを結合する。今回Signalを実装しない。
+- 詳細: `docs/phase5-2-wallet-weight-spec.md`。
+
 ## ADR-042: Phase 5.1は15分UTC・現在選定cohortの再現可能なBehavior集約
 
 - 状態: 採用。2,012 eventsの密度とSPECの将来30分consensus windowから15分UTC半開区間を選択。
