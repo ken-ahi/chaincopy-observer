@@ -26,6 +26,7 @@
 - 実DB read-only preview 2回一致: raw `0.339174742605900594492010777724425848` / normalized `1`、input fingerprint `df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd`。Behavior 2,012 / bucket 1,332 / revision 1,332の全列hash不変、OPEN Behavior DQ 0、Selection/queue不変。新規weight tableは未作成。
 - Validation: format/lint PASS、typecheck/build 11/11、78 files / 756 tests、隔離E2E 22/22、audit high+ 0（既存moderate 4）、diff check PASS。全DB/Redisテストは明示した隔離55433/56380のみ。実DB操作はread-only。
 - 詳細証拠・migration SQL SHA・再開手順: `docs/phase5-2-verification.md`。コード/検証完了後も `READY_FOR_MIGRATION_APPROVAL` で停止し、PR/CIを確認して承認を待つ。Phase 5.3は未着手。
+- PR: [#37](https://github.com/ken-ahi/chaincopy-observer/pull/37)、実装commit `f15d4b50b56304a2f03fd8cd9267bfb21b1cfb65`。feature push済み、worktree clean。最終headのCI結果はPR checksを正とし、成功してもmigration承認待ちの間はmergeしない。
 
 ## Phase 5.1 aggregation（実装・限定運用検証完了）
 
