@@ -1,6 +1,6 @@
 # Autonomous Development State
 
-最終更新: 2026-09-28 (Asia/Tokyo)
+最終更新: 2026-10-02 (Asia/Tokyo)
 
 ## 目的と正本
 
@@ -13,7 +13,7 @@
 - Issue 26: PR #27のmain mergeにより完了。Stage 3B/3Cやdownstream rebuildは再実行しない。
 - PR #29〜#36はmainへmerge済み。46 wallet refresh、BTC/xyz:CL recovery、Phase 5.1集約は完了済みで繰り返さない。現在はPhase 5.2 deterministic wallet weight工程。
 - AWS Requester PaysのLIST / HEAD / inventory / download、その他の有料データソースは使用しない。過去の有料archive設計は参考資料として保持するが、現行の実行計画ではない。
-- 下記の過去工程のPR open表記・承認境界は当時の記録。現在はPhase 5.2の設計・実装・隔離検証・commit/push/PR/CIを許可。新規weight 2 tableの実migrationは**未承認**であり、Phase 5.1承認を流用しない。承認待ちの間はmain mergeもしない。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は許可しない。
+- 下記の過去工程のPR open表記・承認境界は当時の記録。Phase 5.2の新規weight 2 table migrationは正確なSQL SHA256に対してOwner承認済みで、10月2日に限定適用・実検証を完了した。Phase 5.1承認の流用ではない。PR #37は最終head CI成功・mergeable・scope不変を条件にOwnerが自動mergeを承認。Selection閾値、Discovery拡大、destructive DB/Redis、手動DQ/cursor変更は引き続き許可しない。
 
 ## Phase 5.2 wallet-weight-v1
 
@@ -21,12 +21,14 @@
 - Read-only監査: automatic 46、trusted Performance 44、trade-history evaluable 36、SELECTED 1 / QUALIFIED 0。PF/cycle外れ値を踏まえbounded transformを採用。selected 1件に係数をfitしない。
 - Selection SSoT admissionを再利用。quality × sample confidence × concentration、Decimal precision 80、cohort合計正確に1。NAV指標・追加threshold・Signalは導入しない。
 - 新規immutable snapshot/entry 2 table、4 Restrict FK、既存tableへのDDL/書換えなし。SQL: `prisma/migrations/20260928000000_wallet_weight/migration.sql`。
-- PreviewはREAD ONLY、実DB永続化・migration未実施。APIはmatching current receiptのみ返す。過去snapshotは新Performance/EXCLUDE/cohort変更でも不変。
-- 検証結果とOwner承認時の次操作はPhase 5.2 verification文書へ記録する。承認まで正式CLIの実DB `--execute`、migration、main mergeには進まない。
-- 実DB read-only preview 2回一致: raw `0.339174742605900594492010777724425848` / normalized `1`、input fingerprint `df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd`。Behavior 2,012 / bucket 1,332 / revision 1,332の全列hash不変、OPEN Behavior DQ 0、Selection/queue不変。新規weight tableは未作成。
-- Validation: format/lint PASS、typecheck/build 11/11、78 files / 756 tests、隔離E2E 22/22、audit high+ 0（既存moderate 4）、diff check PASS。全DB/Redisテストは明示した隔離55433/56380のみ。実DB操作はread-only。
-- 詳細証拠・migration SQL SHA・再開手順: `docs/phase5-2-verification.md`。コード/検証完了後も `READY_FOR_MIGRATION_APPROVAL` で停止し、PR/CIを確認して承認を待つ。Phase 5.3は未着手。
-- PR: [#37](https://github.com/ken-ahi/chaincopy-observer/pull/37)、実装commit `f15d4b50b56304a2f03fd8cd9267bfb21b1cfb65`。feature push済み、worktree clean。最終headのCI結果はPR checksを正とし、成功してもmigration承認待ちの間はmergeしない。
+- PreviewはREAD ONLY、APIはmatching current receiptのみ返す。過去snapshotは新Performance/EXCLUDE/cohort変更でも不変。
+- 10月1日のpreflightは保存previewのtimestamp `.45Z` / canonical `.450Z`不一致で実変更前に停止。原因はPowerShell JSONの自動日時変換による末尾0除去。Owner承認により10月2日にJSONの2文字列だけを訂正し、SHA256(JSON.stringify(inputSnapshot))が宣言値と完全一致することを確認。金融入力・式・コード・schema・SQLに変更なし。全preflightを初めから再実行した。
+- 実行provenance: HEAD `12253b2c8350d44b10947ded1ee64a22ca3ca9d8`、image `sha256:b1abab1d53ce6793d85974d9596b755f9a6e6cb027902530f13d1eb522312f7d`。PostgreSQL/Redis healthy、pendingは承認済み1件だけ、disk・current cohort・保護hash・queueを再確認してから適用。SQL SHA256 `566d4ac9e246a6a072c56fbe308aabb5dc77940ed19bacbc1d562a6362ec9c67`一致、migration完了 `2026-10-02T13:30:06.498Z`、12 applied / 0 pending。2 table / 7 index / 4 RESTRICT FK / bounds CHECKをcatalog確認済み。
+- migration後の**fresh live preview**を正として正式CLIで1 snapshot / 1 entryだけ保存。raw `0.339174742605900594492010777724425848` / normalized `1`、input fingerprint / snapshot ID `df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd`、calculatedAt `2026-10-02T13:31:01.653Z`。同じCLIの再実行は追加0行、全列・時刻不変。SQL合計は正確に1。現在APIは401/200/no-store/CURRENTとreceipt全項目一致を確認。
+- 最終read-only監査 `2026-10-02T13:36:06.324Z`: Behavior 2,012 / bucket 1,332 / revision 1,332の全列hash不変、OPEN Behavior DQ 0。Selection `cmujbqjbu2af4nq01zg56l0vc`、Performance `cmujbpj6527jdnq01t6zuxi9u`とtrusted evidence、全wallet/cursor/DQ/quarantine/queueも不変。8,427 backlogと既存unlocked active 1は未操作。通常Worker停止、一時処理終了。sync/downstream再計算なし。
+- 実装時隔離Validation: format/lint PASS、typecheck/build 11/11、78 files / 756 tests、隔離E2E 22/22、audit high+ 0（既存moderate 4）、diff check PASS。全DB/Redisテストは明示した隔離55433/56380のみ。今回の追補は3文書のみでlocal format/lint/fingerprint/diff checkと最終head CIを確認し、実DBへtestを接続しない。
+- 詳細証拠・SQL SHA・catalog・実コマンド・保護hash・disk: `docs/phase5-2-verification.md`。実migration/保存/API検証は完了済みで再実行しない。Phase 5.3は未着手・対象外。
+- PR: [#37](https://github.com/ken-ahi/chaincopy-observer/pull/37)。運用追補をcommit/push後、最終head CI/mergeability確認が残る。CI成功かつscope不変なら今回のOwner承認に従いmergeする。最終GitHub状態はPR checksとmerge recordを正とする。
 
 ## Phase 5.1 aggregation（実装・限定運用検証完了）
 

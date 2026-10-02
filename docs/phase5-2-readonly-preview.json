@@ -28,7 +28,7 @@
           "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
           "performanceInputFingerprint": "7d9b36200dfdccdf522f58ca193bf33f9ffe143271111c2472b6797b3f5c5e5c",
           "trustRevision": 0,
-          "metricFrom": "2025-05-15T13:26:43.45Z",
+          "metricFrom": "2025-05-15T13:26:43.450Z",
           "metricTo": "2026-03-22T21:04:53.949Z",
           "trustedClosedCycleCount": "57",
           "metrics": {
@@ -50,7 +50,7 @@
         "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
         "performanceInputFingerprint": "7d9b36200dfdccdf522f58ca193bf33f9ffe143271111c2472b6797b3f5c5e5c",
         "trustRevision": 0,
-        "metricFrom": "2025-05-15T13:26:43.45Z",
+        "metricFrom": "2025-05-15T13:26:43.450Z",
         "metricTo": "2026-03-22T21:04:53.949Z",
         "trustedClosedCycleCount": "57",
         "metrics": {
