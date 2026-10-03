@@ -395,6 +395,14 @@
 - 下流: Phase 5.3は同一cohortのaggregation revision IDとweight snapshot IDを結合する。今回Signalを実装しない。
 - 詳細: `docs/phase5-2-wallet-weight-spec.md`。
 
+## ADR-044: braces 3.0.3への限定・一時security audit例外
+
+- 状態: Owner明示承認、2026-10-03。一時technical debtであり恒久免除ではない。
+- 対象: root dev `@next/eslint-plugin-next → fast-glob → micromatch → braces@3.0.3`、High `GHSA-vfj7-8cjw-p6xm`のみ。公開patched npm releaseがなく、request処理経路ではなくlint/glob toolingに限定されることが承認根拠。tooling DoSリスク自体は残る。
+- 契約: `pnpm security:audit`は通常の`pnpm audit --audit-level high --json`を実行・生出力し、GHSA/package/version/path/dev exposure/count/exit statusを照合する。他High/Critical、欠損・矛盾・取得失敗はfail closed。resolved inventoryの版変更・不在・production経路追加も拒否。広いignore、severity引下げ、`|| true`は導入しない。
+- 撤去: patched/publicな依存経路が提供されたら直ちに最小修正と全隔離検証を行い、例外を撤去して通常auditへ戻す。自動延長・別advisory/版への流用禁止。
+- 詳細: `docs/security-audit-exception.md`。金融式、Selection、schema/migration、実DB/Redisとは独立。
+
 ## ADR-042: Phase 5.1は15分UTC・現在選定cohortの再現可能なBehavior集約
 
 - 状態: 採用。2,012 eventsの密度とSPECの将来30分consensus windowから15分UTC半開区間を選択。

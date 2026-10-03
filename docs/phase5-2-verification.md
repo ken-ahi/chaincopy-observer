@@ -5,7 +5,58 @@ Branch: `codex/phase5-2-wallet-weight`.
 Base main: `db8ac2cc5160948db8b9c4a970c6d1656cb6bb3b` (PR #36).
 Formal design: `phase5-2-wallet-weight-spec.md`, ADR-043.
 
+## Exact temporary audit exception validation (2026-10-03)
+
+Owner approved only `braces@3.0.3` / `GHSA-vfj7-8cjw-p6xm` on the root-dev
+Next ESLint/glob path. `security-audit-exception.md` and ADR-044 record the risk,
+approval and immediate removal condition. This supersedes the historical plain-
+audit blocker below, not the high-severity gate generally.
+
+- `pnpm security:audit` executes plain `pnpm audit --audit-level high --json`,
+  preserves its output and requires an exact policy/inventory match. No dependency
+  version or lockfile change is part of this exception follow-up.
+- Live plain audit still exits 1: critical 0 / high 1 / moderate 7, with the braces
+  advisory visible. The gate exits 0 with `exceptionUsed: true` and the exact
+  advisory/package/version/path in its receipt, not a misleading zero-High claim.
+- Policy tests: **39 PASS**, including extra High/Critical, wrong identity/version,
+  non-string severity, malformed evidence, inventory removal/version/exposure
+  changes and no-High input. Zero High passes only with valid unchanged inventory.
+  New gate and tests have dedicated strict TypeScript coverage.
+- Full isolated validation: frozen install, format/lint PASS; typecheck/build
+  **11/11** plus script strict typecheck; **79 files / 795 tests**; E2E **22/22**;
+  ordinary audit's expected exit 1 followed by gate PASS; `git diff --check` PASS.
+  A final unit rerun passed all 39 after representing array-valued negative fixtures
+  as explicit objects, so the test framework does not unpack the arrays as arguments.
+- Environment: existing `chaincopy-weight-security:20261003` validation image,
+  current scripts/docs/package/CI mounted read-only. Runtime `.env` absent; explicit
+  TEST/E2E URL guard accepted only reserved PostgreSQL 55433 / Redis 56380 and E2E
+  schema/DB15. Real DB/Redis were not connected to. Only isolated fixture/schema
+  mutations from the normal test suites occurred.
+- An initial format attempt encountered the validation image's older API manifest
+  newline representation; mounting the already committed correct manifest fixed
+  that environment mismatch before the successful full run. No application edit
+  or format suppression was introduced.
+- Temporary runner was removed and test containers stopped; ordinary Worker stayed
+  stopped. No live migration, weight persistence, sync, Performance, Selection,
+  Behavior, aggregation, DQ/cursor or queue operation was executed.
+- `prisma/`, application packages, lockfile and workspace overrides have zero diff
+  from `554f6d8`. The approved migration SHA remains
+  `566d4ac9e246a6a072c56fbe308aabb5dc77940ed19bacbc1d562a6362ec9c67`.
+
+Local receipts: gitignored `weight-gate-focused.log`, `weight-gate-focused-final.log`,
+`weight-gate-inventory.log` and `weight-gate-validation.log`. Final-head CI and
+mergeability must still pass before the Owner-authorized PR #37 merge; the exact
+commit/run/merge record is maintained in the PR conversation. Any unapproved
+High/Critical or other gate failure still prevents merge.
+
 ## Dependency-security follow-up (2026-10-03)
+
+Current amendment: Owner subsequently approved the exact temporary braces
+exception in `security-audit-exception.md` / ADR-044. CI #94 on `554f6d8` passed
+all compatibility steps but failed plain audit on braces alone. That historical
+blocker is now handled by an explicit strict gate, not by claiming a patched
+release exists. Original plain audit output and High count remain visible.
+No additional dependency, application, schema or real-data change is made.
 
 The authorized live migration and weight persistence below are complete and must
 not be repeated. [CI #93](https://github.com/ken-ahi/chaincopy-observer/actions/runs/37014531808)
@@ -94,9 +145,10 @@ No formula, Selection, application, schema, Behavior/aggregation or runtime data
 change is included. Temporary validation/smoke helpers were removed; only the
 five dependency files and two state/verification documents are committed.
 Logs are local gitignored `weight-security-*.log` receipts. Final-head CI is still
-required; its authoritative result is linked in PR #37. **Do not merge while the
-remaining high finding exists.** The dependency-security step is BLOCKED, not a
-failure or rollback of the already successful live Phase 5.2 operation.
+required; its authoritative result is linked in PR #37. At this historical step
+the dependency-security result was BLOCKED, not a failure or rollback of the
+successful live Phase 5.2 operation. The subsequent exact exception authorization
+above supersedes only this audit blocker, not any real-data safety boundary.
 
 ## Evidence serialization correction (Owner authorized 2026-10-02)
 
