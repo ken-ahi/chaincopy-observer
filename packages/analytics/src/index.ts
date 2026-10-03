@@ -93,3 +93,4 @@ export type {
 } from "./wallet-selection-v2.js";
 export type * from "./types.js";
 export * from "./behavior-aggregation.js";
+export * from "./wallet-weight.js";

@@ -222,6 +222,7 @@ async function createTestApi(
 ) {
   const app = await createApi({
     behaviorAggregationService: { read: async () => ({ status: "NOT_COMPUTED", items: [] }) },
+    walletWeightService: { current: async () => ({ status: "NO_SELECTED_WALLETS", items: [] }) },
     addressService: service,
     discoveryService: discovery,
     env,
@@ -241,6 +242,16 @@ afterEach(async () => {
 });
 
 describe("API health routes", () => {
+  it("authenticates the read-only wallet weight inspection without caching", async () => {
+    const app = await createTestApi();
+    const url = "/api/wallet-weights/current";
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+    const result = await authorizedGet(app, url);
+    expect(result.statusCode).toBe(200);
+    expect(result.headers["cache-control"]).toBe("no-store");
+    expect(result.json()).toEqual({ status: "NO_SELECTED_WALLETS", items: [] });
+    expect((await authorizedPost(app, url)).statusCode).toBe(404);
+  });
   it("authenticates and bounds the aggregation inspection endpoint", async () => {
     const app = await createTestApi();
     const url =

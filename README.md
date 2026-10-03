@@ -289,6 +289,16 @@ pnpm test
 pnpm test:e2e
 ```
 
+### Phase 5.2 Wallet weight
+
+`wallet-weight-v1`はSelection v2がadmitしたwallet間の決定論的な影響度です。
+`pnpm wallet:weight`はread-only preview、`GET /api/wallet-weights/current`は認証付き
+read-only APIです。式・Decimal・immutable snapshot・Phase 5.3 join契約は
+`docs/phase5-2-wallet-weight-spec.md`を参照してください。
+新規weight 2 tableの実DB migrationはOwner別承認待ちです。承認前は永続化せず、
+`--execute --expected-fingerprint <preview SHA256>`を実DBで使用しません。
+Selection閾値、Behavior、過去集約は変更せず、BUY/SELL Signalは未実装です。
+
 ### Phase 5.1 Behavior aggregation
 
 `behavior-aggregation-v1`は現在のeffective-selected cohortの保存済みBehaviorを
@@ -351,4 +361,4 @@ tests/e2e/
 - [Phase 4.3 Test Matrix](docs/phase4-3-wallet-selection-test-matrix.md)
 - [正本仕様](docs/SPEC.md)
 
-現在はHyperliquid自動探索、`performance-v3`の個別成績計算、Phase 4.3の参考ウォレット選定までです。売買行動の集約、重み付きスコア、シグナル、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
+Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化とPhase 5.1集約まで運用検証済みです。Phase 5.2 weightは実装・隔離検証と実DB migration承認を分離します。BUY/SELLシグナル、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。

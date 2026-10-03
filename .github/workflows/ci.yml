@@ -100,4 +100,4 @@ jobs:
         run: pnpm test:e2e
 
       - name: Audit high-severity vulnerabilities
-        run: pnpm audit --audit-level high
+        run: pnpm security:audit

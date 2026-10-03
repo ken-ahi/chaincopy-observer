@@ -395,6 +395,7 @@ model SyncJob {
 
 /// 監視ウォレットアドレス
 model WalletAddress {
+  weightEntries                WalletWeightEntry[]
   /// ID
   id                           String                        @id @default(cuid())
   /// ウォレットアドレス
@@ -1289,6 +1290,7 @@ model DataQualityIssue {
 
 /// 指標計算実行
 model MetricCalculationRun {
+  weightEntries           WalletWeightEntry[]
   /// ID
   id                      String                         @id @default(cuid())
   /// ウォレットアドレスID
@@ -1521,6 +1523,7 @@ model WalletSelectionSettings {
 
 /// 参考ウォレット選定実行
 model WalletSelectionRun {
+  weightSnapshots         WalletWeightSnapshot[]
   /// ID
   id                      String                      @id @default(cuid())
   /// データソースID
@@ -1832,4 +1835,41 @@ model BehaviorAggregationRevision {
 
   @@unique([bucketId, inputFingerprint], map: "behavior_aggregation_revision_key")
   @@map("behavior_aggregation_revisions")
+}
+
+/// Phase 5.2 immutable selected-cohort weight calculation. No mutable current pointer.
+model WalletWeightSnapshot {
+  id                String              @id
+  weightVersion     String              @map("weight_version")
+  selectionRunId    String              @map("selection_run_id")
+  selectionRun      WalletSelectionRun  @relation(fields: [selectionRunId], references: [id], onDelete: Restrict)
+  cohortFingerprint String              @map("cohort_fingerprint")
+  inputFingerprint  String              @map("input_fingerprint")
+  inputSnapshot     Json                @map("input_snapshot")
+  calculatedAt      DateTime            @default(now()) @map("calculated_at")
+  entries           WalletWeightEntry[]
+
+  @@unique([weightVersion, inputFingerprint], map: "wallet_weight_snapshot_input_key")
+  @@index([selectionRunId, cohortFingerprint, weightVersion], map: "wallet_weight_snapshot_scope_idx")
+  @@map("wallet_weight_snapshots")
+}
+
+/// One admitted wallet's immutable contribution within a coherent cohort.
+model WalletWeightEntry {
+  snapshotId       String               @map("snapshot_id")
+  snapshot         WalletWeightSnapshot @relation(fields: [snapshotId], references: [id], onDelete: Restrict)
+  walletAddressId  String               @map("wallet_address_id")
+  walletAddress    WalletAddress        @relation(fields: [walletAddressId], references: [id], onDelete: Restrict)
+  address          String
+  performanceRunId String               @map("performance_run_id")
+  performanceRun   MetricCalculationRun @relation(fields: [performanceRunId], references: [id], onDelete: Restrict)
+  rawWeight        Decimal              @map("raw_weight") @db.Decimal(38, 36)
+  normalizedWeight Decimal              @map("normalized_weight") @db.Decimal(38, 18)
+  metricInputs     Json                 @map("metric_inputs")
+
+  @@id([snapshotId, walletAddressId])
+  @@unique([snapshotId, address], map: "wallet_weight_entry_address_key")
+  @@index([performanceRunId], map: "wallet_weight_entry_performance_idx")
+  @@index([walletAddressId], map: "wallet_weight_entry_wallet_idx")
+  @@map("wallet_weight_entries")
 }

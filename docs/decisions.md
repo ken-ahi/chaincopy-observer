@@ -384,6 +384,25 @@
 - DQ: 既存successful-group lifecycleのみ使用し、手動解消しない。unknown boundary/不可能遷移をskipしない。
 - 詳細と期間上の限界: `docs/hyperliquid-xyz-cl-quote-provenance.md`。
 
+## ADR-043: Phase 5.2はv2のadmissionと分離した有界・不変の影響度snapshot
+
+- 状態: 実装契約採用。実DB migrationと永続化は別途Owner承認待ち（Phase 5.1承認を流用しない）。
+- 根拠: automatic 46 / evaluable 36のread-only監査でPF最大135.35、cycle最大928を確認。selected 1件だけから係数を調整しない。NAV指標・線形PF・候補母集団percentileを用いない。
+- 式: `(winRate + PF/(1+PF))/2 * n/(n+30) * (1-topTradeContribution)`。自然なbreak-even、対称平均、v2既存標本数30、最大勝ち以外の利益比率を根拠とし、追加閾値・指数なし。average win/lossはsize/payoff重複、streakは履歴長依存のため監査のみ。
+- 正規化: Decimal precision 80、raw 36桁、normalized 18桁。largest remainderとcanonical address tie-breakで合計1。all-zero/missingはfail closed、SSoT以外を救済しない。
+- Provenance: Selection/current trusted Performanceと全metric/windowをimmutable snapshotに固定。新PerformanceとSelection evidenceが不一致なら再評価待ち。過去snapshotを変更しない。
+- 永続化: 新規snapshot/entry 2 table、Restrict FK。READ ONLY preview/API、明示fingerprint付きserializable writerのみ。source、Selection、Behavior、aggregation、queueの書換えなし。
+- 下流: Phase 5.3は同一cohortのaggregation revision IDとweight snapshot IDを結合する。今回Signalを実装しない。
+- 詳細: `docs/phase5-2-wallet-weight-spec.md`。
+
+## ADR-044: braces 3.0.3への限定・一時security audit例外
+
+- 状態: Owner明示承認、2026-10-03。一時technical debtであり恒久免除ではない。
+- 対象: root dev `@next/eslint-plugin-next → fast-glob → micromatch → braces@3.0.3`、High `GHSA-vfj7-8cjw-p6xm`のみ。公開patched npm releaseがなく、request処理経路ではなくlint/glob toolingに限定されることが承認根拠。tooling DoSリスク自体は残る。
+- 契約: `pnpm security:audit`は通常の`pnpm audit --audit-level high --json`を実行・生出力し、GHSA/package/version/path/dev exposure/count/exit statusを照合する。他High/Critical、欠損・矛盾・取得失敗はfail closed。resolved inventoryの版変更・不在・production経路追加も拒否。広いignore、severity引下げ、`|| true`は導入しない。
+- 撤去: patched/publicな依存経路が提供されたら直ちに最小修正と全隔離検証を行い、例外を撤去して通常auditへ戻す。自動延長・別advisory/版への流用禁止。
+- 詳細: `docs/security-audit-exception.md`。金融式、Selection、schema/migration、実DB/Redisとは独立。
+
 ## ADR-042: Phase 5.1は15分UTC・現在選定cohortの再現可能なBehavior集約
 
 - 状態: 採用。2,012 eventsの密度とSPECの将来30分consensus windowから15分UTC半開区間を選択。

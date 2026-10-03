@@ -18,8 +18,10 @@ import { registerWalletSelectionRoutes } from "./wallet-selection-routes.js";
 import { type WalletSelectionService } from "./wallet-selection-service.js";
 import { type PrismaBehaviorAggregationService } from "./behavior-aggregation-service.js";
 import { z } from "zod";
+import { type PrismaWalletWeightService } from "./wallet-weight-service.js";
 
 export interface CreateApiOptions {
+  readonly walletWeightService?: Pick<PrismaWalletWeightService, "current">;
   readonly behaviorAggregationService?: Pick<PrismaBehaviorAggregationService, "read">;
   readonly addressService: AddressService;
   readonly discoveryService: DiscoveryService;
@@ -90,6 +92,12 @@ export async function createApi(options: CreateApiOptions) {
   registerPerformanceRoutes(app, options.performanceService);
   registerDiscoveryRoutes(app, options.discoveryService);
   registerWalletSelectionRoutes(app, options.walletSelectionService);
+  if (options.walletWeightService) {
+    const service = options.walletWeightService;
+    app.get("/api/wallet-weights/current", async (_request, reply) =>
+      reply.header("Cache-Control", "no-store").send(await service.current()),
+    );
+  }
   if (options.behaviorAggregationService) {
     const service = options.behaviorAggregationService;
     app.get("/api/behavior/aggregations", async (request, reply) => {

@@ -1,0 +1,154 @@
+{
+  "checkedAt": "2026-09-28T14:23:02.846Z",
+  "unchanged": true,
+  "repeatPreviewIdentical": true,
+  "preview": {
+    "id": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+    "weightVersion": "wallet-weight-v1",
+    "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+    "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+    "inputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+    "inputSnapshot": {
+      "policy": {
+        "version": "wallet-weight-v1",
+        "confidenceAnchor": "30",
+        "rawScale": 36,
+        "normalizedScale": 18,
+        "precision": 80,
+        "rounding": "HALF_EVEN",
+        "allocation": "LARGEST_REMAINDER_ADDRESS_ASC"
+      },
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "members": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "address": "0x34112cf6672cbad0f44b5a77857099417dc686af",
+          "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "performanceInputFingerprint": "7d9b36200dfdccdf522f58ca193bf33f9ffe143271111c2472b6797b3f5c5e5c",
+          "trustRevision": 0,
+          "metricFrom": "2025-05-15T13:26:43.450Z",
+          "metricTo": "2026-03-22T21:04:53.949Z",
+          "trustedClosedCycleCount": "57",
+          "metrics": {
+            "winRate": "0.684210526315789474",
+            "profitFactor": "1.011095793418617382",
+            "topTradeContribution": "0.127714892493861886",
+            "averageWin": "0.538291941475826972",
+            "averageLoss": "-1.153500206530958439",
+            "maxLosingStreak": "4"
+          }
+        }
+      ]
+    },
+    "entries": [
+      {
+        "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+        "address": "0x34112cf6672cbad0f44b5a77857099417dc686af",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+        "performanceInputFingerprint": "7d9b36200dfdccdf522f58ca193bf33f9ffe143271111c2472b6797b3f5c5e5c",
+        "trustRevision": 0,
+        "metricFrom": "2025-05-15T13:26:43.450Z",
+        "metricTo": "2026-03-22T21:04:53.949Z",
+        "trustedClosedCycleCount": "57",
+        "metrics": {
+          "winRate": "0.684210526315789474",
+          "profitFactor": "1.011095793418617382",
+          "topTradeContribution": "0.127714892493861886",
+          "averageWin": "0.538291941475826972",
+          "averageLoss": "-1.153500206530958439",
+          "maxLosingStreak": "4"
+        },
+        "rawWeight": "0.339174742605900594492010777724425848",
+        "normalizedWeight": "1",
+        "components": {
+          "profitShare": "0.50275864368443531163159807559521172202963997607459585929983099749434182958706536",
+          "quality": "0.5934845850001123928157990377976058610148199880372979296499154987471709147935327",
+          "sampleConfidence": "0.65517241379310344827586206896551724137931034482758620689655172413793103448275862",
+          "concentration": "0.872285107506138114"
+        }
+      }
+    ]
+  },
+  "protected": {
+    "database": {
+      "events": 2012,
+      "eventHash": "0a4a244e034cf7488df5a2218e723bbf6341d03907eabf3422dddf46d8893fbc",
+      "buckets": 1332,
+      "bucketHash": "073c8e4a3da416f62b9c81e3f27c549dc0a6b0441728fa4226c3673aca805225",
+      "revisions": 1332,
+      "revisionHash": "19399c489b50a45212ac9edecef451641d2b5610a3b386550e536aa5f97c4129",
+      "openBehaviorDQ": 0,
+      "newTables": [
+        {
+          "snapshots": null,
+          "entries": null
+        }
+      ]
+    },
+    "queues": {
+      "hyperliquid-sync": {
+        "wait": 0,
+        "active": 0,
+        "paused": 0,
+        "prioritized": 0,
+        "delayed": 0,
+        "completed": 318,
+        "failed": 444,
+        "waiting-children": 0,
+        "activeIds": [],
+        "activeLocks": []
+      },
+      "address-performance": {
+        "wait": 0,
+        "active": 0,
+        "paused": 0,
+        "prioritized": 1,
+        "delayed": 0,
+        "completed": 66,
+        "failed": 14,
+        "waiting-children": 0,
+        "activeIds": [],
+        "activeLocks": []
+      },
+      "behavior-normalization": {
+        "wait": 0,
+        "active": 0,
+        "paused": 0,
+        "prioritized": 0,
+        "delayed": 0,
+        "completed": 24,
+        "failed": 0,
+        "waiting-children": 0,
+        "activeIds": [],
+        "activeLocks": []
+      },
+      "hyperliquid-discovery": {
+        "wait": 0,
+        "active": 0,
+        "paused": 0,
+        "prioritized": 1,
+        "delayed": 0,
+        "completed": 17,
+        "failed": 609,
+        "waiting-children": 0,
+        "activeIds": [],
+        "activeLocks": []
+      },
+      "hyperliquid-candidate-enrichment": {
+        "wait": 0,
+        "active": 1,
+        "paused": 0,
+        "prioritized": 8427,
+        "delayed": 0,
+        "completed": 20,
+        "failed": 5,
+        "waiting-children": 0,
+        "activeIds": ["enrich-cms9j6kxp1mskn90i477x9hxy-1627804426372-1785570826372"],
+        "activeLocks": [0]
+      }
+    }
+  }
+}
