@@ -14,7 +14,7 @@ allowBuilds:
 catalogMode: strict
 
 overrides:
-  brace-expansion: 5.0.9
+  brace-expansion: 5.0.11
   deepmerge-ts: 8.0.0
   esbuild: 0.28.1
   "fast-uri@3": 3.1.7

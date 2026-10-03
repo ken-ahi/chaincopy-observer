@@ -5,6 +5,99 @@ Branch: `codex/phase5-2-wallet-weight`.
 Base main: `db8ac2cc5160948db8b9c4a970c6d1656cb6bb3b` (PR #36).
 Formal design: `phase5-2-wallet-weight-spec.md`, ADR-043.
 
+## Dependency-security follow-up (2026-10-03)
+
+The authorized live migration and weight persistence below are complete and must
+not be repeated. [CI #93](https://github.com/ken-ahi/chaincopy-observer/actions/runs/37014531808)
+on `d6088c2ef30c5f598b684b94f1b53078594ca82e` passed lint, typecheck,
+unit/integration, build and E2E, but failed `pnpm audit --audit-level high`
+(1 critical / 6 high / 9 moderate). Owner authorized only the following minimal
+dependency repair, its necessary lockfile changes and isolated validation:
+
+| Dependency                           | Before   | After    | Reason                                                                                          |
+| ------------------------------------ | -------- | -------- | ----------------------------------------------------------------------------------------------- |
+| `next`                               | `16.3.5` | `16.3.6` | Critical `GHSA-vcvr-r3jv-pc5j`                                                                  |
+| `@next/eslint-plugin-next`           | `16.3.5` | `16.3.6` | Match the approved Next patch line                                                              |
+| `fastify`                            | `5.10.0` | `5.12.2` | High `GHSA-667r-xxjv-c9mm`, `GHSA-p68q-wchp-6fh7`, `GHSA-hwr6-493r-vm6h`, `GHSA-9q9j-q6p8-xq58` |
+| Workspace `brace-expansion` override | `5.0.9`  | `5.0.11` | High `GHSA-qhr7-859c-m2p7`, `GHSA-6j4f-fj2g-mc7p`                                               |
+
+Before editing, `pnpm -r why next`, `pnpm -r why fastify` and
+`pnpm -r why brace-expansion` recorded one version each. Next is required by
+`@chaincopy/web` and the unchanged `next-auth` peer graph; Fastify is a direct
+`@chaincopy/api` dependency; brace-expansion is reached through minimatch in the
+ESLint/config-array/typescript-eslint graph. Raw output is retained locally in
+gitignored `weight-security-why-before.log`.
+
+Lockfile refresh used pnpm 11.9.0:
+`CI=true pnpm install --lockfile-only --frozen-lockfile=false --ignore-scripts`.
+Only the named versions, matching `@next/env`/platform SWC packages, affected
+Next peer references, and Fastify's required `process-warning@5.1.0` were changed.
+`pnpm view fastify@5.12.2 dependencies.process-warning` confirms `^5.1.0`;
+other consumers retain `5.0.0`. No unrelated package was upgraded.
+`minimumReleaseAgeExclude` was not changed: the existing policy accepted these
+versions, including the clean image's frozen install. No advisory suppression,
+threshold change, audit fix/force, or application compatibility edit was made.
+
+### Additional external audit blocker
+
+After this repair, the audit reports critical 0 / high 1 / moderate 7. The remaining
+high is **`braces@3.0.3`**, not `brace-expansion`, through
+`@next/eslint-plugin-next → fast-glob → micromatch → braces`:
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+The audit feed advertises a patched range `>=3.0.4`, but an explicit
+`pnpm view braces@3.0.4 version dist.integrity repository --json` returns
+`ERR_PNPM_PACKAGE_NOT_FOUND`; the official advisory currently says patched
+versions **None**. This metadata discrepancy is not treated as a verified fix.
+An initially suggested 3.0.4 update was withdrawn after these read-only checks.
+No braces override, unpublished version, fork or ignore was added. Merge remains
+blocked until a published, proven fix and the necessary scope approval exist.
+
+### Isolated compatibility validation
+
+Validation image `chaincopy-weight-security:20261003` was built with the existing
+`Dockerfile.e2e`, Node 24.12.0 / pnpm 11.9.0, from this dependency-only workspace.
+The image excludes runtime `.env` files. Explicit TEST/E2E target validation
+accepted only PostgreSQL `127.0.0.1:55433/chaincopy` and Redis
+`127.0.0.1:56380/0`; E2E uses `chaincopy_e2e` / DB15. Only the previously identified
+`behavior-test-postgres` and `behavior-test-redis` containers were started and
+stopped. No command connected to the real PostgreSQL/Redis. Test schema/fixture
+creation and cleanup remained inside those isolated services; the successful real
+migration and weight persistence were not repeated.
+
+| Command / check                                | Result                                                                                    |
+| ---------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| `pnpm install --frozen-lockfile`               | PASS in clean build and validation container                                              |
+| `pnpm -r why next / fastify / brace-expansion` | Exactly `16.3.6` / `5.12.2` / `5.0.11` respectively                                       |
+| `pnpm format:check`                            | PASS                                                                                      |
+| `pnpm lint`                                    | PASS                                                                                      |
+| `pnpm typecheck`                               | PASS, 11/11                                                                               |
+| `pnpm test`                                    | PASS, 78 files / 756 tests; API `app.test.ts` 44/44 including auth/routing                |
+| `pnpm build`                                   | PASS, 11/11; clean image build also 11/11 with no cache                                   |
+| `pnpm test:e2e`                                | PASS, 22/22                                                                               |
+| Standalone production server                   | Next 16.3.6 starts; `/login` 200, `X-Frame-Options: DENY`                                 |
+| `pnpm audit --audit-level high`                | FAIL only on the additional braces high described above; critical 0 / high 1 / moderate 7 |
+| `git diff --check`                             | PASS                                                                                      |
+
+The existing E2E runner uses `next start` against `output: standalone`, which emits
+the existing Next warning. This was not hidden or changed: all 22 E2E tests passed,
+and a separate smoke test started the actual generated
+`apps/web/.next/standalone/apps/web/server.js` after copying its static/public assets
+as in the production Dockerfile. That server also passed and exited gracefully.
+The initial temporary runner used a nonexistent `db:migrate:status` script name
+and stopped before tests; it was corrected to `pnpm exec prisma migrate status`
+against the isolated DB (already up to date), then the full run above completed.
+
+No new migration exists; `git diff --exit-code -- prisma` passes and the approved
+SQL SHA256 remains
+`566d4ac9e246a6a072c56fbe308aabb5dc77940ed19bacbc1d562a6362ec9c67`.
+No formula, Selection, application, schema, Behavior/aggregation or runtime data
+change is included. Temporary validation/smoke helpers were removed; only the
+five dependency files and two state/verification documents are committed.
+Logs are local gitignored `weight-security-*.log` receipts. Final-head CI is still
+required; its authoritative result is linked in PR #37. **Do not merge while the
+remaining high finding exists.** The dependency-security step is BLOCKED, not a
+failure or rollback of the already successful live Phase 5.2 operation.
+
 ## Evidence serialization correction (Owner authorized 2026-10-02)
 
 The 2026-10-01 preflight stopped before any live mutation: the committed preview
