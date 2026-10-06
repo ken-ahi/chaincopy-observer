@@ -1,12 +1,25 @@
 # Autonomous Development State
 
-最終更新: 2026-10-03 (Asia/Tokyo)
+最終更新: 2026-10-06 (Asia/Tokyo)
 
 ## 目的と正本
 
 本書は、`docs/codex-autonomous-master-prompt.md` に従う作業再開用の状態記録である。プロダクト仕様は `docs/SPEC.md`、段階計画は `docs/implementation-plan.md`、確定判断は `docs/decisions.md`、AI開発手順は `docs/ai-development-workflow.md` を正とする。本書はこれらを変更しない。
 
-## 現在のGitHub状態
+## Phase 5.3 現在地（過去工程の状態より優先）
+
+- PR #37はmainへmerge済み。base `0cde866ece640abef318c137fe5ae9df031c87d2`、feature `codex/phase5-3-signal`。Phase 5.2 migration/weight保存は繰り返していない。
+- `signal-v1`実装、仕様/ADR-045、immutable Signal 1 table、read API、明示fingerprint付きCLIを追加。wallet/bucket方向集合の1票制限、混在は各0.5、weightによる影響度とnotional diagnosticsを分離。confidenceは単一walletを広範consensus扱いしない。
+- READ ONLY監査で既存Phase 5.1 receiptはwallet別寄与に十分。実preview完了: 1,332 buckets / 7 coins、BUY優勢606、SELL優勢572、mixed/balanced154、NO_SIGNAL0。全結果同一Selection/weight provenance、保護16 table hashとqueue件数は前後一致。Behavior2,012/aggregation1,332/weight1+1/OPEN Behavior DQ0不変、通常Worker停止。
+- Ownerが限定security repairと正確なSignal SQL SHAを明示承認。`source-map-js`だけをworkspace overrideで1.2.2へ更新し、全旧1.2.1経路を解消。例外拡張・無関係依存更新なし。修正commit `752e3a833d0c78520724845799aa800f1080f08a`、CI #99成功。
+- 全隔離validation再実行: format/lint、typecheck/build11/11、81 files825tests、E2E23/23 PASS。`security:audit` PASS（critical0/high1は既承認の正確なbraces3.0.3 advisoryのみ、moderate7）。明示隔離55433/56380だけでtestし、実DBをtest接続先にしていない。
+- 実migration完了 `2026-10-06T13:37:24.545898Z`: 承認済み `20261006000000_behavior_signal`だけ、SHA256 `e32b7973dd002e83fb2127cf86cb2a7862ba37aa38826cad811898173de72c0e`一致。全preflightを確認、13 applied / 0 pending、catalogで1 table / 7 index / 3 RESTRICT FK / 2 CHECK確認。exact image `sha256:eaefe48d0202b4d827e282713586b47a6546cc6af6090fdc68f50a71f2e20090`、revisionは752e3a8。
+- migration後fresh previewのfingerprintで正式Signal serviceにより1,332件だけ保存。同一全件再実行は追加0・全列不変、7 coin保存API確認。最終 `LIVE_VERIFICATION_PASS` は `2026-10-06T13:45:01.965Z`。BUY606 / SELL572 / mixed-balanced154。保護16 table hash・queue不変、Behavior2,012 / aggregation1,332+1,332 / weight1+1 / Selection不変、OPEN Behavior DQ0。通常Worker停止・一時process終了。完了済みmigration/保存/上流処理を繰り返さない。
+- 実運用blockerは解消。文書追補の最終head CI成功・PR mergeable・scope不変を確認後、今回Owner standing authorizationによりPR #38を自動mergeする。Phase 5.4は未実装・今回対象外。
+- 正本・preview・SQL SHA・検証・次の安全な手順: `docs/phase5-3-signal-spec.md`、`docs/phase5-3-verification.md`、`docs/phase5-3-readonly-preview.json`。
+- PR: [#38](https://github.com/ken-ahi/chaincopy-observer/pull/38)。実装commit `129dd48`、security修正 `752e3a8`をpush済み。文書追補の最終head CI/merge結果はPR checks・merge recordを正とする。新規High/Critical（正確な既承認braces例外以外）なら停止する。
+
+## 前工程のGitHub状態（履歴）
 
 - branch: `codex/phase5-2-wallet-weight`
 - branch base: `db8ac2cc5160948db8b9c4a970c6d1656cb6bb3b`（PR #36 merge）

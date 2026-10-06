@@ -395,6 +395,16 @@
 - 下流: Phase 5.3は同一cohortのaggregation revision IDとweight snapshot IDを結合する。今回Signalを実装しない。
 - 詳細: `docs/phase5-2-wallet-weight-spec.md`。
 
+## ADR-045: Phase 5.3はwallet単位の方向集合を重み付けする観測指標
+
+- 状態: `signal-v1`実装契約。新規1 tableの実DB適用・mergeは別Owner承認待ち。
+- 証拠: Phase 5.1の1,332 immutable receiptに2,012件のwallet別event証拠が存在。aggregate notionalへ単一のweightを掛ける近似は不要。
+- 寄与: wallet/bucketのBUYのみ=1票、SELLのみ=1票、両方向=各0.5票。回数・notionalで票を増やさない。8 Behavior意味区分を方向へ明示写像し、wallet-weight-v1の不変値を適用。
+- Confidence: weighted participation × directional agreement × n/(n+2)。一walletの上限1/3、勝率予測やSPEC §17通知confidenceではない。notionalは説明用のみ。係数は履歴収益へfitしない。
+- Provenance: current SSoT、trusted Performance、weight receipt、aggregation revision/全入力/現在DQを同一snapshotで検証。stale・欠損・不正は保存せずfail closed。空の検証済みbucketはNO_SIGNAL。
+- 保存: `behavior_signal_snapshots`1 table、3 Restrict FK、期待fingerprint必須、serializable/最大3試行。不変履歴へ追記し、late変更は対象bucketのみ。
+- 詳細: `docs/phase5-3-signal-spec.md`。Phase 5.4、通知、demo/実売買、閾値変更、runtime上流再処理は対象外。
+
 ## ADR-044: braces 3.0.3への限定・一時security audit例外
 
 - 状態: Owner明示承認、2026-10-03。一時technical debtであり恒久免除ではない。

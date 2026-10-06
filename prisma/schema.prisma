@@ -1524,6 +1524,7 @@ model WalletSelectionSettings {
 /// 参考ウォレット選定実行
 model WalletSelectionRun {
   weightSnapshots         WalletWeightSnapshot[]
+  signalSnapshots         BehaviorSignalSnapshot[]
   /// ID
   id                      String                      @id @default(cuid())
   /// データソースID
@@ -1820,6 +1821,7 @@ model BehaviorAggregationBucket {
 
 /// Immutable, reproducible observation; null totals mean blocked, never neutral.
 model BehaviorAggregationRevision {
+  signalSnapshots   BehaviorSignalSnapshot[]
   id                String                      @id
   bucketId          String                      @map("bucket_id")
   bucket            BehaviorAggregationBucket   @relation("AggregationBucketRevisions", fields: [bucketId], references: [id], onDelete: Restrict)
@@ -1839,14 +1841,15 @@ model BehaviorAggregationRevision {
 
 /// Phase 5.2 immutable selected-cohort weight calculation. No mutable current pointer.
 model WalletWeightSnapshot {
-  id                String              @id
-  weightVersion     String              @map("weight_version")
-  selectionRunId    String              @map("selection_run_id")
-  selectionRun      WalletSelectionRun  @relation(fields: [selectionRunId], references: [id], onDelete: Restrict)
-  cohortFingerprint String              @map("cohort_fingerprint")
-  inputFingerprint  String              @map("input_fingerprint")
-  inputSnapshot     Json                @map("input_snapshot")
-  calculatedAt      DateTime            @default(now()) @map("calculated_at")
+  signalSnapshots   BehaviorSignalSnapshot[]
+  id                String                   @id
+  weightVersion     String                   @map("weight_version")
+  selectionRunId    String                   @map("selection_run_id")
+  selectionRun      WalletSelectionRun       @relation(fields: [selectionRunId], references: [id], onDelete: Restrict)
+  cohortFingerprint String                   @map("cohort_fingerprint")
+  inputFingerprint  String                   @map("input_fingerprint")
+  inputSnapshot     Json                     @map("input_snapshot")
+  calculatedAt      DateTime                 @default(now()) @map("calculated_at")
   entries           WalletWeightEntry[]
 
   @@unique([weightVersion, inputFingerprint], map: "wallet_weight_snapshot_input_key")
@@ -1872,4 +1875,32 @@ model WalletWeightEntry {
   @@index([performanceRunId], map: "wallet_weight_entry_performance_idx")
   @@index([walletAddressId], map: "wallet_weight_entry_wallet_idx")
   @@map("wallet_weight_entries")
+}
+
+/// Immutable Phase 5.3 observation; current validity is rechecked on read.
+model BehaviorSignalSnapshot {
+  id                    String                      @id
+  signalVersion         String                      @map("signal_version")
+  aggregationRevisionId String                      @map("aggregation_revision_id")
+  aggregationRevision   BehaviorAggregationRevision @relation(fields: [aggregationRevisionId], references: [id], onDelete: Restrict)
+  weightSnapshotId      String                      @map("weight_snapshot_id")
+  weightSnapshot        WalletWeightSnapshot        @relation(fields: [weightSnapshotId], references: [id], onDelete: Restrict)
+  selectionRunId        String                      @map("selection_run_id")
+  selectionRun          WalletSelectionRun          @relation(fields: [selectionRunId], references: [id], onDelete: Restrict)
+  cohortFingerprint     String                      @map("cohort_fingerprint")
+  coin                  String
+  bucketStart           DateTime                    @map("bucket_start")
+  bucketEnd             DateTime                    @map("bucket_end")
+  inputFingerprint      String                      @map("input_fingerprint")
+  inputSnapshot         Json                        @map("input_snapshot")
+  result                Json
+  calculatedAt          DateTime                    @default(now()) @map("calculated_at")
+
+  @@unique([signalVersion, aggregationRevisionId, weightSnapshotId], map: "behavior_signal_source_key")
+  @@unique([signalVersion, inputFingerprint], map: "behavior_signal_input_key")
+  @@index([coin, bucketStart, selectionRunId, cohortFingerprint], map: "behavior_signal_coin_time_idx")
+  @@index([aggregationRevisionId], map: "behavior_signal_aggregation_idx")
+  @@index([weightSnapshotId], map: "behavior_signal_weight_idx")
+  @@index([selectionRunId], map: "behavior_signal_selection_idx")
+  @@map("behavior_signal_snapshots")
 }

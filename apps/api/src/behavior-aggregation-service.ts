@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   aggregateBehaviorBucket,
   aggregationHash,
@@ -7,6 +8,7 @@ import {
   AGGREGATION_VERSION,
   BEHAVIOR_VERSION,
   utcBucketStart,
+  SignalInputError,
   type AggregationEvent,
   type AggregationMember,
 } from "@chaincopy/analytics";
@@ -24,6 +26,34 @@ const MAX_BUCKETS = 2_000;
 
 export class PrismaBehaviorAggregationService {
   public constructor(private readonly database: PrismaClient) {}
+
+  // Downstream consumers share their transaction snapshot with all upstream gates.
+  public async verifiedInTransaction(tx: Transaction, coin: string, start: string) {
+    if (utcBucketStart(start) !== start) throw new RangeError("Unaligned bucket.");
+    const members = await this.members(tx);
+    if (!members.length) return null;
+    const result = await this.calculate(tx, coin, start, members);
+    const bucket = await tx.behaviorAggregationBucket.findUnique({
+      where: { id: result.bucketId },
+      include: { currentRevision: true },
+    });
+    const revision = bucket?.currentRevision;
+    if (
+      !revision ||
+      revision.bucketId !== result.bucketId ||
+      revision.id !== aggregationHash([result.bucketId, result.inputFingerprint]) ||
+      revision.inputFingerprint !== result.inputFingerprint ||
+      revision.status !== result.status ||
+      !isDeepStrictEqual(revision.inputSnapshot, result.snapshot) ||
+      !isDeepStrictEqual(revision.totals, result.totals) ||
+      revision.eventCount !== (result.totals?.eventCount ?? null) ||
+      revision.uniqueWalletCount !== (result.totals?.uniqueWalletCount ?? null) ||
+      (revision.notionalUsd?.toFixed() ?? null) !== (result.totals?.notionalUsd ?? null)
+    )
+      throw new SignalInputError("AGGREGATION_STALE_OR_MISSING");
+    if (result.status === "BLOCKED") throw new SignalInputError("AGGREGATION_BLOCKED");
+    return result;
+  }
 
   private async members(tx: Transaction): Promise<readonly AggregationMember[]> {
     // Avoid the Selection service's infrastructure initialization on an unconfigured DB.

@@ -289,15 +289,25 @@ pnpm test
 pnpm test:e2e
 ```
 
+### Phase 5.3 Observational BUY / SELL score
+
+`signal-v1`は同一cohortのimmutable aggregation receiptとwallet weightを結合し、
+wallet単位の有界方向寄与とconfidenceを計算します。投資助言や通知ではありません。
+`pnpm behavior:signal --coin BTC --bucket-start 2026-09-24T13:15:00.000Z`はREAD ONLY preview。
+認証付き`GET /api/behavior-signals?coin=BTC&bucketStart=...`は検証済みの保存結果のみ返します。
+新規Signal 1 tableと1,332 bucketの限定保存は2026-10-06のOwner承認下で検証済みです。
+`--execute --expected-fingerprint ...`は承認範囲内の明示bucket保存専用です。完了済み処理を繰り返しません。
+仕様・承認境界・fresh preview・保存/冪等性/security検証は
+`docs/phase5-3-signal-spec.md` / `docs/phase5-3-verification.md`を参照してください。
+
 ### Phase 5.2 Wallet weight
 
 `wallet-weight-v1`はSelection v2がadmitしたwallet間の決定論的な影響度です。
 `pnpm wallet:weight`はread-only preview、`GET /api/wallet-weights/current`は認証付き
 read-only APIです。式・Decimal・immutable snapshot・Phase 5.3 join契約は
 `docs/phase5-2-wallet-weight-spec.md`を参照してください。
-新規weight 2 tableの実DB migrationはOwner別承認待ちです。承認前は永続化せず、
-`--execute --expected-fingerprint <preview SHA256>`を実DBで使用しません。
-Selection閾値、Behavior、過去集約は変更せず、BUY/SELL Signalは未実装です。
+新規weight 2 tableの実DB migration・限定保存はOwner承認のもと2026-10-02に完了済みです。
+完了済み処理は繰り返しません。Selection閾値、Behavior、過去集約は変更しません。
 
 ### Phase 5.1 Behavior aggregation
 
@@ -361,4 +371,4 @@ tests/e2e/
 - [Phase 4.3 Test Matrix](docs/phase4-3-wallet-selection-test-matrix.md)
 - [正本仕様](docs/SPEC.md)
 
-Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化とPhase 5.1集約まで運用検証済みです。Phase 5.2 weightは実装・隔離検証と実DB migration承認を分離します。BUY/SELLシグナル、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
+Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測SignalもOwner承認下の限定migration・1,332件保存・冪等性・read API検証を完了し、security gateを通過しています。Phase 5.4、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。

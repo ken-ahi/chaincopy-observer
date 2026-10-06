@@ -19,8 +19,10 @@ import { type WalletSelectionService } from "./wallet-selection-service.js";
 import { type PrismaBehaviorAggregationService } from "./behavior-aggregation-service.js";
 import { z } from "zod";
 import { type PrismaWalletWeightService } from "./wallet-weight-service.js";
+import { type PrismaBehaviorSignalService } from "./behavior-signal-service.js";
 
 export interface CreateApiOptions {
+  readonly behaviorSignalService?: Pick<PrismaBehaviorSignalService, "read">;
   readonly walletWeightService?: Pick<PrismaWalletWeightService, "current">;
   readonly behaviorAggregationService?: Pick<PrismaBehaviorAggregationService, "read">;
   readonly addressService: AddressService;
@@ -92,6 +94,23 @@ export async function createApi(options: CreateApiOptions) {
   registerPerformanceRoutes(app, options.performanceService);
   registerDiscoveryRoutes(app, options.discoveryService);
   registerWalletSelectionRoutes(app, options.walletSelectionService);
+  if (options.behaviorSignalService) {
+    const service = options.behaviorSignalService;
+    app.get("/api/behavior-signals", async (request, reply) => {
+      const query = z
+        .object({ coin: z.string().min(1).max(100), bucketStart: z.string().datetime() })
+        .safeParse(request.query);
+      if (!query.success) return reply.code(400).send({ error: "invalid_query" });
+      try {
+        return reply
+          .header("Cache-Control", "no-store")
+          .send(await service.read(query.data.coin, query.data.bucketStart));
+      } catch (error) {
+        if (error instanceof RangeError) return reply.code(400).send({ error: "invalid_bucket" });
+        throw error;
+      }
+    });
+  }
   if (options.walletWeightService) {
     const service = options.walletWeightService;
     app.get("/api/wallet-weights/current", async (_request, reply) =>

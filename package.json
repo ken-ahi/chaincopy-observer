@@ -30,6 +30,7 @@
     "hl:gap-recovery": "tsx apps/worker/src/maintenance/hyperliquid-gap-recovery-cli.ts",
     "behavior:aggregate": "tsx apps/worker/src/maintenance/behavior-aggregation-cli.ts",
     "wallet:weight": "tsx apps/worker/src/maintenance/wallet-weight-cli.ts",
+    "behavior:signal": "tsx apps/worker/src/maintenance/behavior-signal-cli.ts",
     "hl:promote-free-candidates": "tsx apps/worker/src/maintenance/hyperliquid-free-candidate-cli.ts",
     "queue:cleanup": "tsx apps/worker/src/maintenance/queue-cleanup-cli.ts",
     "deploy:local": "sh scripts/deploy-local.sh"
