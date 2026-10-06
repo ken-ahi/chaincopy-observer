@@ -1,7 +1,31 @@
 # Phase 5.3 verification — 2026-10-06
 
-Status: **BLOCKED** by the new dependency security finding below. Independently,
-real Signal migration/persistence and merge require separate Owner approval.
+Status: Owner explicitly approved the source-map-js repair and exact Signal SQL
+on 2026-10-06. The approved sequence is in progress; completion evidence below
+must precede merge. Prior BLOCKED observations remain historical evidence.
+
+## Approved dependency repair
+
+Before editing, `pnpm why source-map-js` and `pnpm -r why source-map-js --json`
+were captured from the prior validation image (pnpm 11.9.0). Exactly 1.2.1 was
+resolved, through these paths (deduplicated branches expanded here):
+
+- web → @tailwindcss/postcss → @tailwindcss/node → source-map-js;
+- web → @tailwindcss/postcss → postcss → source-map-js;
+- web → next → postcss → source-map-js;
+- web → next-auth → next → postcss → source-map-js;
+- web → @next-auth/prisma-adapter → next-auth → next → postcss → source-map-js;
+- root → vitest → vite → postcss → source-map-js;
+- root → vitest → @vitest/mocker → vite → postcss → source-map-js;
+- api, worker, analytics, blockchain-adapters, config, database and ui → tsup →
+  postcss → source-map-js (each also through tsup → postcss-load-config → postcss).
+
+Root workspace override `source-map-js: 1.2.2` forces every transitive branch to
+the exact approved patch. `CI=true pnpm install --lockfile-only
+--frozen-lockfile=false --ignore-scripts` used pnpm 11.9.0. The lockfile changes
+only this package's version/integrity, its two parent dependency edges and the
+override. No release-age exemption, unrelated update, application logic or
+audit-gate change. Full isolated validation and resolved inventory follow.
 
 ## Provenance and contract audit
 
