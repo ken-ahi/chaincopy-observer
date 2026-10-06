@@ -1,0 +1,794 @@
+{
+  "status": "READ_ONLY_PREVIEW_COMPLETE",
+  "observedAt": "2026-10-06T11:57:31.304Z",
+  "provenance": {
+    "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+    "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+    "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+    "signalVersion": "signal-v1",
+    "aggregationVersion": "behavior-aggregation-v1",
+    "weightVersion": "wallet-weight-v1"
+  },
+  "counts": {
+    "evaluable": 1332,
+    "buyDominant": 606,
+    "sellDominant": 572,
+    "mixed": 154,
+    "balanced": 154,
+    "noSignal": 0
+  },
+  "distributions": {
+    "buy": {
+      "0": 572,
+      "1": 606,
+      "0.5": 154
+    },
+    "sell": {
+      "0": 606,
+      "1": 572,
+      "0.5": 154
+    },
+    "net": {
+      "0": 154,
+      "1": 606,
+      "-1": 572
+    },
+    "confidence": {
+      "0.333333333333333333": 1178,
+      "0.166666666666666667": 154
+    }
+  },
+  "latest": {
+    "ASTER": {
+      "id": "86dab75cc36b423e5b77da19ca05750f4d4f13f808750188c7ed0e05f9a224ca",
+      "inputFingerprint": "86dab75cc36b423e5b77da19ca05750f4d4f13f808750188c7ed0e05f9a224ca",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "e110495d4124abe16749b1a6e4204f37f7f289381240b46952b175447ba24e72",
+        "aggregationInputFingerprint": "456ff8d38bab6dff1abff238410438c4116f6682d0603f240dfe5aa0221ff468",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "ASTER",
+        "bucketStart": "2025-09-25T22:00:00.000Z",
+        "bucketEnd": "2025-09-25T22:15:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "e110495d4124abe16749b1a6e4204f37f7f289381240b46952b175447ba24e72",
+      "aggregationInputFingerprint": "456ff8d38bab6dff1abff238410438c4116f6682d0603f240dfe5aa0221ff468",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "ASTER",
+      "bucketStart": "2025-09-25T22:00:00.000Z",
+      "bucketEnd": "2025-09-25T22:15:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "1",
+      "sellStrength": "0",
+      "netSignal": "1",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 1,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 0,
+      "agreement": "1",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.333333333333333333",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "1",
+          "sellShare": "0",
+          "buyContribution": "1",
+          "sellContribution": "0",
+          "buyEventCount": 1,
+          "sellEventCount": 0,
+          "buyNotionalUsd": "105.4026",
+          "sellNotionalUsd": "0"
+        }
+      ]
+    },
+    "BTC": {
+      "id": "d768ba281426e9543715c7971a5e2065a0c92c8a4bf29bbb5bad129e1dfe9241",
+      "inputFingerprint": "d768ba281426e9543715c7971a5e2065a0c92c8a4bf29bbb5bad129e1dfe9241",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "3cc69c51b9c9efe133aa77be1fd5285ea86b48f32085a2065b51ae58de5609dc",
+        "aggregationInputFingerprint": "7bac8f242fa0c4d3835274a15c360970318d1031a7cd5b554cc9a2f25323eafc",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "BTC",
+        "bucketStart": "2026-09-24T13:15:00.000Z",
+        "bucketEnd": "2026-09-24T13:30:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "3cc69c51b9c9efe133aa77be1fd5285ea86b48f32085a2065b51ae58de5609dc",
+      "aggregationInputFingerprint": "7bac8f242fa0c4d3835274a15c360970318d1031a7cd5b554cc9a2f25323eafc",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "BTC",
+      "bucketStart": "2026-09-24T13:15:00.000Z",
+      "bucketEnd": "2026-09-24T13:30:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "1",
+      "sellStrength": "0",
+      "netSignal": "1",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 1,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 0,
+      "agreement": "1",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.333333333333333333",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "1",
+          "sellShare": "0",
+          "buyContribution": "1",
+          "sellContribution": "0",
+          "buyEventCount": 1,
+          "sellEventCount": 0,
+          "buyNotionalUsd": "302.0112",
+          "sellNotionalUsd": "0"
+        }
+      ]
+    },
+    "ETH": {
+      "id": "b18fa94266d9150e2c445a12cfcbcb673e0945cc883aa87067592a440d269a27",
+      "inputFingerprint": "b18fa94266d9150e2c445a12cfcbcb673e0945cc883aa87067592a440d269a27",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "c583726dce4a5c7cfdc84701f932079cc1ac79786f960f9125f2947321ef69aa",
+        "aggregationInputFingerprint": "8f5d8950f161f1800ace90a39beafbf72e7d64fc101a7e12389d530320d7c11e",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "ETH",
+        "bucketStart": "2025-10-02T10:30:00.000Z",
+        "bucketEnd": "2025-10-02T10:45:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "c583726dce4a5c7cfdc84701f932079cc1ac79786f960f9125f2947321ef69aa",
+      "aggregationInputFingerprint": "8f5d8950f161f1800ace90a39beafbf72e7d64fc101a7e12389d530320d7c11e",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "ETH",
+      "bucketStart": "2025-10-02T10:30:00.000Z",
+      "bucketEnd": "2025-10-02T10:45:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "1",
+      "sellStrength": "0",
+      "netSignal": "1",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 1,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 0,
+      "agreement": "1",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.333333333333333333",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "1",
+          "sellShare": "0",
+          "buyContribution": "1",
+          "sellContribution": "0",
+          "buyEventCount": 1,
+          "sellEventCount": 0,
+          "buyNotionalUsd": "732.82925",
+          "sellNotionalUsd": "0"
+        }
+      ]
+    },
+    "HYPE": {
+      "id": "8d83ffca5bf09a5428f834441f08c037bd8b4f7215d94b44fcac06ba3f0691ca",
+      "inputFingerprint": "8d83ffca5bf09a5428f834441f08c037bd8b4f7215d94b44fcac06ba3f0691ca",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "9a9dc6e3d7f617c2c2129fdd2181fb55e95864ac16fac9448a891150c1077b8b",
+        "aggregationInputFingerprint": "81190ec384ab8b10e4d13deb201968c4d1694e3686376797b7d0e35c55c2aa1e",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "HYPE",
+        "bucketStart": "2026-03-17T21:00:00.000Z",
+        "bucketEnd": "2026-03-17T21:15:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "9a9dc6e3d7f617c2c2129fdd2181fb55e95864ac16fac9448a891150c1077b8b",
+      "aggregationInputFingerprint": "81190ec384ab8b10e4d13deb201968c4d1694e3686376797b7d0e35c55c2aa1e",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "HYPE",
+      "bucketStart": "2026-03-17T21:00:00.000Z",
+      "bucketEnd": "2026-03-17T21:15:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "0.5",
+      "sellStrength": "0.5",
+      "netSignal": "0",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 0,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 1,
+      "agreement": "0.5",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.166666666666666667",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "0.5",
+          "sellShare": "0.5",
+          "buyContribution": "0.5",
+          "sellContribution": "0.5",
+          "buyEventCount": 1,
+          "sellEventCount": 1,
+          "buyNotionalUsd": "41.838",
+          "sellNotionalUsd": "41.931"
+        }
+      ]
+    },
+    "SOL": {
+      "id": "89533aab9e50c2ac31ea857579b42394a27dbe59aa3bd1c9dac8c307d43c46f5",
+      "inputFingerprint": "89533aab9e50c2ac31ea857579b42394a27dbe59aa3bd1c9dac8c307d43c46f5",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "541e9bd51e57bdfb3b8166e1fb99f42cebb93db3597ae9c7368b8ba001129a2d",
+        "aggregationInputFingerprint": "a610fe71854ec7ef6b4e6a7a2e7c54e06c9390a710867fa71d3a82cb7f2a06ee",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "SOL",
+        "bucketStart": "2026-04-17T17:15:00.000Z",
+        "bucketEnd": "2026-04-17T17:30:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "541e9bd51e57bdfb3b8166e1fb99f42cebb93db3597ae9c7368b8ba001129a2d",
+      "aggregationInputFingerprint": "a610fe71854ec7ef6b4e6a7a2e7c54e06c9390a710867fa71d3a82cb7f2a06ee",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "SOL",
+      "bucketStart": "2026-04-17T17:15:00.000Z",
+      "bucketEnd": "2026-04-17T17:30:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "1",
+      "sellStrength": "0",
+      "netSignal": "1",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 1,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 0,
+      "agreement": "1",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.333333333333333333",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "1",
+          "sellShare": "0",
+          "buyContribution": "1",
+          "sellContribution": "0",
+          "buyEventCount": 1,
+          "sellEventCount": 0,
+          "buyNotionalUsd": "204.9599",
+          "sellNotionalUsd": "0"
+        }
+      ]
+    },
+    "XPL": {
+      "id": "c352294cc6c4ab20d29326657366deb531bd99269c5cc856615e0702ec9dea99",
+      "inputFingerprint": "c352294cc6c4ab20d29326657366deb531bd99269c5cc856615e0702ec9dea99",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "95523f59f97aff43c25e8262fc539d31b7c728d51798b0f59bdbf65dc029c870",
+        "aggregationInputFingerprint": "21a23f54a4b3f83029d7f416cadf40c81570a826c12e1fe321c9569f5803be82",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "XPL",
+        "bucketStart": "2025-10-09T19:45:00.000Z",
+        "bucketEnd": "2025-10-09T20:00:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "95523f59f97aff43c25e8262fc539d31b7c728d51798b0f59bdbf65dc029c870",
+      "aggregationInputFingerprint": "21a23f54a4b3f83029d7f416cadf40c81570a826c12e1fe321c9569f5803be82",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "XPL",
+      "bucketStart": "2025-10-09T19:45:00.000Z",
+      "bucketEnd": "2025-10-09T20:00:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "0.5",
+      "sellStrength": "0.5",
+      "netSignal": "0",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 0,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 1,
+      "agreement": "0.5",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.166666666666666667",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "0.5",
+          "sellShare": "0.5",
+          "buyContribution": "0.5",
+          "sellContribution": "0.5",
+          "buyEventCount": 2,
+          "sellEventCount": 2,
+          "buyNotionalUsd": "222.1464",
+          "sellNotionalUsd": "221.87436"
+        }
+      ]
+    },
+    "xyz:CL": {
+      "id": "5efdadd5b6182e6d65f55655270c3dfc058a1231d219ed8609f7f284a758e6a3",
+      "inputFingerprint": "5efdadd5b6182e6d65f55655270c3dfc058a1231d219ed8609f7f284a758e6a3",
+      "inputSnapshot": {
+        "policy": {
+          "version": "signal-v1",
+          "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+          "mixedShare": "0.5",
+          "breadthAnchor": "2",
+          "precision": 80,
+          "confidenceScale": 18,
+          "rounding": "HALF_EVEN",
+          "notionalInfluence": "NONE"
+        },
+        "aggregationRevisionId": "6974b5b59578ddbb89a457f3c95cdd1eae9b0aa54c9648a404d5074b7fac7b70",
+        "aggregationInputFingerprint": "c98fe5cf7bca04b7eb943396d3a4d5603f83d46140323cd1b6cff9b2cce52445",
+        "aggregationVersion": "behavior-aggregation-v1",
+        "behaviorVersion": "behavior-v1",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "weightVersion": "wallet-weight-v1",
+        "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "coin": "xyz:CL",
+        "bucketStart": "2026-04-06T22:30:00.000Z",
+        "bucketEnd": "2026-04-06T22:45:00.000Z"
+      },
+      "policy": {
+        "version": "signal-v1",
+        "contribution": "UNIQUE_WALLET_DIRECTION_SET",
+        "mixedShare": "0.5",
+        "breadthAnchor": "2",
+        "precision": 80,
+        "confidenceScale": 18,
+        "rounding": "HALF_EVEN",
+        "notionalInfluence": "NONE"
+      },
+      "aggregationRevisionId": "6974b5b59578ddbb89a457f3c95cdd1eae9b0aa54c9648a404d5074b7fac7b70",
+      "aggregationInputFingerprint": "c98fe5cf7bca04b7eb943396d3a4d5603f83d46140323cd1b6cff9b2cce52445",
+      "aggregationVersion": "behavior-aggregation-v1",
+      "behaviorVersion": "behavior-v1",
+      "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "weightVersion": "wallet-weight-v1",
+      "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+      "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+      "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+      "coin": "xyz:CL",
+      "bucketStart": "2026-04-06T22:30:00.000Z",
+      "bucketEnd": "2026-04-06T22:45:00.000Z",
+      "signalVersion": "signal-v1",
+      "status": "VALID",
+      "buyStrength": "0.5",
+      "sellStrength": "0.5",
+      "netSignal": "0",
+      "participatingWalletCount": 1,
+      "weightedParticipatingWalletCount": "1",
+      "buyOnlyWalletCount": 0,
+      "sellOnlyWalletCount": 0,
+      "mixedWalletCount": 1,
+      "agreement": "0.5",
+      "breadth": "0.333333333333333333",
+      "confidence": "0.166666666666666667",
+      "contributions": [
+        {
+          "walletAddressId": "cmuh1wwf4001wk70ynvgjo7a3",
+          "performanceRunId": "cmujbpj6527jdnq01t6zuxi9u",
+          "normalizedWeight": "1",
+          "buyShare": "0.5",
+          "sellShare": "0.5",
+          "buyContribution": "0.5",
+          "sellContribution": "0.5",
+          "buyEventCount": 1,
+          "sellEventCount": 1,
+          "buyNotionalUsd": "55.2426",
+          "sellNotionalUsd": "55.2622"
+        }
+      ]
+    }
+  },
+  "protectedState": {
+    "selected_wallet_behavior_events": [
+      {
+        "count": "2012",
+        "hash": "ac7b7970af0a13b74d2c93e8babc32f0"
+      }
+    ],
+    "behavior_aggregation_buckets": [
+      {
+        "count": "1332",
+        "hash": "8043cc71bbb99a3c3afde5077ca148d6"
+      }
+    ],
+    "behavior_aggregation_revisions": [
+      {
+        "count": "1332",
+        "hash": "0c6b496514d11141325351d891fec39f"
+      }
+    ],
+    "wallet_weight_snapshots": [
+      {
+        "count": "1",
+        "hash": "89ef95cdac8b612849c2fae6d5d9677d"
+      }
+    ],
+    "wallet_weight_entries": [
+      {
+        "count": "1",
+        "hash": "d6fb8672b4ac10e4019e26f271b82b0a"
+      }
+    ],
+    "wallet_selection_settings": [
+      {
+        "count": "1",
+        "hash": "143c087160f4a6aed1d5af852653af4e"
+      }
+    ],
+    "wallet_selection_runs": [
+      {
+        "count": "73",
+        "hash": "5f63e5f552db3290348a5529ad9cb19f"
+      }
+    ],
+    "wallet_selection_results": [
+      {
+        "count": "3080",
+        "hash": "71414431fb0e4ee536fd921b09e0503e"
+      }
+    ],
+    "wallet_selection_overrides": [
+      {
+        "count": "1",
+        "hash": "245c8b5a077c51b3bb60d340e49a1d24"
+      }
+    ],
+    "behavior_data_quality_issues": [
+      {
+        "count": "3",
+        "hash": "d4dd642a329e3b23380e434b44573dd3"
+      }
+    ],
+    "behavior_normalization_cursors": [
+      {
+        "count": "7",
+        "hash": "a4a1c6749244d72eb33ce8442f5a0939"
+      }
+    ],
+    "metric_calculation_runs": [
+      {
+        "count": "21293",
+        "hash": "33f00dff3e1b3616e9b662bc72a131d1"
+      }
+    ],
+    "performance_run_trust_transitions": [
+      {
+        "count": "14",
+        "hash": "1de2eceba8096952ee8adfc2815dfc6a"
+      }
+    ],
+    "sync_cursors": [
+      {
+        "count": "403",
+        "hash": "d12676aa75ddb2a86b8d9558fec98864"
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "count": "727",
+        "hash": "d8b2b49efcaf725926fd0663425dac0f"
+      }
+    ],
+    "wallet_addresses": [
+      {
+        "count": "50",
+        "hash": "96316b18fbed704b09294673cedd23f6"
+      }
+    ]
+  },
+  "protectedStateUnchanged": true,
+  "queuesBefore": {
+    "hyperliquid-sync": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 318,
+      "failed": 444,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "address-performance": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 66,
+      "failed": 14,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "behavior-normalization": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 24,
+      "failed": 0,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "hyperliquid-discovery": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 17,
+      "failed": 609,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "hyperliquid-candidate-enrichment": {
+      "wait": 0,
+      "active": 1,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 20,
+      "failed": 5,
+      "waiting-children": 0,
+      "prioritized": 8427
+    }
+  },
+  "queuesAfter": {
+    "hyperliquid-sync": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 318,
+      "failed": 444,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "address-performance": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 66,
+      "failed": 14,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "behavior-normalization": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 24,
+      "failed": 0,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "hyperliquid-discovery": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 17,
+      "failed": 609,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "hyperliquid-candidate-enrichment": {
+      "wait": 0,
+      "active": 1,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 20,
+      "failed": 5,
+      "waiting-children": 0,
+      "prioritized": 8427
+    }
+  },
+  "previewFingerprintCount": 1332,
+  "previewFingerprintDigest": "354e956ea5a83b3483836c8703d0b01ffdfa5031c1ae61edccc395f6e472e561"
+}

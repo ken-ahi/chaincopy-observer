@@ -1,12 +1,21 @@
 # Autonomous Development State
 
-最終更新: 2026-10-03 (Asia/Tokyo)
+最終更新: 2026-10-06 (Asia/Tokyo)
 
 ## 目的と正本
 
 本書は、`docs/codex-autonomous-master-prompt.md` に従う作業再開用の状態記録である。プロダクト仕様は `docs/SPEC.md`、段階計画は `docs/implementation-plan.md`、確定判断は `docs/decisions.md`、AI開発手順は `docs/ai-development-workflow.md` を正とする。本書はこれらを変更しない。
 
-## 現在のGitHub状態
+## Phase 5.3 現在地（過去工程の状態より優先）
+
+- PR #37はmainへmerge済み。base `0cde866ece640abef318c137fe5ae9df031c87d2`、feature `codex/phase5-3-signal`。Phase 5.2 migration/weight保存は繰り返していない。
+- `signal-v1`実装、仕様/ADR-045、immutable Signal 1 table、read API、明示fingerprint付きCLIを追加。wallet/bucket方向集合の1票制限、混在は各0.5、weightによる影響度とnotional diagnosticsを分離。confidenceは単一walletを広範consensus扱いしない。
+- READ ONLY監査で既存Phase 5.1 receiptはwallet別寄与に十分。実preview完了: 1,332 buckets / 7 coins、BUY優勢606、SELL優勢572、mixed/balanced154、NO_SIGNAL0。全結果同一Selection/weight provenance、保護16 table hashとqueue件数は前後一致。Behavior2,012/aggregation1,332/weight1+1/OPEN Behavior DQ0不変、通常Worker停止。
+- 隔離validation: format/lint、typecheck/build11/11、81 files825tests、E2E23/23、diff check PASS。`security:audit`は新規High `source-map-js@1.2.1 / GHSA-68fv-2mgg-jv7q`で正しくFAIL（critical0/high2うち既承認braces1）。例外や依存を無断変更していない。限定1.2.2更新をOwnerへ照会中。
+- 現在 **BLOCKED**: security修正/CI成功、および別途Signal実migration承認が必要。新規実migration/Signal保存/mergeは未実行。Phase 5.4へ進まない。
+- 正本・preview・SQL SHA・検証・次の安全な手順: `docs/phase5-3-signal-spec.md`、`docs/phase5-3-verification.md`、`docs/phase5-3-readonly-preview.json`。
+
+## 前工程のGitHub状態（履歴）
 
 - branch: `codex/phase5-2-wallet-weight`
 - branch base: `db8ac2cc5160948db8b9c4a970c6d1656cb6bb3b`（PR #36 merge）

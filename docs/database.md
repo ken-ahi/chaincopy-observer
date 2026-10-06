@@ -1,5 +1,17 @@
 # データベース設計
 
+## Phase 5.3 observational Signal（2026-10-06、実DB承認待ち）
+
+`BehaviorSignalSnapshot` / `behavior_signal_snapshots`はcoin/15分bucketごとの
+immutable計算結果を保持する。aggregation revision、wallet weight snapshot、
+Selection Runへ3本のRESTRICT FK。version/input fingerprintおよび
+version/aggregation revision/weight snapshotをuniqueとし、全入力provenanceと
+Decimal文字列のresultをJSONBへ保存する。current pointerや更新処理は設けず、
+現在の検証済みupstream identityからcurrent snapshotを決定する。
+coin/time/cohortおよびFK検索index、bucket幅/identity CHECKを新規tableにのみ追加。
+既存tableへのDDLやbackfillはない。`docs/phase5-3-signal-spec.md`参照。
+実migrationはPhase 5.2の承認範囲外であり、別Owner承認前には適用しない。
+
 ## Phase 5.0 Behavior normalization（2026-08-23）
 
 `SelectedWalletBehaviorEvent` は source Fill／transition に基づく `behavior-v1` の監査正本であり、Selection Run ごとに複製しない。`BehaviorNormalizationRun` は生成実行、`BehaviorSelectionScope` は Selection membership、`BehaviorNormalizationCursor` は timestamp-group 完了境界、`BehaviorDataQualityIssue` は fail-closed 理由をそれぞれ保持する。Event 本体に `selectionRunId` / `performanceRunId` は置かない。

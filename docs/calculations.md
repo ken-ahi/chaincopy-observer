@@ -263,4 +263,9 @@ leverage 95パーセンタイルは有効snapshotを昇順にし、`PERCENTILE_C
 
 ## 10. Wallet Selection v2で利用する保存値
 
+Phase 5.3の観測指標`signal-v1`は本書のPnL/Performance式を変更しない。
+保存済みwallet別Behavior方向集合とwallet-weight-v1だけを結合し、
+`docs/phase5-3-signal-spec.md`に式・Decimal精度・confidence・NO_SIGNALを定義する。
+SPEC §17通知用confidence、投資助言、Phase 5.4の勢い判定とは別の出力である。
+
 `wallet-selection-v2`は本書の金融式を再計算・変更せず、同じtrusted `performance-v3` Runに保存されたclosed `PositionCycle`件数と`winRate / profitFactor / averageWin / averageLoss / maxLosingStreak / topTradeContribution`だけを読む。全6 metricが`AVAILABLE`かつ同一coverage windowであることを要求し、欠損値を0へ変換しない。NAV由来のreturn / drawdownはv2 gateへ使用しない。選定契約と閾値は`docs/free-data-wallet-selection-v2.md`を正本とする。

@@ -48,6 +48,18 @@ function assertStoredSnapshot(
 export class PrismaWalletWeightService {
   public constructor(private readonly database: PrismaClient) {}
 
+  public async verifiedInTransaction(tx: Prisma.TransactionClient) {
+    const current = await this.calculate(tx);
+    if (!current) return null;
+    const stored = await tx.walletWeightSnapshot.findUnique({
+      where: { id: current.id },
+      include: { entries: { orderBy: { address: "asc" } } },
+    });
+    if (!stored) throw new WalletWeightInputError("WEIGHT_NOT_COMPUTED");
+    assertStoredSnapshot(stored, current);
+    return current;
+  }
+
   private async calculate(tx: Prisma.TransactionClient) {
     const settings = await tx.walletSelectionSettings.findFirst({
       where: { source: { key: "hyperliquid-mainnet" } },
