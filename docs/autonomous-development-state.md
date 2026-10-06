@@ -14,6 +14,7 @@
 - 隔離validation: format/lint、typecheck/build11/11、81 files825tests、E2E23/23、diff check PASS。`security:audit`は新規High `source-map-js@1.2.1 / GHSA-68fv-2mgg-jv7q`で正しくFAIL（critical0/high2うち既承認braces1）。例外や依存を無断変更していない。限定1.2.2更新をOwnerへ照会中。
 - 現在 **BLOCKED**: security修正/CI成功、および別途Signal実migration承認が必要。新規実migration/Signal保存/mergeは未実行。Phase 5.4へ進まない。
 - 正本・preview・SQL SHA・検証・次の安全な手順: `docs/phase5-3-signal-spec.md`、`docs/phase5-3-verification.md`、`docs/phase5-3-readonly-preview.json`。
+- PR: [#38](https://github.com/ken-ahi/chaincopy-observer/pull/38)。実装commit `129dd48`をpush済み。README追補後の最終head CIを監視し、結果はPR checksを正とする。新規Highまたはmigration未承認の間はmergeしない。
 
 ## 前工程のGitHub状態（履歴）
 
