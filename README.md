@@ -295,9 +295,9 @@ pnpm test:e2e
 wallet単位の有界方向寄与とconfidenceを計算します。投資助言や通知ではありません。
 `pnpm behavior:signal --coin BTC --bucket-start 2026-09-24T13:15:00.000Z`はREAD ONLY preview。
 認証付き`GET /api/behavior-signals?coin=BTC&bucketStart=...`は検証済みの保存結果のみ返します。
-新規Signal 1 tableの実migrationと実保存は別Owner承認前には行いません。
-`--execute --expected-fingerprint ...`は承認後の明示bucket保存専用です。
-仕様・承認境界・実preview・現在のsecurity blockerは
+新規Signal 1 tableと1,332 bucketの限定保存は2026-10-06のOwner承認下で検証済みです。
+`--execute --expected-fingerprint ...`は承認範囲内の明示bucket保存専用です。完了済み処理を繰り返しません。
+仕様・承認境界・fresh preview・保存/冪等性/security検証は
 `docs/phase5-3-signal-spec.md` / `docs/phase5-3-verification.md`を参照してください。
 
 ### Phase 5.2 Wallet weight
@@ -371,4 +371,4 @@ tests/e2e/
 - [Phase 4.3 Test Matrix](docs/phase4-3-wallet-selection-test-matrix.md)
 - [正本仕様](docs/SPEC.md)
 
-Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測Signalは実装・隔離検証・実データREAD ONLY previewまで実施し、security gateと別途実migration承認が残っています。Phase 5.4、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
+Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測SignalもOwner承認下の限定migration・1,332件保存・冪等性・read API検証を完了し、security gateを通過しています。Phase 5.4、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
