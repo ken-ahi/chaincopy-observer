@@ -12,7 +12,9 @@
 - direction-change-v1を実装。同一coin/Selection/cohort/weight、exact15分隣接、保存済みcurrent-valid Signalだけを比較。epsilonなし、confidence独立、NONEもimmutable保存。詳細はADR-046 / `docs/phase5-4-direction-change-spec.md`。
 - Stage 1 READ ONLY監査: 1,332 Signalは全件current-valid、269隣接ペア、1,056 gap境界、先頭7件。net+1/0/-1は606/154/572。欠落を0で補わない。実DB変更なし。
 - 新規DirectionChange 1 table / 2 RESTRICT FK / 6 index / 4 CHECKを設計。実migration/実保存/mergeは**別Owner承認待ち**。Phase 5.3承認を流用しない。通知/Phase 6へ進まない。
-- 隔離全validationとbounded live READ ONLY previewを実施し、結果・exact SQL SHA・承認handoffを`docs/phase5-4-verification.md`へ記録する。既存braces例外は拡張せず、新規High/Criticalは停止条件。
+- Owner追加承認による限定security修正: Next/plugin16.3.6→16.3.8、sharp override0.35.4→0.35.5と必要lockfileのみ。修正commit `0a5bb551d245e05ee54551cfe999b6cd614287be`。既存braces例外/gate不変。全隔離validation PASS: format/lint、typecheck/build11/11、83 files870tests、E2E24/24。audit critical0/high1は正確な既承認bracesのみ（moderate7）。
+- 正式read-only preview完了 `2026-10-10T10:38:02.216Z`。269ペア=BUY弱まり11/SELL弱まり11/強気反転82/弱気反転100/NONE65、加速0。gap1,056は未比較、欠落補完なし。保護17 table hash/queue前後一致、Signal1,332・Behavior2,012・集約1,332+1,332・weight/Selection/DQ不変。Worker停止、一時process終了。実migration13件のまま、新規tableは存在しない。
+- 実行image `sha256:ff4748758278a0245c0cc6f56d54ead3be0b1a0a9d6d887096a10c80779af6b1`のrevisionは0a5bb55。正本: `docs/phase5-4-verification.md` / `docs/phase5-4-readonly-preview.json`。新規SQL SHA256 `6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`。最終head CI成功後も**READY_FOR_MIGRATION_APPROVAL**でPRをopenのまま停止。実適用/実保存/merge承認を流用しない。
 
 ## Phase 5.3 完了記録（履歴）
 
