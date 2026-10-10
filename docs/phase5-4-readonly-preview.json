@@ -1,0 +1,1965 @@
+{
+  "status": "READ_ONLY_PREVIEW_COMPLETE",
+  "observedAt": "2026-10-10T10:38:02.216Z",
+  "signalCount": 1332,
+  "comparableAdjacentPairs": 269,
+  "blockedNonAdjacentPairs": 1056,
+  "firstObservationsWithoutPredecessor": 7,
+  "counts": {
+    "BUY_ACCELERATING": 0,
+    "BUY_WEAKENING": 11,
+    "SELL_ACCELERATING": 0,
+    "SELL_WEAKENING": 11,
+    "BULLISH_REVERSAL": 82,
+    "BEARISH_REVERSAL": 100,
+    "NONE": 65
+  },
+  "summary": {
+    "ASTER": {
+      "count": 14,
+      "first": "2025-09-23T19:30:00.000Z",
+      "last": "2025-09-25T22:00:00.000Z",
+      "gaps": 7,
+      "missingBucketSlots": 189,
+      "longest": 4,
+      "histogram": {
+        "netSignal": {
+          "0": 2,
+          "1": 6,
+          "-1": 6
+        },
+        "buyStrength": {
+          "0": 6,
+          "1": 6,
+          "0.5": 2
+        },
+        "sellStrength": {
+          "0": 6,
+          "1": 6,
+          "0.5": 2
+        },
+        "confidence": {
+          "0.333333333333333333": 12,
+          "0.166666666666666667": 2
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 0,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 0,
+        "BULLISH_REVERSAL": 3,
+        "BEARISH_REVERSAL": 2,
+        "NONE": 1
+      },
+      "newestEvent": {
+        "id": "1d894f16de4421942a8b43a6c30616e7d1ccbc013ce4acb66c054e4c01acaa39",
+        "inputFingerprint": "1d894f16de4421942a8b43a6c30616e7d1ccbc013ce4acb66c054e4c01acaa39",
+        "inputSnapshot": {
+          "policy": {
+            "version": "direction-change-v1",
+            "intervalMs": 900000,
+            "minimumDelta": "0",
+            "comparison": "STRICT_SAME_BASIS",
+            "zeroEntry": "NONE",
+            "zeroExit": "WEAKENING",
+            "confidenceGate": "NONE"
+          },
+          "previous": {
+            "id": "aa99e17a9e13403da3d307eac751b87b2f7a698287038e31156368a11f4e9f93",
+            "inputFingerprint": "aa99e17a9e13403da3d307eac751b87b2f7a698287038e31156368a11f4e9f93",
+            "coin": "ASTER",
+            "bucketStart": "2025-09-25T21:45:00.000Z",
+            "bucketEnd": "2025-09-25T22:00:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "330487f1b71b5f65f066a422f1c0a0547cef8540e91977323e1bdfe6c6f4eaec",
+            "aggregationInputFingerprint": "4917ccda2fe208bfba117ba7ff9b16a74653dfb0ef3c3a49472228adb02e4cae",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "0",
+            "sellStrength": "1",
+            "netSignal": "-1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          },
+          "current": {
+            "id": "86dab75cc36b423e5b77da19ca05750f4d4f13f808750188c7ed0e05f9a224ca",
+            "inputFingerprint": "86dab75cc36b423e5b77da19ca05750f4d4f13f808750188c7ed0e05f9a224ca",
+            "coin": "ASTER",
+            "bucketStart": "2025-09-25T22:00:00.000Z",
+            "bucketEnd": "2025-09-25T22:15:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "e110495d4124abe16749b1a6e4204f37f7f289381240b46952b175447ba24e72",
+            "aggregationInputFingerprint": "456ff8d38bab6dff1abff238410438c4116f6682d0603f240dfe5aa0221ff468",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "1",
+            "sellStrength": "0",
+            "netSignal": "1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          }
+        },
+        "directionChangeVersion": "direction-change-v1",
+        "signalVersion": "signal-v1",
+        "coin": "ASTER",
+        "previousSignalId": "aa99e17a9e13403da3d307eac751b87b2f7a698287038e31156368a11f4e9f93",
+        "currentSignalId": "86dab75cc36b423e5b77da19ca05750f4d4f13f808750188c7ed0e05f9a224ca",
+        "previousBucket": "2025-09-25T21:45:00.000Z",
+        "currentBucket": "2025-09-25T22:00:00.000Z",
+        "previousNetSignal": "-1",
+        "currentNetSignal": "1",
+        "delta": "2",
+        "eventType": "BULLISH_REVERSAL",
+        "reason": "EXACT_NET_TRANSITION",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "confidence": {
+          "previous": "0.333333333333333333",
+          "current": "0.333333333333333333",
+          "delta": "0",
+          "meaning": "EVIDENCE_BREADTH_NOT_PROBABILITY",
+          "previousParticipants": 1,
+          "currentParticipants": 1,
+          "previousWeightMass": "1",
+          "currentWeightMass": "1"
+        }
+      },
+      "isolatedBuckets": 5,
+      "consecutiveSequences": [
+        {
+          "from": "2025-09-23T20:00:00.000Z",
+          "to": "2025-09-23T20:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-24T14:15:00.000Z",
+          "to": "2025-09-24T15:00:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-09-25T21:45:00.000Z",
+          "to": "2025-09-25T22:00:00.000Z",
+          "count": 2
+        }
+      ]
+    },
+    "BTC": {
+      "count": 516,
+      "first": "2026-02-23T21:00:00.000Z",
+      "last": "2026-09-24T13:15:00.000Z",
+      "gaps": 423,
+      "missingBucketSlots": 19902,
+      "longest": 7,
+      "histogram": {
+        "netSignal": {
+          "0": 42,
+          "1": 242,
+          "-1": 232
+        },
+        "buyStrength": {
+          "0": 232,
+          "1": 242,
+          "0.5": 42
+        },
+        "sellStrength": {
+          "0": 242,
+          "1": 232,
+          "0.5": 42
+        },
+        "confidence": {
+          "0.333333333333333333": 474,
+          "0.166666666666666667": 42
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 2,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 5,
+        "BULLISH_REVERSAL": 24,
+        "BEARISH_REVERSAL": 45,
+        "NONE": 16
+      },
+      "newestEvent": {
+        "id": "3e40a857141d34648d030bbee4f526b3310dadd42c8a856fe76d5a0ffb9375da",
+        "inputFingerprint": "3e40a857141d34648d030bbee4f526b3310dadd42c8a856fe76d5a0ffb9375da",
+        "inputSnapshot": {
+          "policy": {
+            "version": "direction-change-v1",
+            "intervalMs": 900000,
+            "minimumDelta": "0",
+            "comparison": "STRICT_SAME_BASIS",
+            "zeroEntry": "NONE",
+            "zeroExit": "WEAKENING",
+            "confidenceGate": "NONE"
+          },
+          "previous": {
+            "id": "7be9531b881a417cd0c4cd4a877ad22c9747ce4c6df857c600ffaa0c67e2e060",
+            "inputFingerprint": "7be9531b881a417cd0c4cd4a877ad22c9747ce4c6df857c600ffaa0c67e2e060",
+            "coin": "BTC",
+            "bucketStart": "2026-09-09T16:15:00.000Z",
+            "bucketEnd": "2026-09-09T16:30:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "81dda332dc888e65e4ce7d67bf72b2924349379508363d67ecb8deeaefc8b649",
+            "aggregationInputFingerprint": "56bef23d1e064a7ad5eca533a52b87290055a66292672f408537a24ed5b67324",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "1",
+            "sellStrength": "0",
+            "netSignal": "1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          },
+          "current": {
+            "id": "d4af00a859c85a3a6c501f1e69df191b02fb40decc23c769873c5241dc74a3a4",
+            "inputFingerprint": "d4af00a859c85a3a6c501f1e69df191b02fb40decc23c769873c5241dc74a3a4",
+            "coin": "BTC",
+            "bucketStart": "2026-09-09T16:30:00.000Z",
+            "bucketEnd": "2026-09-09T16:45:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "3e532453e11da34a38a234f43ad14a5f56891b43d546a5bfa54700aded5a9492",
+            "aggregationInputFingerprint": "5eb430937cafb6a90465effa72a45e9f45f38918f4d0ffdf6ece0534ee4f2929",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "0",
+            "sellStrength": "1",
+            "netSignal": "-1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          }
+        },
+        "directionChangeVersion": "direction-change-v1",
+        "signalVersion": "signal-v1",
+        "coin": "BTC",
+        "previousSignalId": "7be9531b881a417cd0c4cd4a877ad22c9747ce4c6df857c600ffaa0c67e2e060",
+        "currentSignalId": "d4af00a859c85a3a6c501f1e69df191b02fb40decc23c769873c5241dc74a3a4",
+        "previousBucket": "2026-09-09T16:15:00.000Z",
+        "currentBucket": "2026-09-09T16:30:00.000Z",
+        "previousNetSignal": "1",
+        "currentNetSignal": "-1",
+        "delta": "-2",
+        "eventType": "BEARISH_REVERSAL",
+        "reason": "EXACT_NET_TRANSITION",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "confidence": {
+          "previous": "0.333333333333333333",
+          "current": "0.333333333333333333",
+          "delta": "0",
+          "meaning": "EVIDENCE_BREADTH_NOT_PROBABILITY",
+          "previousParticipants": 1,
+          "currentParticipants": 1,
+          "previousWeightMass": "1",
+          "currentWeightMass": "1"
+        }
+      },
+      "isolatedBuckets": 357,
+      "consecutiveSequences": [
+        {
+          "from": "2026-03-22T12:45:00.000Z",
+          "to": "2026-03-22T13:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-22T13:45:00.000Z",
+          "to": "2026-03-22T14:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-23T15:45:00.000Z",
+          "to": "2026-03-23T16:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-23T17:00:00.000Z",
+          "to": "2026-03-23T17:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-03-25T16:00:00.000Z",
+          "to": "2026-03-25T16:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-26T11:00:00.000Z",
+          "to": "2026-03-26T11:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-26T13:30:00.000Z",
+          "to": "2026-03-26T15:00:00.000Z",
+          "count": 7
+        },
+        {
+          "from": "2026-03-26T19:45:00.000Z",
+          "to": "2026-03-26T20:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-03-28T00:45:00.000Z",
+          "to": "2026-03-28T01:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-28T12:00:00.000Z",
+          "to": "2026-03-28T12:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-28T13:30:00.000Z",
+          "to": "2026-03-28T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-28T16:15:00.000Z",
+          "to": "2026-03-28T16:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-30T16:45:00.000Z",
+          "to": "2026-03-30T17:30:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2026-03-31T14:00:00.000Z",
+          "to": "2026-03-31T14:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-31T16:15:00.000Z",
+          "to": "2026-03-31T16:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-01T15:00:00.000Z",
+          "to": "2026-04-01T15:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-01T20:30:00.000Z",
+          "to": "2026-04-01T21:30:00.000Z",
+          "count": 5
+        },
+        {
+          "from": "2026-04-02T13:15:00.000Z",
+          "to": "2026-04-02T13:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-02T17:30:00.000Z",
+          "to": "2026-04-02T17:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-03T18:15:00.000Z",
+          "to": "2026-04-03T18:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-04T08:15:00.000Z",
+          "to": "2026-04-04T08:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-06T09:00:00.000Z",
+          "to": "2026-04-06T09:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-06T13:30:00.000Z",
+          "to": "2026-04-06T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-06T23:45:00.000Z",
+          "to": "2026-04-07T00:30:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2026-04-07T13:45:00.000Z",
+          "to": "2026-04-07T14:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-07T19:00:00.000Z",
+          "to": "2026-04-07T19:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-08T20:00:00.000Z",
+          "to": "2026-04-08T20:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-08T22:15:00.000Z",
+          "to": "2026-04-08T22:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-08T23:00:00.000Z",
+          "to": "2026-04-08T23:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-09T20:45:00.000Z",
+          "to": "2026-04-09T21:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-04-10T18:00:00.000Z",
+          "to": "2026-04-10T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-10T18:45:00.000Z",
+          "to": "2026-04-10T19:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-10T20:15:00.000Z",
+          "to": "2026-04-10T20:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-14T14:00:00.000Z",
+          "to": "2026-04-14T14:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-14T17:15:00.000Z",
+          "to": "2026-04-14T17:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-15T13:30:00.000Z",
+          "to": "2026-04-15T14:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-04-16T11:45:00.000Z",
+          "to": "2026-04-16T12:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-16T13:30:00.000Z",
+          "to": "2026-04-16T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-16T18:00:00.000Z",
+          "to": "2026-04-16T18:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-04-17T17:30:00.000Z",
+          "to": "2026-04-17T17:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-20T09:15:00.000Z",
+          "to": "2026-04-20T09:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-20T17:30:00.000Z",
+          "to": "2026-04-20T17:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-23T17:00:00.000Z",
+          "to": "2026-04-23T17:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-04-23T22:00:00.000Z",
+          "to": "2026-04-23T22:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-04-24T17:00:00.000Z",
+          "to": "2026-04-24T17:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-28T21:30:00.000Z",
+          "to": "2026-04-28T21:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-05-01T17:15:00.000Z",
+          "to": "2026-05-01T17:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-05-04T14:15:00.000Z",
+          "to": "2026-05-04T14:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-05-04T19:00:00.000Z",
+          "to": "2026-05-04T19:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-05-14T13:45:00.000Z",
+          "to": "2026-05-14T14:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-05-14T16:30:00.000Z",
+          "to": "2026-05-14T16:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-06-11T17:15:00.000Z",
+          "to": "2026-06-11T17:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-06-12T13:30:00.000Z",
+          "to": "2026-06-12T14:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-06-13T19:30:00.000Z",
+          "to": "2026-06-13T20:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-06-17T18:30:00.000Z",
+          "to": "2026-06-17T18:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-06-19T19:30:00.000Z",
+          "to": "2026-06-19T20:15:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2026-06-23T13:30:00.000Z",
+          "to": "2026-06-23T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-06-25T21:30:00.000Z",
+          "to": "2026-06-25T21:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-06-28T21:45:00.000Z",
+          "to": "2026-06-28T22:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2026-06-29T19:45:00.000Z",
+          "to": "2026-06-29T20:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-07-01T13:45:00.000Z",
+          "to": "2026-07-01T14:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-07-02T16:15:00.000Z",
+          "to": "2026-07-02T16:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-07-03T13:30:00.000Z",
+          "to": "2026-07-03T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-07-15T11:00:00.000Z",
+          "to": "2026-07-15T11:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-07-29T18:30:00.000Z",
+          "to": "2026-07-29T18:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-08-27T13:45:00.000Z",
+          "to": "2026-08-27T14:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-09-09T16:15:00.000Z",
+          "to": "2026-09-09T16:30:00.000Z",
+          "count": 2
+        }
+      ]
+    },
+    "ETH": {
+      "count": 271,
+      "first": "2025-05-15T13:15:00.000Z",
+      "last": "2025-10-02T10:30:00.000Z",
+      "gaps": 225,
+      "missingBucketSlots": 13159,
+      "longest": 6,
+      "histogram": {
+        "netSignal": {
+          "0": 35,
+          "1": 119,
+          "-1": 117
+        },
+        "buyStrength": {
+          "0": 117,
+          "1": 119,
+          "0.5": 35
+        },
+        "sellStrength": {
+          "0": 119,
+          "1": 117,
+          "0.5": 35
+        },
+        "confidence": {
+          "0.333333333333333333": 236,
+          "0.166666666666666667": 35
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 2,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 2,
+        "BULLISH_REVERSAL": 14,
+        "BEARISH_REVERSAL": 12,
+        "NONE": 15
+      },
+      "newestEvent": {
+        "id": "1fcf201f5890f0cff11dbad17044e30b82579435aafdd854048a4b95f23ec613",
+        "inputFingerprint": "1fcf201f5890f0cff11dbad17044e30b82579435aafdd854048a4b95f23ec613",
+        "inputSnapshot": {
+          "policy": {
+            "version": "direction-change-v1",
+            "intervalMs": 900000,
+            "minimumDelta": "0",
+            "comparison": "STRICT_SAME_BASIS",
+            "zeroEntry": "NONE",
+            "zeroExit": "WEAKENING",
+            "confidenceGate": "NONE"
+          },
+          "previous": {
+            "id": "3600a4f8c03cd7549f4eea6ac1110c40083bef00e37784a5b94d012bdf31909b",
+            "inputFingerprint": "3600a4f8c03cd7549f4eea6ac1110c40083bef00e37784a5b94d012bdf31909b",
+            "coin": "ETH",
+            "bucketStart": "2025-10-02T10:15:00.000Z",
+            "bucketEnd": "2025-10-02T10:30:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "ae40e0dc87c46963cc88812f409b4246be7100132d6fdf163916e29e67aeaa77",
+            "aggregationInputFingerprint": "c4b5852be21c433904523995a271189a03dd2ab3142df4585306a5f55829e6db",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "0",
+            "sellStrength": "1",
+            "netSignal": "-1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          },
+          "current": {
+            "id": "b18fa94266d9150e2c445a12cfcbcb673e0945cc883aa87067592a440d269a27",
+            "inputFingerprint": "b18fa94266d9150e2c445a12cfcbcb673e0945cc883aa87067592a440d269a27",
+            "coin": "ETH",
+            "bucketStart": "2025-10-02T10:30:00.000Z",
+            "bucketEnd": "2025-10-02T10:45:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "c583726dce4a5c7cfdc84701f932079cc1ac79786f960f9125f2947321ef69aa",
+            "aggregationInputFingerprint": "8f5d8950f161f1800ace90a39beafbf72e7d64fc101a7e12389d530320d7c11e",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "1",
+            "sellStrength": "0",
+            "netSignal": "1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          }
+        },
+        "directionChangeVersion": "direction-change-v1",
+        "signalVersion": "signal-v1",
+        "coin": "ETH",
+        "previousSignalId": "3600a4f8c03cd7549f4eea6ac1110c40083bef00e37784a5b94d012bdf31909b",
+        "currentSignalId": "b18fa94266d9150e2c445a12cfcbcb673e0945cc883aa87067592a440d269a27",
+        "previousBucket": "2025-10-02T10:15:00.000Z",
+        "currentBucket": "2025-10-02T10:30:00.000Z",
+        "previousNetSignal": "-1",
+        "currentNetSignal": "1",
+        "delta": "2",
+        "eventType": "BULLISH_REVERSAL",
+        "reason": "EXACT_NET_TRANSITION",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "confidence": {
+          "previous": "0.333333333333333333",
+          "current": "0.333333333333333333",
+          "delta": "0",
+          "meaning": "EVIDENCE_BREADTH_NOT_PROBABILITY",
+          "previousParticipants": 1,
+          "currentParticipants": 1,
+          "previousWeightMass": "1",
+          "currentWeightMass": "1"
+        }
+      },
+      "isolatedBuckets": 198,
+      "consecutiveSequences": [
+        {
+          "from": "2025-05-15T13:15:00.000Z",
+          "to": "2025-05-15T13:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-05-23T18:15:00.000Z",
+          "to": "2025-05-23T18:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-05-27T12:00:00.000Z",
+          "to": "2025-05-27T12:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-05-27T13:15:00.000Z",
+          "to": "2025-05-27T13:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-05-28T07:45:00.000Z",
+          "to": "2025-05-28T08:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-06-03T21:45:00.000Z",
+          "to": "2025-06-03T22:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-06-04T15:45:00.000Z",
+          "to": "2025-06-04T16:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-15T22:15:00.000Z",
+          "to": "2025-07-15T22:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-16T20:45:00.000Z",
+          "to": "2025-07-16T21:45:00.000Z",
+          "count": 5
+        },
+        {
+          "from": "2025-07-17T11:00:00.000Z",
+          "to": "2025-07-17T11:45:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-07-17T12:15:00.000Z",
+          "to": "2025-07-17T13:30:00.000Z",
+          "count": 6
+        },
+        {
+          "from": "2025-07-17T14:00:00.000Z",
+          "to": "2025-07-17T14:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-17T14:45:00.000Z",
+          "to": "2025-07-17T15:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-17T20:45:00.000Z",
+          "to": "2025-07-17T21:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-23T13:15:00.000Z",
+          "to": "2025-07-23T13:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-24T18:00:00.000Z",
+          "to": "2025-07-24T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-25T08:00:00.000Z",
+          "to": "2025-07-25T08:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-26T15:45:00.000Z",
+          "to": "2025-07-26T16:30:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-07-27T12:30:00.000Z",
+          "to": "2025-07-27T12:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-07-27T18:00:00.000Z",
+          "to": "2025-07-27T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-08-11T19:30:00.000Z",
+          "to": "2025-08-11T19:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-08-12T13:00:00.000Z",
+          "to": "2025-08-12T13:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-10T15:15:00.000Z",
+          "to": "2025-09-10T15:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-10T17:00:00.000Z",
+          "to": "2025-09-10T17:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-12T14:45:00.000Z",
+          "to": "2025-09-12T15:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-12T20:45:00.000Z",
+          "to": "2025-09-12T21:45:00.000Z",
+          "count": 5
+        },
+        {
+          "from": "2025-09-30T20:45:00.000Z",
+          "to": "2025-09-30T21:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-02T10:15:00.000Z",
+          "to": "2025-10-02T10:30:00.000Z",
+          "count": 2
+        }
+      ]
+    },
+    "HYPE": {
+      "count": 1,
+      "first": "2026-03-17T21:00:00.000Z",
+      "last": "2026-03-17T21:00:00.000Z",
+      "gaps": 0,
+      "missingBucketSlots": 0,
+      "longest": 1,
+      "histogram": {
+        "netSignal": {
+          "0": 1
+        },
+        "buyStrength": {
+          "0.5": 1
+        },
+        "sellStrength": {
+          "0.5": 1
+        },
+        "confidence": {
+          "0.166666666666666667": 1
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 0,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 0,
+        "BULLISH_REVERSAL": 0,
+        "BEARISH_REVERSAL": 0,
+        "NONE": 0
+      },
+      "newestEvent": null,
+      "isolatedBuckets": 1,
+      "consecutiveSequences": []
+    },
+    "SOL": {
+      "count": 419,
+      "first": "2025-09-14T20:30:00.000Z",
+      "last": "2026-04-17T17:15:00.000Z",
+      "gaps": 310,
+      "missingBucketSlots": 20209,
+      "longest": 5,
+      "histogram": {
+        "netSignal": {
+          "0": 58,
+          "1": 187,
+          "-1": 174
+        },
+        "buyStrength": {
+          "0": 174,
+          "1": 187,
+          "0.5": 58
+        },
+        "sellStrength": {
+          "0": 187,
+          "1": 174,
+          "0.5": 58
+        },
+        "confidence": {
+          "0.333333333333333333": 361,
+          "0.166666666666666667": 58
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 6,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 3,
+        "BULLISH_REVERSAL": 36,
+        "BEARISH_REVERSAL": 33,
+        "NONE": 30
+      },
+      "newestEvent": {
+        "id": "002695d9943b402efcc3f5a34e7eb8c3fd0766daec815f67fbc7093017f827a0",
+        "inputFingerprint": "002695d9943b402efcc3f5a34e7eb8c3fd0766daec815f67fbc7093017f827a0",
+        "inputSnapshot": {
+          "policy": {
+            "version": "direction-change-v1",
+            "intervalMs": 900000,
+            "minimumDelta": "0",
+            "comparison": "STRICT_SAME_BASIS",
+            "zeroEntry": "NONE",
+            "zeroExit": "WEAKENING",
+            "confidenceGate": "NONE"
+          },
+          "previous": {
+            "id": "ee32ac773ae663308a123e96beb7b04554d09fc8db476ccf9982f9ea53288d96",
+            "inputFingerprint": "ee32ac773ae663308a123e96beb7b04554d09fc8db476ccf9982f9ea53288d96",
+            "coin": "SOL",
+            "bucketStart": "2026-04-17T17:00:00.000Z",
+            "bucketEnd": "2026-04-17T17:15:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "30e1f8832c2a750d75cd0a466934b73b1e900987990b267fa027f49dc551c494",
+            "aggregationInputFingerprint": "92fdf4e7a8cf82044b31724de1415a97ac38e9a90a6922f629c2cb65978a7381",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "0",
+            "sellStrength": "1",
+            "netSignal": "-1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          },
+          "current": {
+            "id": "89533aab9e50c2ac31ea857579b42394a27dbe59aa3bd1c9dac8c307d43c46f5",
+            "inputFingerprint": "89533aab9e50c2ac31ea857579b42394a27dbe59aa3bd1c9dac8c307d43c46f5",
+            "coin": "SOL",
+            "bucketStart": "2026-04-17T17:15:00.000Z",
+            "bucketEnd": "2026-04-17T17:30:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "541e9bd51e57bdfb3b8166e1fb99f42cebb93db3597ae9c7368b8ba001129a2d",
+            "aggregationInputFingerprint": "a610fe71854ec7ef6b4e6a7a2e7c54e06c9390a710867fa71d3a82cb7f2a06ee",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "1",
+            "sellStrength": "0",
+            "netSignal": "1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          }
+        },
+        "directionChangeVersion": "direction-change-v1",
+        "signalVersion": "signal-v1",
+        "coin": "SOL",
+        "previousSignalId": "ee32ac773ae663308a123e96beb7b04554d09fc8db476ccf9982f9ea53288d96",
+        "currentSignalId": "89533aab9e50c2ac31ea857579b42394a27dbe59aa3bd1c9dac8c307d43c46f5",
+        "previousBucket": "2026-04-17T17:00:00.000Z",
+        "currentBucket": "2026-04-17T17:15:00.000Z",
+        "previousNetSignal": "-1",
+        "currentNetSignal": "1",
+        "delta": "2",
+        "eventType": "BULLISH_REVERSAL",
+        "reason": "EXACT_NET_TRANSITION",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "confidence": {
+          "previous": "0.333333333333333333",
+          "current": "0.333333333333333333",
+          "delta": "0",
+          "meaning": "EVIDENCE_BREADTH_NOT_PROBABILITY",
+          "previousParticipants": 1,
+          "currentParticipants": 1,
+          "previousWeightMass": "1",
+          "currentWeightMass": "1"
+        }
+      },
+      "isolatedBuckets": 239,
+      "consecutiveSequences": [
+        {
+          "from": "2025-09-15T12:15:00.000Z",
+          "to": "2025-09-15T12:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-15T14:00:00.000Z",
+          "to": "2025-09-15T14:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-17T15:00:00.000Z",
+          "to": "2025-09-17T15:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-19T06:00:00.000Z",
+          "to": "2025-09-19T06:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-20T15:45:00.000Z",
+          "to": "2025-09-20T16:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-21T09:45:00.000Z",
+          "to": "2025-09-21T10:30:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-09-21T18:45:00.000Z",
+          "to": "2025-09-21T19:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-21T22:15:00.000Z",
+          "to": "2025-09-21T22:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-22T15:15:00.000Z",
+          "to": "2025-09-22T15:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-22T16:15:00.000Z",
+          "to": "2025-09-22T16:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-01T20:30:00.000Z",
+          "to": "2025-10-01T20:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-11T01:30:00.000Z",
+          "to": "2025-10-11T01:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-11T07:45:00.000Z",
+          "to": "2025-10-11T08:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-11T11:15:00.000Z",
+          "to": "2025-10-11T11:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-11T19:30:00.000Z",
+          "to": "2025-10-11T19:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-11T20:45:00.000Z",
+          "to": "2025-10-11T21:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-11T22:45:00.000Z",
+          "to": "2025-10-11T23:45:00.000Z",
+          "count": 5
+        },
+        {
+          "from": "2025-10-12T12:00:00.000Z",
+          "to": "2025-10-12T12:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-12T20:00:00.000Z",
+          "to": "2025-10-12T20:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-14T14:00:00.000Z",
+          "to": "2025-10-14T14:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-14T15:30:00.000Z",
+          "to": "2025-10-14T15:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-14T18:00:00.000Z",
+          "to": "2025-10-14T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-14T18:45:00.000Z",
+          "to": "2025-10-14T19:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-15T07:30:00.000Z",
+          "to": "2025-10-15T08:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-15T12:15:00.000Z",
+          "to": "2025-10-15T13:00:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-10-15T13:30:00.000Z",
+          "to": "2025-10-15T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-16T13:30:00.000Z",
+          "to": "2025-10-16T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-17T13:30:00.000Z",
+          "to": "2025-10-17T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-17T20:15:00.000Z",
+          "to": "2025-10-17T20:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-17T21:15:00.000Z",
+          "to": "2025-10-17T21:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-18T20:45:00.000Z",
+          "to": "2025-10-18T21:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-18T23:15:00.000Z",
+          "to": "2025-10-18T23:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-19T00:00:00.000Z",
+          "to": "2025-10-19T01:00:00.000Z",
+          "count": 5
+        },
+        {
+          "from": "2025-10-19T08:30:00.000Z",
+          "to": "2025-10-19T09:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-19T18:45:00.000Z",
+          "to": "2025-10-19T19:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-19T20:45:00.000Z",
+          "to": "2025-10-19T21:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-19T22:45:00.000Z",
+          "to": "2025-10-19T23:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-21T00:15:00.000Z",
+          "to": "2025-10-21T00:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-21T06:45:00.000Z",
+          "to": "2025-10-21T07:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-22T07:00:00.000Z",
+          "to": "2025-10-22T07:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-22T22:00:00.000Z",
+          "to": "2025-10-22T22:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T03:30:00.000Z",
+          "to": "2025-10-23T03:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T04:15:00.000Z",
+          "to": "2025-10-23T04:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T05:30:00.000Z",
+          "to": "2025-10-23T06:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-23T13:30:00.000Z",
+          "to": "2025-10-23T13:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T19:15:00.000Z",
+          "to": "2025-10-23T19:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T21:15:00.000Z",
+          "to": "2025-10-23T21:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T22:00:00.000Z",
+          "to": "2025-10-23T22:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-23T23:45:00.000Z",
+          "to": "2025-10-24T00:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-24T07:45:00.000Z",
+          "to": "2025-10-24T08:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-25T04:15:00.000Z",
+          "to": "2025-10-25T05:00:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-10-25T21:15:00.000Z",
+          "to": "2025-10-25T21:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-27T13:45:00.000Z",
+          "to": "2025-10-27T14:15:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-10-31T14:00:00.000Z",
+          "to": "2025-10-31T14:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-31T20:00:00.000Z",
+          "to": "2025-10-31T20:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-04T16:15:00.000Z",
+          "to": "2025-11-04T16:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-04T18:15:00.000Z",
+          "to": "2025-11-04T19:15:00.000Z",
+          "count": 5
+        },
+        {
+          "from": "2025-11-06T14:45:00.000Z",
+          "to": "2025-11-06T15:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-06T20:30:00.000Z",
+          "to": "2025-11-06T20:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-06T22:00:00.000Z",
+          "to": "2025-11-06T22:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-11-10T10:15:00.000Z",
+          "to": "2025-11-10T10:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-10T15:15:00.000Z",
+          "to": "2025-11-10T16:00:00.000Z",
+          "count": 4
+        },
+        {
+          "from": "2025-11-10T19:30:00.000Z",
+          "to": "2025-11-10T19:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-10T20:30:00.000Z",
+          "to": "2025-11-10T20:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-13T19:15:00.000Z",
+          "to": "2025-11-13T19:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-14T14:30:00.000Z",
+          "to": "2025-11-14T14:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-27T20:30:00.000Z",
+          "to": "2025-11-27T20:45:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-28T22:15:00.000Z",
+          "to": "2025-11-28T22:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-11-29T22:00:00.000Z",
+          "to": "2025-11-29T22:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-01-27T12:00:00.000Z",
+          "to": "2026-01-27T12:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-13T18:45:00.000Z",
+          "to": "2026-03-13T19:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-04-17T17:00:00.000Z",
+          "to": "2026-04-17T17:15:00.000Z",
+          "count": 2
+        }
+      ]
+    },
+    "XPL": {
+      "count": 86,
+      "first": "2025-09-25T23:15:00.000Z",
+      "last": "2025-10-09T19:45:00.000Z",
+      "gaps": 69,
+      "missingBucketSlots": 1245,
+      "longest": 3,
+      "histogram": {
+        "netSignal": {
+          "0": 12,
+          "1": 41,
+          "-1": 33
+        },
+        "buyStrength": {
+          "0": 33,
+          "1": 41,
+          "0.5": 12
+        },
+        "sellStrength": {
+          "0": 41,
+          "1": 33,
+          "0.5": 12
+        },
+        "confidence": {
+          "0.166666666666666667": 12,
+          "0.333333333333333333": 74
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 1,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 1,
+        "BULLISH_REVERSAL": 4,
+        "BEARISH_REVERSAL": 7,
+        "NONE": 3
+      },
+      "newestEvent": {
+        "id": "6f7d11411f17bfbeea990e09ba7438c1a8096c22526eb1055c891ccdd4be868a",
+        "inputFingerprint": "6f7d11411f17bfbeea990e09ba7438c1a8096c22526eb1055c891ccdd4be868a",
+        "inputSnapshot": {
+          "policy": {
+            "version": "direction-change-v1",
+            "intervalMs": 900000,
+            "minimumDelta": "0",
+            "comparison": "STRICT_SAME_BASIS",
+            "zeroEntry": "NONE",
+            "zeroExit": "WEAKENING",
+            "confidenceGate": "NONE"
+          },
+          "previous": {
+            "id": "fd7232ec062a3806daf20115c609a39b19f8f05372228b2925586bdcfa5f4368",
+            "inputFingerprint": "fd7232ec062a3806daf20115c609a39b19f8f05372228b2925586bdcfa5f4368",
+            "coin": "XPL",
+            "bucketStart": "2025-10-09T02:15:00.000Z",
+            "bucketEnd": "2025-10-09T02:30:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "5bca596c64660a45915819047404dca94ed7e0faff7ef2ab266f395b19afaac3",
+            "aggregationInputFingerprint": "ddcbea87abf74b039c4c5ed82de7ddf159db44100c01ebea274cc7d1116697e7",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "1",
+            "sellStrength": "0",
+            "netSignal": "1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          },
+          "current": {
+            "id": "e5f2b5f0679d86f7770f7cb49ce6b73d01404ef2c07cc6bf24bcfbb934c4d050",
+            "inputFingerprint": "e5f2b5f0679d86f7770f7cb49ce6b73d01404ef2c07cc6bf24bcfbb934c4d050",
+            "coin": "XPL",
+            "bucketStart": "2025-10-09T02:30:00.000Z",
+            "bucketEnd": "2025-10-09T02:45:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "d5c607d6c93f61d214c3bf62b4030d576a3f20edd5bd4432a95a968f4d931b4e",
+            "aggregationInputFingerprint": "0e75029ffb720334e203513d294282fe75acd62502d91111939ff3c228aabb30",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "0",
+            "sellStrength": "1",
+            "netSignal": "-1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          }
+        },
+        "directionChangeVersion": "direction-change-v1",
+        "signalVersion": "signal-v1",
+        "coin": "XPL",
+        "previousSignalId": "fd7232ec062a3806daf20115c609a39b19f8f05372228b2925586bdcfa5f4368",
+        "currentSignalId": "e5f2b5f0679d86f7770f7cb49ce6b73d01404ef2c07cc6bf24bcfbb934c4d050",
+        "previousBucket": "2025-10-09T02:15:00.000Z",
+        "currentBucket": "2025-10-09T02:30:00.000Z",
+        "previousNetSignal": "1",
+        "currentNetSignal": "-1",
+        "delta": "-2",
+        "eventType": "BEARISH_REVERSAL",
+        "reason": "EXACT_NET_TRANSITION",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "confidence": {
+          "previous": "0.333333333333333333",
+          "current": "0.333333333333333333",
+          "delta": "0",
+          "meaning": "EVIDENCE_BREADTH_NOT_PROBABILITY",
+          "previousParticipants": 1,
+          "currentParticipants": 1,
+          "previousWeightMass": "1",
+          "currentWeightMass": "1"
+        }
+      },
+      "isolatedBuckets": 57,
+      "consecutiveSequences": [
+        {
+          "from": "2025-09-25T23:45:00.000Z",
+          "to": "2025-09-26T00:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-26T19:45:00.000Z",
+          "to": "2025-09-26T20:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-27T15:15:00.000Z",
+          "to": "2025-09-27T15:45:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-27T18:30:00.000Z",
+          "to": "2025-09-27T19:00:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-28T18:00:00.000Z",
+          "to": "2025-09-28T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-28T22:00:00.000Z",
+          "to": "2025-09-28T22:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-09-29T00:00:00.000Z",
+          "to": "2025-09-29T00:30:00.000Z",
+          "count": 3
+        },
+        {
+          "from": "2025-09-29T18:00:00.000Z",
+          "to": "2025-09-29T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-01T21:00:00.000Z",
+          "to": "2025-10-01T21:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-05T19:45:00.000Z",
+          "to": "2025-10-05T20:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-07T06:45:00.000Z",
+          "to": "2025-10-07T07:00:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-08T18:00:00.000Z",
+          "to": "2025-10-08T18:15:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2025-10-09T02:15:00.000Z",
+          "to": "2025-10-09T02:30:00.000Z",
+          "count": 2
+        }
+      ]
+    },
+    "xyz:CL": {
+      "count": 25,
+      "first": "2026-03-02T11:00:00.000Z",
+      "last": "2026-04-06T22:30:00.000Z",
+      "gaps": 22,
+      "missingBucketSlots": 3382,
+      "longest": 2,
+      "histogram": {
+        "netSignal": {
+          "0": 4,
+          "1": 11,
+          "-1": 10
+        },
+        "buyStrength": {
+          "0": 10,
+          "1": 11,
+          "0.5": 4
+        },
+        "sellStrength": {
+          "0": 11,
+          "1": 10,
+          "0.5": 4
+        },
+        "confidence": {
+          "0.333333333333333333": 21,
+          "0.166666666666666667": 4
+        }
+      },
+      "counts": {
+        "BUY_ACCELERATING": 0,
+        "BUY_WEAKENING": 0,
+        "SELL_ACCELERATING": 0,
+        "SELL_WEAKENING": 0,
+        "BULLISH_REVERSAL": 1,
+        "BEARISH_REVERSAL": 1,
+        "NONE": 0
+      },
+      "newestEvent": {
+        "id": "5a2b3b917e1729abd708da3d93854605af76851561588a21b59b4b5324b0d7b3",
+        "inputFingerprint": "5a2b3b917e1729abd708da3d93854605af76851561588a21b59b4b5324b0d7b3",
+        "inputSnapshot": {
+          "policy": {
+            "version": "direction-change-v1",
+            "intervalMs": 900000,
+            "minimumDelta": "0",
+            "comparison": "STRICT_SAME_BASIS",
+            "zeroEntry": "NONE",
+            "zeroExit": "WEAKENING",
+            "confidenceGate": "NONE"
+          },
+          "previous": {
+            "id": "cee4fb6d046a20939e434010cfe6fda1c6b86c5d2062217a240c9671f548169d",
+            "inputFingerprint": "cee4fb6d046a20939e434010cfe6fda1c6b86c5d2062217a240c9671f548169d",
+            "coin": "xyz:CL",
+            "bucketStart": "2026-03-17T21:45:00.000Z",
+            "bucketEnd": "2026-03-17T22:00:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "c7fb7674de67172e099a8f6cad2ccf386d5e44684ec3b71cd8b65dcd17b364a0",
+            "aggregationInputFingerprint": "61d99fc3d6f422987028d213402c9095a312046f17c00ed016d3999375065f8a",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "1",
+            "sellStrength": "0",
+            "netSignal": "1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          },
+          "current": {
+            "id": "2eda7e357d150d70227a40c904d494164731a39616f4620cbd36b270a114778c",
+            "inputFingerprint": "2eda7e357d150d70227a40c904d494164731a39616f4620cbd36b270a114778c",
+            "coin": "xyz:CL",
+            "bucketStart": "2026-03-17T22:00:00.000Z",
+            "bucketEnd": "2026-03-17T22:15:00.000Z",
+            "signalVersion": "signal-v1",
+            "status": "VALID",
+            "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+            "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+            "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightInputFingerprint": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+            "weightVersion": "wallet-weight-v1",
+            "aggregationRevisionId": "3e6a9925656cb01a85c212ac25a85c5978366e99a48f827de781b80af742a04b",
+            "aggregationInputFingerprint": "a76c0e1d7ae69c2616a43962ab30fdccfcd116c6920776d4189b56cc4371fb37",
+            "aggregationVersion": "behavior-aggregation-v1",
+            "behaviorVersion": "behavior-v1",
+            "buyStrength": "0",
+            "sellStrength": "1",
+            "netSignal": "-1",
+            "confidence": "0.333333333333333333",
+            "participatingWalletCount": 1,
+            "weightedParticipatingWalletCount": "1"
+          }
+        },
+        "directionChangeVersion": "direction-change-v1",
+        "signalVersion": "signal-v1",
+        "coin": "xyz:CL",
+        "previousSignalId": "cee4fb6d046a20939e434010cfe6fda1c6b86c5d2062217a240c9671f548169d",
+        "currentSignalId": "2eda7e357d150d70227a40c904d494164731a39616f4620cbd36b270a114778c",
+        "previousBucket": "2026-03-17T21:45:00.000Z",
+        "currentBucket": "2026-03-17T22:00:00.000Z",
+        "previousNetSignal": "1",
+        "currentNetSignal": "-1",
+        "delta": "-2",
+        "eventType": "BEARISH_REVERSAL",
+        "reason": "EXACT_NET_TRANSITION",
+        "selectionRunId": "cmujbqjbu2af4nq01zg56l0vc",
+        "cohortFingerprint": "fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a",
+        "weightSnapshotId": "df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd",
+        "confidence": {
+          "previous": "0.333333333333333333",
+          "current": "0.333333333333333333",
+          "delta": "0",
+          "meaning": "EVIDENCE_BREADTH_NOT_PROBABILITY",
+          "previousParticipants": 1,
+          "currentParticipants": 1,
+          "previousWeightMass": "1",
+          "currentWeightMass": "1"
+        }
+      },
+      "isolatedBuckets": 21,
+      "consecutiveSequences": [
+        {
+          "from": "2026-03-09T21:15:00.000Z",
+          "to": "2026-03-09T21:30:00.000Z",
+          "count": 2
+        },
+        {
+          "from": "2026-03-17T21:45:00.000Z",
+          "to": "2026-03-17T22:00:00.000Z",
+          "count": 2
+        }
+      ]
+    }
+  },
+  "protectedState": {
+    "behavior_signal_snapshots": [
+      {
+        "count": "1332",
+        "hash": "e864bef7df600d63fb3dc04952e806cd"
+      }
+    ],
+    "selected_wallet_behavior_events": [
+      {
+        "count": "2012",
+        "hash": "ac7b7970af0a13b74d2c93e8babc32f0"
+      }
+    ],
+    "behavior_aggregation_buckets": [
+      {
+        "count": "1332",
+        "hash": "8043cc71bbb99a3c3afde5077ca148d6"
+      }
+    ],
+    "behavior_aggregation_revisions": [
+      {
+        "count": "1332",
+        "hash": "0c6b496514d11141325351d891fec39f"
+      }
+    ],
+    "wallet_weight_snapshots": [
+      {
+        "count": "1",
+        "hash": "89ef95cdac8b612849c2fae6d5d9677d"
+      }
+    ],
+    "wallet_weight_entries": [
+      {
+        "count": "1",
+        "hash": "d6fb8672b4ac10e4019e26f271b82b0a"
+      }
+    ],
+    "wallet_selection_settings": [
+      {
+        "count": "1",
+        "hash": "143c087160f4a6aed1d5af852653af4e"
+      }
+    ],
+    "wallet_selection_runs": [
+      {
+        "count": "73",
+        "hash": "5f63e5f552db3290348a5529ad9cb19f"
+      }
+    ],
+    "wallet_selection_results": [
+      {
+        "count": "3080",
+        "hash": "71414431fb0e4ee536fd921b09e0503e"
+      }
+    ],
+    "wallet_selection_overrides": [
+      {
+        "count": "1",
+        "hash": "245c8b5a077c51b3bb60d340e49a1d24"
+      }
+    ],
+    "behavior_data_quality_issues": [
+      {
+        "count": "3",
+        "hash": "d4dd642a329e3b23380e434b44573dd3"
+      }
+    ],
+    "behavior_normalization_cursors": [
+      {
+        "count": "7",
+        "hash": "a4a1c6749244d72eb33ce8442f5a0939"
+      }
+    ],
+    "metric_calculation_runs": [
+      {
+        "count": "21293",
+        "hash": "33f00dff3e1b3616e9b662bc72a131d1"
+      }
+    ],
+    "performance_run_trust_transitions": [
+      {
+        "count": "14",
+        "hash": "1de2eceba8096952ee8adfc2815dfc6a"
+      }
+    ],
+    "sync_cursors": [
+      {
+        "count": "403",
+        "hash": "d12676aa75ddb2a86b8d9558fec98864"
+      }
+    ],
+    "data_quality_issues": [
+      {
+        "count": "727",
+        "hash": "d8b2b49efcaf725926fd0663425dac0f"
+      }
+    ],
+    "wallet_addresses": [
+      {
+        "count": "50",
+        "hash": "96316b18fbed704b09294673cedd23f6"
+      }
+    ]
+  },
+  "protectedStateUnchanged": true,
+  "queuesBefore": {
+    "hyperliquid-sync": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 318,
+      "failed": 444,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "address-performance": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 66,
+      "failed": 14,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "behavior-normalization": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 24,
+      "failed": 0,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "hyperliquid-discovery": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 17,
+      "failed": 609,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "hyperliquid-candidate-enrichment": {
+      "wait": 0,
+      "active": 1,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 20,
+      "failed": 5,
+      "waiting-children": 0,
+      "prioritized": 8427
+    }
+  },
+  "queuesAfter": {
+    "hyperliquid-sync": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 318,
+      "failed": 444,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "address-performance": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 66,
+      "failed": 14,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "behavior-normalization": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 24,
+      "failed": 0,
+      "waiting-children": 0,
+      "prioritized": 0
+    },
+    "hyperliquid-discovery": {
+      "wait": 0,
+      "active": 0,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 17,
+      "failed": 609,
+      "waiting-children": 0,
+      "prioritized": 1
+    },
+    "hyperliquid-candidate-enrichment": {
+      "wait": 0,
+      "active": 1,
+      "paused": 0,
+      "delayed": 0,
+      "completed": 20,
+      "failed": 5,
+      "waiting-children": 0,
+      "prioritized": 8427
+    }
+  },
+  "executionCommit": "0a5bb551d245e05ee54551cfe999b6cd614287be",
+  "image": "sha256:ff4748758278a0245c0cc6f56d54ead3be0b1a0a9d6d887096a10c80779af6b1",
+  "resultFingerprintsSha256": "6908e1edbc19539f664f5bb2f86bbcd007c73b12f029256a1e4516e2380832b4",
+  "resultsSha256": "66e154a2af1e83e4177d51a0b7d6e84a9705dcfcc1e158c02c8050738404914d"
+}

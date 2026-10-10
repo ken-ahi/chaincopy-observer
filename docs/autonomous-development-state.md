@@ -1,12 +1,22 @@
 # Autonomous Development State
 
-最終更新: 2026-10-06 (Asia/Tokyo)
+最終更新: 2026-10-10 (Asia/Tokyo)
 
 ## 目的と正本
 
 本書は、`docs/codex-autonomous-master-prompt.md` に従う作業再開用の状態記録である。プロダクト仕様は `docs/SPEC.md`、段階計画は `docs/implementation-plan.md`、確定判断は `docs/decisions.md`、AI開発手順は `docs/ai-development-workflow.md` を正とする。本書はこれらを変更しない。
 
-## Phase 5.3 現在地（過去工程の状態より優先）
+## Phase 5.4 現在地（過去工程の状態より優先）
+
+- PR #38はmainへmerge済み、base `4999b15db3fcfc761864237c77c4cd23a43d5127`。feature `codex/phase5-4-direction-change`。Phase 5.3 migration/Signal保存や上流処理は繰り返さない。
+- direction-change-v1を実装。同一coin/Selection/cohort/weight、exact15分隣接、保存済みcurrent-valid Signalだけを比較。epsilonなし、confidence独立、NONEもimmutable保存。詳細はADR-046 / `docs/phase5-4-direction-change-spec.md`。
+- Stage 1 READ ONLY監査: 1,332 Signalは全件current-valid、269隣接ペア、1,056 gap境界、先頭7件。net+1/0/-1は606/154/572。欠落を0で補わない。実DB変更なし。
+- 新規DirectionChange 1 table / 2 RESTRICT FK / 6 index / 4 CHECKを設計。実migration/実保存/mergeは**別Owner承認待ち**。Phase 5.3承認を流用しない。通知/Phase 6へ進まない。
+- Owner追加承認による限定security修正: Next/plugin16.3.6→16.3.8、sharp override0.35.4→0.35.5と必要lockfileのみ。修正commit `0a5bb551d245e05ee54551cfe999b6cd614287be`。既存braces例外/gate不変。全隔離validation PASS: format/lint、typecheck/build11/11、83 files870tests、E2E24/24。audit critical0/high1は正確な既承認bracesのみ（moderate7）。
+- 正式read-only preview完了 `2026-10-10T10:38:02.216Z`。269ペア=BUY弱まり11/SELL弱まり11/強気反転82/弱気反転100/NONE65、加速0。gap1,056は未比較、欠落補完なし。保護17 table hash/queue前後一致、Signal1,332・Behavior2,012・集約1,332+1,332・weight/Selection/DQ不変。Worker停止、一時process終了。実migration13件のまま、新規tableは存在しない。
+- 実行image `sha256:ff4748758278a0245c0cc6f56d54ead3be0b1a0a9d6d887096a10c80779af6b1`のrevisionは0a5bb55。正本: `docs/phase5-4-verification.md` / `docs/phase5-4-readonly-preview.json`。新規SQL SHA256 `6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`。最終head CI成功後も**READY_FOR_MIGRATION_APPROVAL**でPRをopenのまま停止。実適用/実保存/merge承認を流用しない。
+
+## Phase 5.3 完了記録（履歴）
 
 - PR #37はmainへmerge済み。base `0cde866ece640abef318c137fe5ae9df031c87d2`、feature `codex/phase5-3-signal`。Phase 5.2 migration/weight保存は繰り返していない。
 - `signal-v1`実装、仕様/ADR-045、immutable Signal 1 table、read API、明示fingerprint付きCLIを追加。wallet/bucket方向集合の1票制限、混在は各0.5、weightによる影響度とnotional diagnosticsを分離。confidenceは単一walletを広範consensus扱いしない。

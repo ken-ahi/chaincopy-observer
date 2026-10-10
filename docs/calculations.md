@@ -268,4 +268,10 @@ Phase 5.3の観測指標`signal-v1`は本書のPnL/Performance式を変更しな
 `docs/phase5-3-signal-spec.md`に式・Decimal精度・confidence・NO_SIGNALを定義する。
 SPEC §17通知用confidence、投資助言、Phase 5.4の勢い判定とは別の出力である。
 
+Phase 5.4 `direction-change-v1`は同一cohort/weightの厳密15分隣接Signalだけを
+Decimalで比較する。delta=current net−previous net。非ゼロ符号反転、同方向の
+絶対値増減を区別し、非ゼロ→0は弱まり、0→非ゼロはNONE/方向発生とする。
+epsilonなし、confidenceは方向とは独立した証拠。欠落/NO_SIGNALを0で埋めない。
+確定契約は`docs/phase5-4-direction-change-spec.md`。PnL/Performance式は不変。
+
 `wallet-selection-v2`は本書の金融式を再計算・変更せず、同じtrusted `performance-v3` Runに保存されたclosed `PositionCycle`件数と`winRate / profitFactor / averageWin / averageLoss / maxLosingStreak / topTradeContribution`だけを読む。全6 metricが`AVAILABLE`かつ同一coverage windowであることを要求し、欠損値を0へ変換しない。NAV由来のreturn / drawdownはv2 gateへ使用しない。選定契約と閾値は`docs/free-data-wallet-selection-v2.md`を正本とする。

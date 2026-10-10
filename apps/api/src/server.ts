@@ -21,6 +21,7 @@ import { PrismaWalletSelectionService } from "./wallet-selection-service.js";
 import { PrismaBehaviorAggregationService } from "./behavior-aggregation-service.js";
 import { PrismaWalletWeightService } from "./wallet-weight-service.js";
 import { PrismaBehaviorSignalService } from "./behavior-signal-service.js";
+import { PrismaDirectionChangeService } from "./direction-change-service.js";
 
 loadRootEnvironment();
 
@@ -49,6 +50,7 @@ const performanceService = new PrismaPerformanceService(prisma, performanceQueue
 const walletSelectionService = new PrismaWalletSelectionService(prisma);
 const app = await createApi({
   behaviorSignalService: new PrismaBehaviorSignalService(prisma),
+  directionChangeService: new PrismaDirectionChangeService(prisma),
   walletWeightService: new PrismaWalletWeightService(prisma),
   behaviorAggregationService: new PrismaBehaviorAggregationService(prisma),
   addressService,
