@@ -52,6 +52,16 @@ export class PrismaBehaviorSignalService {
     );
   }
 
+  /** Read-only saved receipt validation inside the caller's coherent transaction. */
+  public async verifiedInTransaction(tx: Prisma.TransactionClient, coin: string, start: string) {
+    const result = await this.calculate(tx, coin, start);
+    if (!result) return null;
+    const stored = await tx.behaviorSignalSnapshot.findUnique({ where: { id: result.id } });
+    if (!stored) throw new SignalInputError("SIGNAL_NOT_COMPUTED");
+    assertStored(stored, result);
+    return result;
+  }
+
   public async persist(coin: string, start: string, expectedFingerprint: string) {
     if (!/^[0-9a-f]{64}$/.test(expectedFingerprint))
       throw new SignalInputError("EXPECTED_FINGERPRINT_REQUIRED");

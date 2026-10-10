@@ -1,12 +1,20 @@
 # Autonomous Development State
 
-最終更新: 2026-10-06 (Asia/Tokyo)
+最終更新: 2026-10-10 (Asia/Tokyo)
 
 ## 目的と正本
 
 本書は、`docs/codex-autonomous-master-prompt.md` に従う作業再開用の状態記録である。プロダクト仕様は `docs/SPEC.md`、段階計画は `docs/implementation-plan.md`、確定判断は `docs/decisions.md`、AI開発手順は `docs/ai-development-workflow.md` を正とする。本書はこれらを変更しない。
 
-## Phase 5.3 現在地（過去工程の状態より優先）
+## Phase 5.4 現在地（過去工程の状態より優先）
+
+- PR #38はmainへmerge済み、base `4999b15db3fcfc761864237c77c4cd23a43d5127`。feature `codex/phase5-4-direction-change`。Phase 5.3 migration/Signal保存や上流処理は繰り返さない。
+- direction-change-v1を実装。同一coin/Selection/cohort/weight、exact15分隣接、保存済みcurrent-valid Signalだけを比較。epsilonなし、confidence独立、NONEもimmutable保存。詳細はADR-046 / `docs/phase5-4-direction-change-spec.md`。
+- Stage 1 READ ONLY監査: 1,332 Signalは全件current-valid、269隣接ペア、1,056 gap境界、先頭7件。net+1/0/-1は606/154/572。欠落を0で補わない。実DB変更なし。
+- 新規DirectionChange 1 table / 2 RESTRICT FK / 6 index / 4 CHECKを設計。実migration/実保存/mergeは**別Owner承認待ち**。Phase 5.3承認を流用しない。通知/Phase 6へ進まない。
+- 隔離全validationとbounded live READ ONLY previewを実施し、結果・exact SQL SHA・承認handoffを`docs/phase5-4-verification.md`へ記録する。既存braces例外は拡張せず、新規High/Criticalは停止条件。
+
+## Phase 5.3 完了記録（履歴）
 
 - PR #37はmainへmerge済み。base `0cde866ece640abef318c137fe5ae9df031c87d2`、feature `codex/phase5-3-signal`。Phase 5.2 migration/weight保存は繰り返していない。
 - `signal-v1`実装、仕様/ADR-045、immutable Signal 1 table、read API、明示fingerprint付きCLIを追加。wallet/bucket方向集合の1票制限、混在は各0.5、weightによる影響度とnotional diagnosticsを分離。confidenceは単一walletを広範consensus扱いしない。

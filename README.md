@@ -289,6 +289,15 @@ pnpm test
 pnpm test:e2e
 ```
 
+### Phase 5.4 Observational direction change
+
+Phase 5.4 `direction-change-v1`は保存済みSignalの厳密15分隣接ペアを比較し、
+反転・強まり・弱まりと明示NONEを判定します。cohort/weight変更や欠落をまたぎません。
+`pnpm behavior:direction-change --coin BTC --bucket-start ...`はREAD ONLY preview、
+`GET /api/direction-changes?coin=BTC&bucketStart=...`は認証付き保存結果readです。
+新規DirectionChange tableの実migration・実保存は別Owner承認待ちです。
+詳細は`docs/phase5-4-direction-change-spec.md`。通知/売買判断の推奨ではありません。
+
 ### Phase 5.3 Observational BUY / SELL score
 
 `signal-v1`は同一cohortのimmutable aggregation receiptとwallet weightを結合し、
@@ -371,4 +380,4 @@ tests/e2e/
 - [Phase 4.3 Test Matrix](docs/phase4-3-wallet-selection-test-matrix.md)
 - [正本仕様](docs/SPEC.md)
 
-Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測SignalもOwner承認下の限定migration・1,332件保存・冪等性・read API検証を完了し、security gateを通過しています。Phase 5.4、通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
+Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測SignalもOwner承認下の限定migration・1,332件保存・冪等性・read API検証を完了しています。Phase 5.4は実装・隔離検証対象で、実migration/実保存は別Owner承認が必要です。通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
