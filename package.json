@@ -38,7 +38,7 @@
   },
   "devDependencies": {
     "@chaincopy/database": "workspace:*",
-    "@next/eslint-plugin-next": "16.3.6",
+    "@next/eslint-plugin-next": "16.3.8",
     "@playwright/test": "1.62.0",
     "@prisma/client": "6.19.3",
     "@types/node": "24.13.3",

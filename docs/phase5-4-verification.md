@@ -62,9 +62,7 @@ six indexes (PK, two unique, three secondary), four CHECK constraints. No existi
 table SQL, large index, backfill, consumer or scheduler. New authenticated read API
 and explicit-bucket/fingerprint CLI; no notification, demo, paid source or trading.
 
-## Migration approval handoff (NOT applied to real DB)
-
-## Isolated validation and current security blocker
+## Isolated validation and security repair
 
 Explicit PostgreSQL 127.0.0.1:55433 / Redis 127.0.0.1:56380 only; integration
 uses UUID schemas, E2E uses chaincopy_e2e / Redis15. No runtime fallback.
@@ -84,11 +82,15 @@ braces exception is unchanged. Newly reported High dependencies on October 10:
 - next 16.3.6, patched >=16.3.8: [GHSA-cjq9-62q9-8jv4](https://github.com/advisories/GHSA-cjq9-62q9-8jv4).
 - sharp 0.35.4, patched >=0.35.5: [GHSA-wq5f-xc86-pv6w](https://github.com/advisories/GHSA-wq5f-xc86-pv6w).
 
-The gate correctly fails; no suppression, new exception, dependency change or
-lowered severity. A separate narrow patch approval was requested. This finding
-blocks readiness/merge even though functional validation passes.
+The gate correctly failed before repair; no suppression or lowered severity.
+Owner explicitly approved the narrow patch: next/plugin 16.3.8, sharp override
+0.35.5 and necessary lockfile only. Before editing, recursive pnpm why confirmed
+Next16.3.6 through web/next-auth/adapter, sharp0.35.4 through those Next paths,
+and root eslint plugin16.3.6. pnpm11.9.0 lockfile-only installation used CI=true;
+no release-age exception was needed. Exact braces exception remains unchanged.
+Full isolated validation must be rerun on this repaired graph before readiness.
 
-## Exact SQL handoff (not yet ready while security gate fails)
+## Exact SQL handoff (NOT applied to real DB)
 
 `prisma/migrations/20261010000000_direction_change/migration.sql`
 
