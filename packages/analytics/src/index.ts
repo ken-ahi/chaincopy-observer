@@ -95,3 +95,4 @@ export type * from "./types.js";
 export * from "./behavior-aggregation.js";
 export * from "./wallet-weight.js";
 export * from "./behavior-signal.js";
+export * from "./direction-change.js";

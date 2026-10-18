@@ -1,5 +1,14 @@
 # Architecture Decision Log
 
+## ADR-046: Phase 5.4 direction-change-v1の比較可能性とNONEを固定する
+
+- 状態: 実装契約、新規1 tableの実DB適用/実保存/mergeはOwner別承認待ち。
+- 同一coin/version/Selection/cohort/weight、厳密15分隣接、保存済みcurrent-valid Signalのみ比較する。cohortをまたぐ数値同一性は意味の同一性を証明しないため遮断。欠落/NO_SIGNALの中立補完禁止。
+- exact Decimalの符号/絶対値変化を採用。epsilonや収益にfitしたthresholdなし。tiny deltaも観測変化として記録し、通知のmaterialityは別契約。confidenceは証拠の幅であり方向を変更しない。
+- 反対の非ゼロ符号だけ反転。非ゼロ→0は弱まり、0→非ゼロはNONE/方向発生、同値はNONE。NONEをimmutable保存し、未計算/遮断と区別する。
+- 新規DirectionChangeSnapshotの2 Signal FKはRESTRICT。late revisionは隣接2比較だけ新identityを追記、旧行不変。readは現在validなreceiptだけ返す。Phase 6は保存済み判定を消費し再計算しない。
+- 詳細: `docs/phase5-4-direction-change-spec.md`。通知、demo/実売買、Selection閾値変更、upstream再処理は対象外。
+
 ## ADR-034: Phase 5.0 behavior-v1 の identity、ordering、quote 境界を固定する
 
 - 状態: 採用

@@ -184,6 +184,10 @@ Phase 5.3ではEmail、push notification、demo order、actual orderを扱わな
 
 ## 8. Phase 5.4: Momentum / Direction Change Detection
 
+確定契約（2026-10-10）: `docs/phase5-4-direction-change-spec.md` / ADR-046。
+direction-change-v1は同一basisのexact隣接比較、epsilonなし、confidence独立、
+明示NONEのimmutable保存を採用する。実DB適用/実保存は別Owner承認待ち。
+
 ### 8.1 責務
 
 Phase 5.3で保存した過去Signal系列から、現在値だけでなく勢い、弱まり、方向転換を決定論的に検出する。

@@ -221,6 +221,7 @@ async function createTestApi(
   walletSelection: WalletSelectionService = walletSelectionService,
 ) {
   const app = await createApi({
+    directionChangeService: { read: async () => ({ status: "NOT_COMPUTED", item: null }) },
     behaviorSignalService: { read: async () => ({ status: "NOT_COMPUTED", item: null }) },
     behaviorAggregationService: { read: async () => ({ status: "NOT_COMPUTED", items: [] }) },
     walletWeightService: { current: async () => ({ status: "NO_SELECTED_WALLETS", items: [] }) },
@@ -243,6 +244,17 @@ afterEach(async () => {
 });
 
 describe("API health routes", () => {
+  it("authenticates bounded direction-change reads and rejects writes", async () => {
+    const app = await createTestApi();
+    const url = "/api/direction-changes?coin=BTC&bucketStart=2026-01-01T00:15:00.000Z";
+    expect((await app.inject({ method: "GET", url })).statusCode).toBe(401);
+    const response = await authorizedGet(app, url);
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toEqual({ status: "NOT_COMPUTED", item: null });
+    expect((await authorizedGet(app, "/api/direction-changes?coin=BTC")).statusCode).toBe(400);
+    expect((await authorizedPost(app, "/api/direction-changes")).statusCode).toBe(404);
+  });
   it("authenticates and bounds saved Signal inspection without caching or writes", async () => {
     const app = await createTestApi();
     const url = "/api/behavior-signals?coin=BTC&bucketStart=2026-01-01T00:00:00.000Z";

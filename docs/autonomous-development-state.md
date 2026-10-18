@@ -1,12 +1,41 @@
 # Autonomous Development State
 
-最終更新: 2026-10-06 (Asia/Tokyo)
+最終更新: 2026-10-18 (Asia/Tokyo)
 
 ## 目的と正本
 
 本書は、`docs/codex-autonomous-master-prompt.md` に従う作業再開用の状態記録である。プロダクト仕様は `docs/SPEC.md`、段階計画は `docs/implementation-plan.md`、確定判断は `docs/decisions.md`、AI開発手順は `docs/ai-development-workflow.md` を正とする。本書はこれらを変更しない。
 
-## Phase 5.3 現在地（過去工程の状態より優先）
+## Phase 5.4 現在地（過去工程の状態より優先）
+
+- **実運用検証COMPLETE**。Owner承認により一時ハーネスのSQL区切り文字serializationだけを修正。LFをparameterで渡し、正式previewの変更していないSQLと17保護table全件hash一致を確認。tracked code/test/契約/fingerprint/SQL変更なし。
+- 再開head `3808b9322ff0907e22b926740629e38cb8d88ea0`、image `sha256:a2accc83e3273c8194d0d59dc3398eb669984c7d35f1ee5bf7ced4937fd9a843`。14 applied /0 pendingをread-only確認し、**migrationは再実行していない**。
+- fresh READ ONLY preview完了 `2026-10-18T09:08:54.508Z`。269ペアのfresh expected fingerprintsでformal service保存。完了 `2026-10-18T09:12:14.711Z`。強気反転82／弱気反転100／BUY弱まり11／SELL弱まり11／加速0／NONE65。gap1,056は未保存。
+- 2回目の同入力保存は追加0件。全269行・calculatedAt・fingerprints不変、行全体SHA256 `5ceddcb417b36d921bcdccc1fa5d99903d356271aa4eff67204db056f04b75e4`。全269件の認証付きsaved read APIがCURRENTで一致、未認証401確認。
+- 保護17 table hash・Signal1,332／Behavior2,012／集約1,332+1,332／weight／Selection／OPEN Behavior DQ0／queues不変。通常Worker停止、一時process終了。sync・Performance・Selection・Behavior・aggregation・weight・Signal保存を再実行していない。
+- 文書のみの追補のためOwner指示どおりlocal full isolated suiteは再実行せず、既存870tests/E2E24とCI #103 PASSを保持。format・diff・security gateを再確認（critical0、highは正確な既承認bracesのみ）。最終headのfull GitHub CI成功・mergeable・scope不変を確認した場合に限りPR #39を自動mergeする承認あり。最終CI/merge記録はPR #39を正とする。詳細は`docs/phase5-4-verification.md`。
+- 次工程はPhase 6向け設計の別依頼待ち。今回通知・デモトレード・売買・有料source・閾値変更は含めない。
+
+## Phase 5.4 2026-10-18 初回停止記録（履歴・再開完了済み）
+
+- **BLOCKED**。OwnerがPR #39のexact migration・bounded保存・条件付きmergeを承認。head `4c807c2`を確認し全preflight PASS後、`20261010000000_direction_change`だけを実DBへ適用済み（2026-10-18T08:35:09.807455Z）。SQL SHAは承認値`6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`、14 applied / 0 pending。catalog 19列・6 index・2 RESTRICT FK・4 CHECK一致。
+- 適用後fresh read-only preview PASS（2026-10-18T08:38:18.650Z）。1,332 Signal → 269ペア、弱まり22/反転182/NONE65、加速0。gap1,056を比較しない。過去fingerprintを無検証で流用していない。
+- 一時保存ハーネスのprotected-state guardでSTOP。正式previewと異なるSQL区切り文字escapeでhash不一致。正式SQLによる独立read-only再確認は17 table全一致、新規保存**0件**。アプリ・式・SQL・保護データの不一致ではないが、OwnerのSTOP条件に従い書き込みを再開していない。初回の一時import解決エラーもDB接続前であり保存なし。
+- Signal1,332 / Behavior2,012 / 集約1,332+1,332 / weight / Selection / OPEN Behavior DQ0 / queues不変。普通Worker停止、一時process・隔離services停止。上流処理再実行、DQ/cursor/Redis変更なし。
+- 全隔離validation PASS: format/lint、typecheck/build11/11、83 files870tests、E2E24/24、security critical0/high1は正確な既承認bracesのみ。実保存・冪等性・saved API確認・mergeは未完了。詳細は`docs/phase5-4-verification.md`。PR #39はopenのまま。
+- 次の承認境界: 一時evidence serializationだけを修正し、fresh read-only preflight/previewから既承認保存flowを再開することのOwner確認。**migrationを再適用しない**。判定条件は弱めず、上流処理・Phase 6へ進まない。
+
+## Phase 5.4 2026-10-10 実装・承認待ち記録（履歴）
+
+- PR #38はmainへmerge済み、base `4999b15db3fcfc761864237c77c4cd23a43d5127`。feature `codex/phase5-4-direction-change`。Phase 5.3 migration/Signal保存や上流処理は繰り返さない。
+- direction-change-v1を実装。同一coin/Selection/cohort/weight、exact15分隣接、保存済みcurrent-valid Signalだけを比較。epsilonなし、confidence独立、NONEもimmutable保存。詳細はADR-046 / `docs/phase5-4-direction-change-spec.md`。
+- Stage 1 READ ONLY監査: 1,332 Signalは全件current-valid、269隣接ペア、1,056 gap境界、先頭7件。net+1/0/-1は606/154/572。欠落を0で補わない。実DB変更なし。
+- 新規DirectionChange 1 table / 2 RESTRICT FK / 6 index / 4 CHECKを設計。実migration/実保存/mergeは**別Owner承認待ち**。Phase 5.3承認を流用しない。通知/Phase 6へ進まない。
+- Owner追加承認による限定security修正: Next/plugin16.3.6→16.3.8、sharp override0.35.4→0.35.5と必要lockfileのみ。修正commit `0a5bb551d245e05ee54551cfe999b6cd614287be`。既存braces例外/gate不変。全隔離validation PASS: format/lint、typecheck/build11/11、83 files870tests、E2E24/24。audit critical0/high1は正確な既承認bracesのみ（moderate7）。
+- 正式read-only preview完了 `2026-10-10T10:38:02.216Z`。269ペア=BUY弱まり11/SELL弱まり11/強気反転82/弱気反転100/NONE65、加速0。gap1,056は未比較、欠落補完なし。保護17 table hash/queue前後一致、Signal1,332・Behavior2,012・集約1,332+1,332・weight/Selection/DQ不変。Worker停止、一時process終了。実migration13件のまま、新規tableは存在しない。
+- 実行image `sha256:ff4748758278a0245c0cc6f56d54ead3be0b1a0a9d6d887096a10c80779af6b1`のrevisionは0a5bb55。正本: `docs/phase5-4-verification.md` / `docs/phase5-4-readonly-preview.json`。新規SQL SHA256 `6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`。最終head CI成功後も**READY_FOR_MIGRATION_APPROVAL**でPRをopenのまま停止。実適用/実保存/merge承認を流用しない。
+
+## Phase 5.3 完了記録（履歴）
 
 - PR #37はmainへmerge済み。base `0cde866ece640abef318c137fe5ae9df031c87d2`、feature `codex/phase5-3-signal`。Phase 5.2 migration/weight保存は繰り返していない。
 - `signal-v1`実装、仕様/ADR-045、immutable Signal 1 table、read API、明示fingerprint付きCLIを追加。wallet/bucket方向集合の1票制限、混在は各0.5、weightによる影響度とnotional diagnosticsを分離。confidenceは単一walletを広範consensus扱いしない。

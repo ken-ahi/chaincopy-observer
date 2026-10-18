@@ -1292,46 +1292,46 @@ model DataQualityIssue {
 model MetricCalculationRun {
   weightEntries           WalletWeightEntry[]
   /// ID
-  id                      String                         @id @default(cuid())
+  id                      String                          @id @default(cuid())
   /// ウォレットアドレスID
-  walletAddressId         String                         @map("wallet_address_id")
-  walletAddress           WalletAddress                  @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
+  walletAddressId         String                          @map("wallet_address_id")
+  walletAddress           WalletAddress                   @relation(fields: [walletAddressId], references: [id], onDelete: Cascade)
   /// 計算バージョン
-  calculationVersion      String                         @map("calculation_version")
+  calculationVersion      String                          @map("calculation_version")
   /// 計算開始日時
-  calculationFrom         DateTime                       @map("calculation_from")
+  calculationFrom         DateTime                        @map("calculation_from")
   /// 計算終了日時
-  calculationTo           DateTime                       @map("calculation_to")
+  calculationTo           DateTime                        @map("calculation_to")
   /// 要求日時
-  requestedAt             DateTime                       @map("requested_at")
+  requestedAt             DateTime                        @map("requested_at")
   /// 計算要求元
-  requestedBy             String                         @map("requested_by")
+  requestedBy             String                          @map("requested_by")
   /// 開始日時
-  startedAt               DateTime?                      @map("started_at")
+  startedAt               DateTime?                       @map("started_at")
   /// 完了日時
-  completedAt             DateTime?                      @map("completed_at")
+  completedAt             DateTime?                       @map("completed_at")
   /// ステータス
-  status                  MetricCalculationStatus        @default(PENDING)
+  status                  MetricCalculationStatus         @default(PENDING)
   /// 履歴完全性
-  historyCompleteness     PerformanceHistoryCompleteness @map("history_completeness")
+  historyCompleteness     PerformanceHistoryCompleteness  @map("history_completeness")
   /// 精度区分
   precision               PerformancePrecision?
   /// 入力フィンガープリント
-  inputFingerprint        String                         @map("input_fingerprint")
+  inputFingerprint        String                          @map("input_fingerprint")
   /// 重複排除キー
-  deduplicationKey        String                         @unique(map: "metric_runs_dedup_key") @map("deduplication_key")
+  deduplicationKey        String                          @unique(map: "metric_runs_dedup_key") @map("deduplication_key")
   /// 警告件数
-  warningCount            Int                            @default(0) @map("warning_count")
+  warningCount            Int                             @default(0) @map("warning_count")
   /// 警告コード
-  warningCodes            String[]                       @default([]) @map("warning_codes")
+  warningCodes            String[]                        @default([]) @map("warning_codes")
   /// エラーコード
-  errorCode               String?                        @map("error_code")
+  errorCode               String?                         @map("error_code")
   /// エラーメッセージ
-  errorMessage            String?                        @map("error_message") @db.Text
+  errorMessage            String?                         @map("error_message") @db.Text
   /// 下流処理で利用可能な信頼状態（計算成否とは独立）
-  trustState              PerformanceRunTrustState       @default(TRUSTED) @map("trust_state")
+  trustState              PerformanceRunTrustState        @default(TRUSTED) @map("trust_state")
   /// trust transition と整合性を検証する単調増加 revision
-  trustRevision           Int                            @default(0) @map("trust_revision")
+  trustRevision           Int                             @default(0) @map("trust_revision")
   dailyNavs               DailyNav[]
   positionCycles          PositionCycle[]
   performanceMetrics      AddressPerformanceMetric[]
@@ -1339,9 +1339,9 @@ model MetricCalculationRun {
   behaviorSelectionScopes BehaviorSelectionScope[]
   trustTransitions        PerformanceRunTrustTransition[]
   /// 登録日時
-  createdAt               DateTime                       @default(now()) @map("created_at")
+  createdAt               DateTime                        @default(now()) @map("created_at")
   /// 更新日時
-  updatedAt               DateTime                       @updatedAt @map("updated_at")
+  updatedAt               DateTime                        @updatedAt @map("updated_at")
 
   @@index([walletAddressId, calculationVersion, status, trustState, requestedAt], map: "metric_runs_trusted_lookup_idx")
   @@index([walletAddressId, status, requestedAt], map: "metric_runs_wallet_status_requested_idx")
@@ -1879,6 +1879,8 @@ model WalletWeightEntry {
 
 /// Immutable Phase 5.3 observation; current validity is rechecked on read.
 model BehaviorSignalSnapshot {
+  previousComparisons   DirectionChangeSnapshot[]   @relation("PreviousSignal")
+  currentComparisons    DirectionChangeSnapshot[]   @relation("CurrentSignal")
   id                    String                      @id
   signalVersion         String                      @map("signal_version")
   aggregationRevisionId String                      @map("aggregation_revision_id")
@@ -1903,4 +1905,36 @@ model BehaviorSignalSnapshot {
   @@index([weightSnapshotId], map: "behavior_signal_weight_idx")
   @@index([selectionRunId], map: "behavior_signal_selection_idx")
   @@map("behavior_signal_snapshots")
+}
+
+/// Immutable Phase 5.4 result, including explicit NONE. No mutable current pointer.
+model DirectionChangeSnapshot {
+  id                     String                 @id
+  directionChangeVersion String                 @map("direction_change_version")
+  signalVersion          String                 @map("signal_version")
+  previousSignalId       String                 @map("previous_signal_id")
+  previousSignal         BehaviorSignalSnapshot @relation("PreviousSignal", fields: [previousSignalId], references: [id], onDelete: Restrict, map: "direction_change_previous_fkey")
+  currentSignalId        String                 @map("current_signal_id")
+  currentSignal          BehaviorSignalSnapshot @relation("CurrentSignal", fields: [currentSignalId], references: [id], onDelete: Restrict, map: "direction_change_current_fkey")
+  coin                   String
+  previousBucket         DateTime               @map("previous_bucket")
+  currentBucket          DateTime               @map("current_bucket")
+  previousNetSignal      Decimal                @map("previous_net_signal") @db.Decimal(38, 19)
+  currentNetSignal       Decimal                @map("current_net_signal") @db.Decimal(38, 19)
+  delta                  Decimal                @db.Decimal(38, 19)
+  eventType              String                 @map("event_type")
+  selectionRunId         String                 @map("selection_run_id")
+  cohortFingerprint      String                 @map("cohort_fingerprint")
+  weightSnapshotId       String                 @map("weight_snapshot_id")
+  inputFingerprint       String                 @map("input_fingerprint")
+  inputSnapshot          Json                   @map("input_snapshot")
+  result                 Json
+  calculatedAt           DateTime               @default(now()) @map("calculated_at")
+
+  @@unique([directionChangeVersion, previousSignalId, currentSignalId], map: "direction_change_source_key")
+  @@unique([directionChangeVersion, inputFingerprint], map: "direction_change_input_key")
+  @@index([coin, currentBucket, directionChangeVersion], map: "direction_change_coin_time_idx")
+  @@index([previousSignalId], map: "direction_change_previous_idx")
+  @@index([currentSignalId], map: "direction_change_current_idx")
+  @@map("direction_change_snapshots")
 }

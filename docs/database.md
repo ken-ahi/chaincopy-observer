@@ -1,6 +1,16 @@
 # データベース設計
 
-## Phase 5.3 observational Signal（2026-10-06、実DB承認待ち）
+## Phase 5.4 direction-change-v1（2026-10-10、実DB承認待ち）
+
+`DirectionChangeSnapshot` / `direction_change_snapshots`は厳密15分隣接の
+保存済みcurrent-valid Signal 2件を固定するimmutable結果。NONEも保存する。
+新規1 table、PK + unique 2 + secondary 3、SignalへのRESTRICT FK 2、
+identity/adjacency/delta/event CHECK 4。numeric(38,19)でnet/deltaを保持し、
+confidenceと全provenanceはreceipt JSONに保存する。late revision時は新規追記、
+旧結果のUPDATE/DELETEなし。既存大規模tableへのDDL/index追加なし。
+実適用は別Owner承認が必要。`docs/phase5-4-direction-change-spec.md`参照。
+
+## Phase 5.3 observational Signal（2026-10-06、承認済み限定適用完了）
 
 `BehaviorSignalSnapshot` / `behavior_signal_snapshots`はcoin/15分bucketごとの
 immutable計算結果を保持する。aggregation revision、wallet weight snapshot、
