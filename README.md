@@ -380,4 +380,4 @@ tests/e2e/
 - [Phase 4.3 Test Matrix](docs/phase4-3-wallet-selection-test-matrix.md)
 - [正本仕様](docs/SPEC.md)
 
-Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測SignalもOwner承認下の限定migration・1,332件保存・冪等性・read API検証を完了しています。Phase 5.4は実装・隔離検証対象で、実migration/実保存は別Owner承認が必要です。通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。
+Hyperliquid自動探索、`performance-v3`、Selection v2、Behavior正規化、Phase 5.1集約、Phase 5.2 weightまで運用検証済みです。Phase 5.3観測SignalもOwner承認下の限定migration・1,332件保存・冪等性・read API検証を完了しています。Phase 5.4もOwner承認下で厳密隣接269ペアの保存・冪等性・saved read API検証を完了しました（`docs/phase5-4-verification.md`）。通知、デモトレード、実取引、およびSui/Cetus連携には進んでいません。

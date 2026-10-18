@@ -1,12 +1,111 @@
 # Phase 5.4 verification — 2026-10-18
 
-Current status: **BLOCKED — approved real migration complete; persistence stopped
-at the pre-write evidence guard**. No DirectionChange rows were written. See the
-October 18 execution record below; October 10 sections are historical evidence.
-Owner authorized the exact migration and bounded persistence/conditional merge,
-but also required stopping on discrepancies. No merge has been performed.
+Current status: **live persistence, idempotency and saved API verification PASS**.
+Owner explicitly approved the disposable evidence-serialization correction and
+resumption after the first attempt's guard stop. The approved migration was NOT
+rerun. Final documentation-head CI and conditional merge are tracked in PR #39.
+Earlier stopped-attempt and October 10 records below are retained as history.
 
-## 2026-10-18 approved execution / stopped handoff
+## 2026-10-18 corrected-harness resumption — PASS
+
+Preflight PR/local head `3808b9322ff0907e22b926740629e38cb8d88ea0` matched; worktree
+was clean. Execution image
+`sha256:a2accc83e3273c8194d0d59dc3398eb669984c7d35f1ee5bf7ced4937fd9a843`
+is labeled with that head. Only committed documentation differs from the prior
+validated image; no tracked executable, test, dependency, schema, SQL or formula
+changed in this resumption.
+
+### Serialization correction and fresh read-only gates
+
+The disposable harness now binds a single LF byte (`String.fromCharCode(10)`) as
+a Prisma SQL parameter for the `string_agg` row separator. This removes the extra
+JavaScript/SQL escape layer, rather than changing the hash algorithm, table/row
+allowlist, ordering, identity/fingerprint or assertions. The original formal
+preview SQL is retained unchanged as an independent comparison query.
+
+At `2026-10-18T09:05:43.192Z`, corrected-harness hashes equaled the independently
+executed formal SQL for **all 17 protected tables**. All also matched the known-safe
+baseline. Explicit current checks: 14 applied / zero pending, target checksum
+unchanged, DirectionChange0, Signal1,332, same Selection/cohort/weight, OPEN Behavior
+DQ0, healthy PostgreSQL/Redis, unchanged queues, ordinary Worker stopped. Only
+`prisma migrate status` was used: no migrate deploy/dev/resolve or DDL was rerun.
+
+Fresh formal READ ONLY preview completed `2026-10-18T09:08:54.508Z`, again checking
+all 1,332 persisted Signal receipts against current provenance. Its 269 comparable
+results and expected fingerprints—not the historical receipt—were supplied to
+the existing `PrismaDirectionChangeService.persist` path. The preview's protected
+hashes matched both the corrected harness and formal-query preflight results.
+Canonical fresh results SHA256:
+`66e154a2af1e83e4177d51a0b7d6e84a9705dcfcc1e158c02c8050738404914d`.
+
+### Formal persistence, idempotency and saved API
+
+Completed `2026-10-18T09:12:14.711Z`. Concurrency1; every pair uses the existing
+Serializable transaction and fresh expected-fingerprint gate. Only the new
+DirectionChange table receives inserts. No ad hoc SQL INSERT/UPDATE or contract
+change is involved.
+
+| Pass              | Saved total | Additional rows | Verification                                                              |
+| ----------------- | ----------: | --------------: | ------------------------------------------------------------------------- |
+| First             |         269 |             269 | Every ID and complete result equals fresh preview                         |
+| Same-input repeat |         269 |               0 | Full returned rows, including calculatedAt, deep-equal first pass         |
+| Saved API read    |         269 |               0 | All 269 authenticated GET responses CURRENT and equal saved/fresh results |
+
+Both persistence passes and the post-API read have the identical full-row JSON
+SHA256 (sorted by ID, including immutable metadata and calculatedAt):
+`5ceddcb417b36d921bcdccc1fa5d99903d356271aa4eff67204db056f04b75e4`.
+Each API response is `Cache-Control: no-store`; unauthenticated read returns401.
+The actual API route was exercised via Fastify injection with the real formal
+service/database. Unrelated services throw if called; no HTTP listener, BullMQ
+Queue instance, scheduler or ordinary API/Worker process was started.
+
+| Saved event type  | Count |
+| ----------------- | ----: |
+| BULLISH_REVERSAL  |    82 |
+| BEARISH_REVERSAL  |   100 |
+| BUY_WEAKENING     |    11 |
+| SELL_WEAKENING    |    11 |
+| BUY_ACCELERATING  |     0 |
+| SELL_ACCELERATING |     0 |
+| NONE              |    65 |
+| Total             |   269 |
+
+Saved counts by coin: ASTER6 / BTC92 / ETH45 / SOL108 / XPL16 / xyz:CL2.
+HYPE has no comparable pair and no row. All 1,056 gap boundaries and seven initial
+observations were excluded, not filled with zero or NONE. Source IDs, input
+fingerprints and immutable rows match the fresh formal calculation; invalid
+`id <> input_fingerprint` count0.
+
+### Protection, process state and validation
+
+Corrected and formal protected-state SQL agree before writes and after the entire
+verification. Corrected hashes/queue counts also match after each persistence
+pass. All 17 protected table counts/full-row hashes are unchanged, including
+Signal1,332 (hash `e864bef7df600d63fb3dc04952e806cd`), Behavior2,012, aggregation
+1,332 buckets + 1,332 revisions, weight1+1, Selection settings/results/overrides,
+Performance/quarantine, DQ and cursors. OPEN Behavior DQ remains0. Selection/cohort/
+weight IDs are unchanged from the preflight below. Queue counts are exactly the
+previous baseline, including enrichment prioritized8,427/active1. No queue mutation
+or backlog consumption. No upstream phase was executed or persisted.
+
+Final read-only PostgreSQL checks confirm 269 saved rows, 14 applied migrations,
+the original application timestamp/checksum unchanged, and all expected counts.
+DB size58,437,629,619 bytes; disk free ~665 GiB WSL /257 GiB Windows. Sampled
+persistence process RAM330.4 MiB, PostgreSQL117.1 MiB, Redis44.21 MiB. All temporary
+containers exited; existing isolated test services and ordinary Worker remain
+stopped. PostgreSQL/Redis healthy. Disposable harness files are removed before
+commit; execution logs remain local/ignored. No business logic, fingerprint,
+threshold, migration SQL, DQ/cursor or security policy was modified.
+
+Per Owner instruction and the documentation-only workflow, local full isolated
+validation was not repeated because tracked code/tests are unchanged from the
+already passing 870-test /24-E2E run and CI #103. This follow-up runs formatting,
+`git diff --check`, the live verification above and `pnpm security:audit` (PASS:
+critical0/high1 only exact approved braces3.0.3/GHSA-vfj7-8cjw-p6xm; moderate7).
+Final-head GitHub CI still runs the full isolated suite before conditional merge.
+The CI result and merge commit are recorded in PR #39. No Phase 6 work is included.
+
+## 2026-10-18 first attempt / stopped handoff (history, superseded above)
 
 PR #39 is open. Preflight head `4c807c2f48283e049b6175268f87e436fae629dc`
 matched the clean local feature branch and GitHub; base is PR #38 merge. Exact

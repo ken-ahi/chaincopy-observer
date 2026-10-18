@@ -8,6 +8,16 @@
 
 ## Phase 5.4 現在地（過去工程の状態より優先）
 
+- **実運用検証COMPLETE**。Owner承認により一時ハーネスのSQL区切り文字serializationだけを修正。LFをparameterで渡し、正式previewの変更していないSQLと17保護table全件hash一致を確認。tracked code/test/契約/fingerprint/SQL変更なし。
+- 再開head `3808b9322ff0907e22b926740629e38cb8d88ea0`、image `sha256:a2accc83e3273c8194d0d59dc3398eb669984c7d35f1ee5bf7ced4937fd9a843`。14 applied /0 pendingをread-only確認し、**migrationは再実行していない**。
+- fresh READ ONLY preview完了 `2026-10-18T09:08:54.508Z`。269ペアのfresh expected fingerprintsでformal service保存。完了 `2026-10-18T09:12:14.711Z`。強気反転82／弱気反転100／BUY弱まり11／SELL弱まり11／加速0／NONE65。gap1,056は未保存。
+- 2回目の同入力保存は追加0件。全269行・calculatedAt・fingerprints不変、行全体SHA256 `5ceddcb417b36d921bcdccc1fa5d99903d356271aa4eff67204db056f04b75e4`。全269件の認証付きsaved read APIがCURRENTで一致、未認証401確認。
+- 保護17 table hash・Signal1,332／Behavior2,012／集約1,332+1,332／weight／Selection／OPEN Behavior DQ0／queues不変。通常Worker停止、一時process終了。sync・Performance・Selection・Behavior・aggregation・weight・Signal保存を再実行していない。
+- 文書のみの追補のためOwner指示どおりlocal full isolated suiteは再実行せず、既存870tests/E2E24とCI #103 PASSを保持。format・diff・security gateを再確認（critical0、highは正確な既承認bracesのみ）。最終headのfull GitHub CI成功・mergeable・scope不変を確認した場合に限りPR #39を自動mergeする承認あり。最終CI/merge記録はPR #39を正とする。詳細は`docs/phase5-4-verification.md`。
+- 次工程はPhase 6向け設計の別依頼待ち。今回通知・デモトレード・売買・有料source・閾値変更は含めない。
+
+## Phase 5.4 2026-10-18 初回停止記録（履歴・再開完了済み）
+
 - **BLOCKED**。OwnerがPR #39のexact migration・bounded保存・条件付きmergeを承認。head `4c807c2`を確認し全preflight PASS後、`20261010000000_direction_change`だけを実DBへ適用済み（2026-10-18T08:35:09.807455Z）。SQL SHAは承認値`6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`、14 applied / 0 pending。catalog 19列・6 index・2 RESTRICT FK・4 CHECK一致。
 - 適用後fresh read-only preview PASS（2026-10-18T08:38:18.650Z）。1,332 Signal → 269ペア、弱まり22/反転182/NONE65、加速0。gap1,056を比較しない。過去fingerprintを無検証で流用していない。
 - 一時保存ハーネスのprotected-state guardでSTOP。正式previewと異なるSQL区切り文字escapeでhash不一致。正式SQLによる独立read-only再確認は17 table全一致、新規保存**0件**。アプリ・式・SQL・保護データの不一致ではないが、OwnerのSTOP条件に従い書き込みを再開していない。初回の一時import解決エラーもDB接続前であり保存なし。
