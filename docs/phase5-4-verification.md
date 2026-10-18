@@ -1,8 +1,119 @@
-# Phase 5.4 verification — 2026-10-10
+# Phase 5.4 verification — 2026-10-18
 
-Implementation, full isolated validation and live READ ONLY preview **PASS**;
-**no real migration/persistence or merge authorized**. Final-head CI is tracked
-in the PR checks. Handoff: READY_FOR_MIGRATION_APPROVAL after final CI success.
+Current status: **BLOCKED — approved real migration complete; persistence stopped
+at the pre-write evidence guard**. No DirectionChange rows were written. See the
+October 18 execution record below; October 10 sections are historical evidence.
+Owner authorized the exact migration and bounded persistence/conditional merge,
+but also required stopping on discrepancies. No merge has been performed.
+
+## 2026-10-18 approved execution / stopped handoff
+
+PR #39 is open. Preflight head `4c807c2f48283e049b6175268f87e436fae629dc`
+matched the clean local feature branch and GitHub; base is PR #38 merge. Exact
+execution image `sha256:89877b2ba5de181f2dc028adbde2753660d5848d7088925f0193b9dc4147f302`
+has that revision label. It extends the previously validated Phase 5.4 image with
+committed documentation only; git confirms no executable/schema/dependency changes
+between the earlier image's `0a5bb55` code and this head.
+
+### Preflight PASS
+
+- PostgreSQL17.10 / Redis healthy, ordinary Worker/API/web stopped. No consumers
+  started. Disk free: WSL/PostgreSQL volume ~664.8 GiB, Windows ~264 GiB.
+- DB size before: 58,436,064,947 bytes. Thirteen applied migrations, no unfinished
+  migration; exactly `20261010000000_direction_change` pending. Target table absent.
+- Host and image SQL SHA256 both equal the Owner-approved
+  `6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`.
+- Pre-migration formal READ ONLY preview completed `2026-10-18T08:34:21.497Z`:
+  all 1,332 saved signal-v1 rows current-valid, 269 comparable pairs. Counts and
+  coin scope match the October 10 audit. Selection `cmujbqjbu2af4nq01zg56l0vc`,
+  cohort `fe0406a83061090efe9fb2dc83008e8b1cf62f567a186cb15cb4a21a54190a8a`,
+  weight `df5787c523f18a541b8fe127bbfa651ce13b1beaf2601ac9638218bfc602c9cd`.
+- Protected 17-table full-row hashes/counts and all queue counts match the previous
+  evidence; OPEN Behavior DQ0. Existing enrichment prioritized8,427/active1 untouched.
+- Security gate rerun before mutation: PASS, critical0/high1 only the exact approved
+  braces3.0.3/GHSA-vfj7-8cjw-p6xm path; moderate7/low0. No policy/exception changes.
+
+### Approved migration / catalog PASS
+
+Executed the exact image's `pnpm db:migrate:deploy` only after confirming the sole
+pending migration and SQL checksum. Prisma applied only
+`20261010000000_direction_change`, finished `2026-10-18T08:35:09.807455Z`.
+Subsequent `pnpm exec prisma migrate status`: up to date, 14 applied.
+
+PostgreSQL catalogs confirm 19 columns (nets/delta numeric(38,19)), six valid/ready
+indexes (PK + two unique + three secondary), two validated ON DELETE RESTRICT /
+ON UPDATE CASCADE Signal FKs and four validated CHECKs. Zero rows immediately
+after DDL. No existing-table SQL, backfill, automatic rollback/drop or cleanup.
+DB size after DDL/final check: 58,436,155,059 bytes (+90,112 bytes).
+
+### Fresh post-migration preview PASS; persistence NOT complete
+
+Formal READ ONLY preview reran after catalog verification and completed
+`2026-10-18T08:38:18.650Z`. It independently revalidated all 1,332 source receipts;
+historical fingerprints were not reused blindly. Fresh results:
+
+| Result            | Count |
+| ----------------- | ----: |
+| BUY_ACCELERATING  |     0 |
+| BUY_WEAKENING     |    11 |
+| SELL_ACCELERATING |     0 |
+| SELL_WEAKENING    |    11 |
+| BULLISH_REVERSAL  |    82 |
+| BEARISH_REVERSAL  |   100 |
+| NONE              |    65 |
+| Comparable total  |   269 |
+
+1,056 gaps and seven first observations remain non-comparable. Fresh canonical
+results SHA256 is `66e154a2af1e83e4177d51a0b7d6e84a9705dcfcc1e158c02c8050738404914d`;
+protected tables and queues match the pre-migration baseline.
+
+A temporary execution harness was prepared to call the existing formal
+`PrismaDirectionChangeService.persist` with each fresh expected fingerprint,
+repeat it, compare immutable rows, and verify the authenticated read API. It did
+**not reach any persist call**:
+
+1. First launch failed during ESM import resolution: root workspace does not expose
+   `@chaincopy/config`. No DB connection/write occurred. Only the temporary import
+   was corrected to the existing compiled config module; no application code changed.
+2. Second launch stopped at its first protected-state assertion. Its SQL delimiter
+   was over-escaped: the temporary TypeScript/JavaScript source contained four
+   backslashes before `n`, whereas the formal preview contains two. Thus multi-row
+   `string_agg` hashes differed despite matching counts/single-row hashes.
+3. In accordance with STOP-on-discrepancy, no write retry followed. A separate
+   READ ONLY verifier copied the formal preview's exact static SQL/evidence function
+   unchanged. At `2026-10-18T08:40:57.444Z` all 17 hashes matched the fresh baseline
+   and the new table contained **0 rows**. This proves an evidence-serialization
+   defect in the disposable harness, not changed protected data.
+
+Final read-only catalog/state check: 14 applied / zero unfinished migrations,
+DirectionChange0, Signal1,332, Behavior2,012, aggregation1,332 buckets/revisions,
+weight1, unchanged Selection, OPEN Behavior DQ0. Queue counts unchanged. Temporary
+containers exited; ordinary Worker remains stopped. No upstream jobs, real DQ /
+cursor / Redis mutation, paid source, threshold change or trading occurred.
+
+### Validation and resumption boundary
+
+Full isolated validation reran on the approved execution image with explicit
+PostgreSQL127.0.0.1:55433 / Redis127.0.0.1:56380 targets (E2E schema chaincopy_e2e,
+Redis15). `pnpm format:check`, `pnpm lint`, `pnpm typecheck`, `pnpm test`,
+`pnpm build`, `pnpm test:e2e`, `pnpm security:audit` all PASS: 11/11 typecheck/build,
+83 files / 870 tests, E2E24/24, critical0/high1 exact braces exception. Test services
+stopped afterward. Final documentation format and `git diff --check` are verified
+separately; final-head CI is recorded in PR #39 checks.
+
+Real persistence, repeat/idempotency, saved-result API reconciliation and merge
+are **not completed**. Stop status is BLOCKED, not recovery success. Temporary
+operational harnesses are removed from the worktree; no new runtime tooling ships.
+Local ignored execution logs retain the preflight/migration/catalog/preview/guard
+and isolated-validation evidence.
+
+Required Owner direction: approve correcting only the disposable evidence-hash
+serialization and resuming the existing formal persistence flow after a fresh
+read-only preflight/preview. **Do not apply the migration again**; verify its
+existing approved checksum and zero pending migrations. Do not weaken any hash,
+identity, fingerprint or protected-state condition. Do not rerun upstream phases.
+Conditional merge authorization remains gated on completed live verification and
+passing final-head CI; this blocked attempt does not satisfy it.
 
 ## Stage 1 READ ONLY series audit
 

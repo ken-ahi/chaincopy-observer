@@ -1,12 +1,21 @@
 # Autonomous Development State
 
-最終更新: 2026-10-10 (Asia/Tokyo)
+最終更新: 2026-10-18 (Asia/Tokyo)
 
 ## 目的と正本
 
 本書は、`docs/codex-autonomous-master-prompt.md` に従う作業再開用の状態記録である。プロダクト仕様は `docs/SPEC.md`、段階計画は `docs/implementation-plan.md`、確定判断は `docs/decisions.md`、AI開発手順は `docs/ai-development-workflow.md` を正とする。本書はこれらを変更しない。
 
 ## Phase 5.4 現在地（過去工程の状態より優先）
+
+- **BLOCKED**。OwnerがPR #39のexact migration・bounded保存・条件付きmergeを承認。head `4c807c2`を確認し全preflight PASS後、`20261010000000_direction_change`だけを実DBへ適用済み（2026-10-18T08:35:09.807455Z）。SQL SHAは承認値`6409a6bc6005609198fd81d46dd271358abcf679b3c06b96896936d1e88cb761`、14 applied / 0 pending。catalog 19列・6 index・2 RESTRICT FK・4 CHECK一致。
+- 適用後fresh read-only preview PASS（2026-10-18T08:38:18.650Z）。1,332 Signal → 269ペア、弱まり22/反転182/NONE65、加速0。gap1,056を比較しない。過去fingerprintを無検証で流用していない。
+- 一時保存ハーネスのprotected-state guardでSTOP。正式previewと異なるSQL区切り文字escapeでhash不一致。正式SQLによる独立read-only再確認は17 table全一致、新規保存**0件**。アプリ・式・SQL・保護データの不一致ではないが、OwnerのSTOP条件に従い書き込みを再開していない。初回の一時import解決エラーもDB接続前であり保存なし。
+- Signal1,332 / Behavior2,012 / 集約1,332+1,332 / weight / Selection / OPEN Behavior DQ0 / queues不変。普通Worker停止、一時process・隔離services停止。上流処理再実行、DQ/cursor/Redis変更なし。
+- 全隔離validation PASS: format/lint、typecheck/build11/11、83 files870tests、E2E24/24、security critical0/high1は正確な既承認bracesのみ。実保存・冪等性・saved API確認・mergeは未完了。詳細は`docs/phase5-4-verification.md`。PR #39はopenのまま。
+- 次の承認境界: 一時evidence serializationだけを修正し、fresh read-only preflight/previewから既承認保存flowを再開することのOwner確認。**migrationを再適用しない**。判定条件は弱めず、上流処理・Phase 6へ進まない。
+
+## Phase 5.4 2026-10-10 実装・承認待ち記録（履歴）
 
 - PR #38はmainへmerge済み、base `4999b15db3fcfc761864237c77c4cd23a43d5127`。feature `codex/phase5-4-direction-change`。Phase 5.3 migration/Signal保存や上流処理は繰り返さない。
 - direction-change-v1を実装。同一coin/Selection/cohort/weight、exact15分隣接、保存済みcurrent-valid Signalだけを比較。epsilonなし、confidence独立、NONEもimmutable保存。詳細はADR-046 / `docs/phase5-4-direction-change-spec.md`。
